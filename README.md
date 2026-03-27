@@ -1,4 +1,4 @@
-# FDE Harness — 빠른 프로토타이핑 파이프라인
+# CDE Harness — 빠른 프로토타이핑 파이프라인
 
 AWS Solutions Architect가 고객 요구사항으로부터 **Next.js 15 + Cloudscape Design System** 프로토타입을 자동 생성하기 위한 Claude Code 하네스입니다.
 
@@ -150,7 +150,7 @@ requirements-analyst → architect → spec-writer → code-generator → review
 ## 디렉토리 구조
 
 ```
-fde-harness/
+cde-harness/
 ├── .claude/
 │   ├── agents/                     # 서브에이전트 정의 (11개)
 │   │   ├── brief-composer.md         # 입력 통합 → 브리프 생성

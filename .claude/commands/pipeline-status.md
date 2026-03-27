@@ -1,8 +1,8 @@
 ---
-description: "Show current FDE pipeline status, progress, and artifact summary"
+description: "Show current CDE pipeline status, progress, and artifact summary"
 ---
 
-# FDE Pipeline - Status
+# CDE Pipeline - Status
 
 Display the current state of the prototype pipeline.
 

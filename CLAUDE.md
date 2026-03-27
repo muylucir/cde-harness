@@ -1,4 +1,4 @@
-# FDE Harness - Rapid Prototype Pipeline
+# CDE Harness - Rapid Prototype Pipeline
 
 Sub-agent pipeline for generating Next.js 15 + Cloudscape Design System prototypes from customer pain points. Built for AWS Solutions Architects doing rapid customer demos.
 

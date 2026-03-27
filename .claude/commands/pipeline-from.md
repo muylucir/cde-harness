@@ -1,8 +1,8 @@
 ---
-description: "Resume the FDE pipeline from a specific stage (e.g., /pipeline-from code-generator)"
+description: "Resume the CDE pipeline from a specific stage (e.g., /pipeline-from code-generator)"
 ---
 
-# FDE Pipeline - Resume from Stage
+# CDE Pipeline - Resume from Stage
 
 Resume the pipeline from a specific stage, using existing artifacts from prior stages.
 

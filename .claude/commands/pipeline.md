@@ -1,8 +1,8 @@
 ---
-description: "Run the full FDE prototype pipeline from customer brief to handover-ready code"
+description: "Run the full CDE prototype pipeline from customer brief to handover-ready code"
 ---
 
-# FDE Pipeline - Full Run
+# CDE Pipeline - Full Run
 
 Execute the complete prototype generation pipeline from customer brief to handover-ready code.
 

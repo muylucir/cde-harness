@@ -22,6 +22,7 @@ Sub-agent pipeline for generating Next.js 15 + Cloudscape Design System prototyp
 - State: `.pipeline/state.json`
 - Brief generation: `/brief` → raw 입력에서 brief 자동 생성
 - Trigger: `/pipeline` → full run
+- Iterate: `/iterate` → 고객 피드백 분석 + 영향 범위 추적 + 최소 재생성
 - Resume: `/pipeline-from {stage-name}`
 - Status: `/pipeline-status`
 

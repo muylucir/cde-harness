@@ -46,3 +46,5 @@ next-env.d.ts
 /.pipeline/input/customer-brief.md
 /.pipeline/input/source-analysis.md
 /.pipeline/artifacts/v*/
+/.pipeline/revisions/v*
+/.pipeline/input/manifest.json

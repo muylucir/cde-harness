@@ -127,6 +127,7 @@ npm run dev
 |--------|------|
 | `/brief` | 다양한 입력 자료에서 customer-brief.md 자동 생성 |
 | `/pipeline` | 전체 파이프라인 실행 (브리프 → 핸드오버) |
+| `/iterate` | 고객 피드백 분석 → 영향 범위 추적 → 최소 재생성 |
 | `/pipeline-from {stage}` | 특정 단계부터 재개 |
 | `/pipeline-status` | 현재 진행 상태 확인 |
 
@@ -148,8 +149,9 @@ requirements-analyst → architect → spec-writer → code-generator → review
 ```
 fde-harness/
 ├── .claude/
-│   ├── agents/                     # 서브에이전트 정의 (9개)
+│   ├── agents/                     # 서브에이전트 정의 (10개)
 │   │   ├── brief-composer.md         # 입력 통합 → 브리프 생성
+│   │   ├── feedback-analyzer.md      # 피드백 영향 분석 + 변경 추적
 │   │   ├── requirements-analyst.md   # 요구사항 분석
 │   │   ├── architect.md              # 아키텍처 설계
 │   │   ├── spec-writer.md            # 명세서 작성 (BE+AI+FE)
@@ -158,9 +160,10 @@ fde-harness/
 │   │   ├── code-generator-frontend.md # 프론트엔드 코드 생성
 │   │   ├── reviewer.md               # 코드 리뷰
 │   │   └── security-auditor-pipeline.md  # 보안 점검
-│   ├── commands/                   # 파이프라인 커맨드 (4개)
+│   ├── commands/                   # 파이프라인 커맨드 (5개)
 │   │   ├── brief.md                  # /brief
 │   │   ├── pipeline.md               # /pipeline
+│   │   ├── iterate.md                # /iterate
 │   │   ├── pipeline-from.md          # /pipeline-from
 │   │   └── pipeline-status.md        # /pipeline-status
 │   └── settings.json               # Claude Code 권한 설정
@@ -253,6 +256,65 @@ fde-harness/
 - **출력**: OWASP 기반 보안 감사 보고서
 - **점검 항목**: 입력 검증, XSS 방지, CSRF, 보안 헤더, 의존성, 시크릿, 프로토타입 특화 체크
 - **FAIL 시**: 코드 생성 단계로 보안 수정 피드백 전달 (최대 2회)
+
+---
+
+## 반복 개선 워크플로우 (`/iterate`)
+
+1차 프로토타입을 고객에게 보여주고 피드백을 받은 후, 처음부터 다시 만들 필요 없이 변경된 부분만 업데이트합니다.
+
+### 사용법
+
+```bash
+# 1. 고객 피드백 파일을 raw에 추가
+cp ~/Desktop/고객피드백_2차미팅.md .pipeline/input/raw/
+
+# 2. /iterate 실행
+/iterate
+```
+
+### 자동 처리 과정
+
+```
+새 피드백 파일 감지
+    │
+    ▼
+[feedback-analyzer] 영향도 분석
+    │  - 입력 변경 감지 (manifest.json과 비교)
+    │  - 피드백 → 요구사항 매핑
+    │  - 요구사항 → 아키텍처 → 스펙 → 코드 영향 추적
+    │  - 최소 재진입 지점 결정
+    ▼
+사용자 확인 (영향 범위 + 재진입 지점)
+    │
+    ▼
+[brief-composer] 기존 brief + 피드백 병합
+    │
+    ▼
+재진입 지점부터 파이프라인 재실행 (v2)
+    │  - 변경 필요한 파일만 재생성
+    │  - 나머지는 v1에서 보존
+    ▼
+업데이트된 프로토타입
+```
+
+### 영향 범위별 재진입 지점
+
+| 피드백 유형 | 자동 판단 재진입 | 예시 |
+|------------|-----------------|------|
+| 새 기능 추가 | `requirements-analyst` | "엑셀 내보내기 기능 추가" |
+| 기존 기능 구조 변경 | `architect` | "테이블을 카드뷰로 변경" |
+| UI/UX 수정 | `code-generator-frontend` | "버튼 위치 변경" |
+| 데이터 필드 추가 | `spec-writer` | "전화번호 필드 추가" |
+| 버그 수정 | `code-generator-backend` 또는 `frontend` | "필터가 안 됨" |
+
+### 추적 데이터
+
+| 파일 | 용도 |
+|------|------|
+| `.pipeline/input/manifest.json` | 입력 파일 체크섬 — 변경 감지용 |
+| `.pipeline/revisions/v{N}-to-v{N+1}.json` | 리비전 로그 — 변경 항목 + 영향 범위 |
+| `.pipeline/revisions/v{N}-to-v{N+1}-analysis.md` | 한국어 영향도 분석 보고서 |
 
 ---
 

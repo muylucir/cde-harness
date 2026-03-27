@@ -160,6 +160,32 @@ allowedTools:
 ### PDF가 너무 길 때
 PDF가 20페이지를 초과하면 처음 20페이지만 읽고 `source-analysis.md`에 "20페이지까지만 분석함"으로 표기한다.
 
+## 입력 추적 (Manifest)
+
+Brief 생성이 완료되면 `.pipeline/input/manifest.json`을 작성/업데이트한다. 이 파일은 `feedback-analyzer`가 이후 리비전에서 변경 감지에 사용한다.
+
+```json
+{
+  "version": 1,
+  "processed_at": "<ISO-8601>",
+  "brief_checksum": "<customer-brief.md의 md5>",
+  "files": [
+    {
+      "name": "미팅노트_1차.md",
+      "path": ".pipeline/input/raw/미팅노트_1차.md",
+      "checksum": "<md5>",
+      "size": 1234,
+      "type": "meeting-notes"
+    }
+  ]
+}
+```
+
+Manifest 생성 방법:
+- 각 파일의 체크섬: `md5sum` 명령으로 계산
+- `version`: `.pipeline/state.json`의 `current_version` (없으면 1)
+- 리비전 실행 시 (`/iterate`): 이전 manifest와 현재 상태를 비교하여 변경 감지
+
 ## 검증 체크리스트
 
 - [ ] `.pipeline/input/raw/` 에서 모든 파일을 읽었는가
@@ -168,6 +194,7 @@ PDF가 20페이지를 초과하면 처음 20페이지만 읽고 `source-analysis
 - [ ] source-analysis.md가 각 소스별 추출 결과를 포함하는가
 - [ ] 모순이 감지된 경우 Conflicts 섹션에 기록했는가
 - [ ] JSON이 아닌 마크다운이므로 자연스러운 문장으로 작성되었는가
+- [ ] `.pipeline/input/manifest.json`이 생성/업데이트되었는가
 
 ## 완료 후
 

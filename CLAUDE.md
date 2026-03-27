@@ -27,7 +27,7 @@ Sub-agent pipeline for generating Next.js 15 + Cloudscape Design System prototyp
 - Status: `/pipeline-status`
 
 ## Pipeline Agent Order
-(brief-composer) → requirements-analyst → architect → spec-writer → code-generator-backend → (code-generator-ai) → code-generator-frontend → reviewer → security-auditor-pipeline
+(brief-composer) → requirements-analyst → architect → spec-writer → code-generator-backend → (code-generator-ai) → code-generator-frontend → reviewer → security-auditor-pipeline → handover-packager
 
 *code-generator-ai는 요구사항에 AI 기능이 포함된 경우에만 실행*
 

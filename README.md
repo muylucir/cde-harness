@@ -37,7 +37,10 @@ AWS Solutions Architect가 고객 요구사항으로부터 **Next.js 15 + Clouds
 [6. 보안 점검] → OWASP 기반 보안 감사
     │
     ▼
-완료: 고객 핸드오버 준비
+[7. 핸드오버] → 아키텍처/API 문서 + 프로덕션 체크리스트 + 환경 설정 가이드
+    │
+    ▼
+완료: 고객 개발팀에 패키지 전달
 ```
 
 ---
@@ -149,7 +152,7 @@ requirements-analyst → architect → spec-writer → code-generator → review
 ```
 fde-harness/
 ├── .claude/
-│   ├── agents/                     # 서브에이전트 정의 (10개)
+│   ├── agents/                     # 서브에이전트 정의 (11개)
 │   │   ├── brief-composer.md         # 입력 통합 → 브리프 생성
 │   │   ├── feedback-analyzer.md      # 피드백 영향 분석 + 변경 추적
 │   │   ├── requirements-analyst.md   # 요구사항 분석
@@ -159,7 +162,8 @@ fde-harness/
 │   │   ├── code-generator-ai.md      # AI Agent 코드 생성 (조건부)
 │   │   ├── code-generator-frontend.md # 프론트엔드 코드 생성
 │   │   ├── reviewer.md               # 코드 리뷰
-│   │   └── security-auditor-pipeline.md  # 보안 점검
+│   │   ├── security-auditor-pipeline.md  # 보안 점검
+│   │   └── handover-packager.md      # 핸드오버 패키지 생성
 │   ├── commands/                   # 파이프라인 커맨드 (5개)
 │   │   ├── brief.md                  # /brief
 │   │   ├── pipeline.md               # /pipeline
@@ -250,6 +254,18 @@ fde-harness/
 - **출력**: 7개 카테고리 리뷰 보고서 (PASS/FAIL)
 - **심사 항목**: Cloudscape 준수, Next.js 15 규약, TypeScript 품질, 접근성, 요구사항 커버리지, **백엔드 품질**, 코드 조직
 - **FAIL 시**: 백엔드/프론트엔드 코드 생성 또는 명세서 단계로 피드백 전달 (최대 3회)
+
+### 7. 핸드오버 패키지 (Handover Packager)
+- **입력**: 모든 파이프라인 아티팩트 + 생성된 코드
+- **출력**: 프로젝트 루트에 핸드오버 문서 패키지
+- **생성 문서**:
+  - `README.md` — 5분 안에 실행 가능한 시작 가이드
+  - `docs/ARCHITECTURE.md` — 컴포넌트 트리 + 데이터 플로우 + 설계 결정
+  - `docs/API.md` — API 엔드포인트 문서 (백엔드 있을 때)
+  - `docs/AI-AGENT.md` — 에이전트 패턴/프롬프트/도구 문서 (AI 있을 때)
+  - `docs/PRODUCTION-CHECKLIST.md` — 인증, DB 교체, 보안, 인프라, 테스트 체크리스트
+  - `docs/REVISION-HISTORY.md` — 프로토타입 변경 이력 (리비전 있을 때)
+  - `.env.local.example` — 환경 변수 템플릿
 
 ### 6. 보안 점검 (Security Auditor)
 - **입력**: 생성된 코드 + 리뷰 결과 (PASS 필수)

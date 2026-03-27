@@ -32,7 +32,8 @@ Execute the complete prototype generation pipeline from customer brief to handov
    ├── 03-specs/
    ├── 04-codegen/
    ├── 05-review/
-   └── 06-security/
+   ├── 06-security/
+   └── 07-handover/
    ```
 
 4. Initialize `.pipeline/state.json`:
@@ -112,6 +113,12 @@ Execute each stage sequentially. After each stage, update `state.json` and prese
   - `return_to` 필드에 따라 stage 4A(백엔드) 또는 4B(프론트엔드) 재실행 (max 2 iterations)
   - If max iterations reached: halt with `halt-report.md`
 - If **PASS**: pipeline complete
+
+### Stage 7: Handover Package
+- Launch the `handover-packager` agent
+- Input: 모든 파이프라인 아티팩트 + `src/` + `package.json`
+- Output: `.pipeline/artifacts/v{N}/07-handover/` + 프로젝트 루트에 문서 복사
+- 생성 문서: README.md, ARCHITECTURE.md, API.md, AI-AGENT.md(조건부), PRODUCTION-CHECKLIST.md, REVISION-HISTORY.md(조건부), .env.local.example
 
 ## Completion
 

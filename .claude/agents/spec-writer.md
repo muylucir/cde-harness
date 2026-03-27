@@ -32,21 +32,29 @@ Read from the current pipeline version directory:
 
 `architecture.json`의 컴포넌트, API 라우트, 데이터 모델을 기반으로 **백엔드와 프론트엔드 스펙을 모두** 작성한다.
 
-### 백엔드 스펙 (generator: "backend") — 먼저 생성됨
+### 백엔드 스펙 (generator: "backend") — 1번째 생성
 1. **types** — 공유 TypeScript 타입/인터페이스 (프론트엔드도 import)
 2. **validation** — zod 요청 스키마
 3. **data** — 시드/목데이터
 4. **db** — 인메모리 스토어 + 리소스별 repository
-5. **services** — AWS 서비스 래퍼 (필요 시: Bedrock, DynamoDB, S3)
+5. **services** — AWS 서비스 래퍼 (필요 시: DynamoDB, S3)
 6. **api** — Next.js Route Handlers (REST endpoints)
 7. **middleware** — 보안 헤더, 인증 미들웨어
 
-### 프론트엔드 스펙 (generator: "frontend") — 백엔드 이후 생성됨
-1. **hooks** — API 호출 커스텀 훅
+### AI 스펙 (generator: "ai") — 2번째 생성 (조건부: AI 기능이 있을 때만)
+1. **ai-types** — AI 관련 타입 (Message, Tool, AgentResponse 등)
+2. **ai-prompts** — 시스템 프롬프트, 프롬프트 템플릿
+3. **ai-tools** — 에이전트 커스텀 도구 정의
+4. **ai-rag** — RAG 파이프라인 (필요 시: 임베딩, 검색)
+5. **ai-agent** — Strands Agent 또는 Bedrock 직접 호출
+6. **ai-api** — 채팅/에이전트 API 라우트 (스트리밍)
+
+### 프론트엔드 스펙 (generator: "frontend") — 3번째 (마지막) 생성
+1. **hooks** — API 호출 커스텀 훅 (AI 채팅 훅 포함)
 2. **contexts** — React context providers
 3. **layout** — AppLayout, TopNavigation, SideNavigation
 4. **shared** — 재사용 Cloudscape wrapper 컴포넌트
-5. **feature** — 기능별 컴포넌트
+5. **feature** — 기능별 컴포넌트 (AI 채팅 UI 포함 시 Cloudscape Chat 컴포넌트 사용)
 6. **page** — App Router page 컴포넌트
 
 ## 백엔드 스펙 파일 포맷

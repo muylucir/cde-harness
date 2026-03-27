@@ -75,6 +75,14 @@ Execute each stage sequentially. After each stage, update `state.json` and prese
 - Verify `npm run build` passes
 - If build fails after 3 attempts: halt and report to user
 
+### Stage 4A-2: AI Agent Code Generation (조건부)
+- requirements.json에 AI 관련 FR이 있는지 확인 (챗봇, RAG, 에이전트, 콘텐츠 생성, 요약 등)
+- **AI 기능이 없으면 이 단계를 건너뛴다**
+- Launch the `code-generator-ai` agent
+- Input: `03-specs/_manifest.json` (generator: "ai" phases) + AI spec files + backend generation log
+- Output: `src/lib/ai/`, `src/app/api/chat/`, AI types + `04-codegen/generation-log-ai.json`
+- Verify `npm run build` passes
+
 ### Stage 4B: Frontend Code Generation
 - Launch the `code-generator-frontend` agent
 - Input: `03-specs/_manifest.json` (generator: "frontend" phases) + frontend spec files + backend generation log

@@ -25,6 +25,9 @@ AWS Solutions Architect가 고객 요구사항으로부터 **Next.js 15 + Clouds
 [4A. 백엔드 코드 생성] → types + API routes + data layer
     │
     ▼
+[4A-2. AI Agent 코드 생성] → Strands Agent + prompts + tools (조건부)
+    │
+    ▼
 [4B. 프론트엔드 코드 생성] → Cloudscape UI components + pages
     │
     ▼
@@ -145,12 +148,13 @@ requirements-analyst → architect → spec-writer → code-generator → review
 ```
 fde-harness/
 ├── .claude/
-│   ├── agents/                     # 서브에이전트 정의 (8개)
+│   ├── agents/                     # 서브에이전트 정의 (9개)
 │   │   ├── brief-composer.md         # 입력 통합 → 브리프 생성
 │   │   ├── requirements-analyst.md   # 요구사항 분석
 │   │   ├── architect.md              # 아키텍처 설계
-│   │   ├── spec-writer.md            # 명세서 작성 (FE+BE)
+│   │   ├── spec-writer.md            # 명세서 작성 (BE+AI+FE)
 │   │   ├── code-generator-backend.md # 백엔드 코드 생성
+│   │   ├── code-generator-ai.md      # AI Agent 코드 생성 (조건부)
 │   │   ├── code-generator-frontend.md # 프론트엔드 코드 생성
 │   │   ├── reviewer.md               # 코드 리뷰
 │   │   └── security-auditor-pipeline.md  # 보안 점검
@@ -221,6 +225,16 @@ fde-harness/
 - **하는 일**: types → validation → data → db → services → api → middleware 순서로 생성
 - **기본 패턴**: 인메모리 스토어 + Repository 패턴 (DynamoDB 등으로 교체 가능)
 - **AWS 서비스**: 요구사항에 따라 Bedrock, DynamoDB, S3, Cognito 연동 코드 생성
+
+### 4A-2. AI Agent 코드 생성 (Code Generator — AI) *조건부*
+- **실행 조건**: 요구사항에 AI 기능(챗봇, RAG, 에이전트, 콘텐츠 생성 등)이 포함된 경우에만
+- **입력**: AI 관련 명세서 + 백엔드 생성 로그
+- **출력**: Strands Agent 정의, 시스템 프롬프트, 커스텀 도구, 스트리밍 API
+- **참조 스킬 3개**:
+  - `agent-patterns` — 에이전트 패턴 선택 (ReAct, Plan-and-Execute, Multi-Agent 등)
+  - `prompt-engineering` — 시스템 프롬프트 설계 (XML 구조화, Tool Use Prompting)
+  - `strands-sdk-guide` — Strands Agents SDK 구현 (도구, MCP, 스트리밍, Guardrails)
+- **모든 모델 호출은 Strands SDK가 추상화** — 별도 Bedrock API 코드 불필요
 
 ### 4B. 프론트엔드 코드 생성 (Code Generator — Frontend)
 - **입력**: 프론트엔드 명세서 + 백엔드 생성 로그 (타입/API 참조)

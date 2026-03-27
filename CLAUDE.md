@@ -26,10 +26,19 @@ Sub-agent pipeline for generating Next.js 15 + Cloudscape Design System prototyp
 - Resume: `/pipeline-from {stage-name}`
 - Status: `/pipeline-status`
 
-## Pipeline Agent Order
-(brief-composer) → requirements-analyst → architect → spec-writer → code-generator-backend → (code-generator-ai) → code-generator-frontend → reviewer → security-auditor-pipeline → handover-packager
+## Pipeline Agent Order (병렬 구간 포함)
+
+```
+(brief-composer) → requirements-analyst → architect
+    → [spec-writer BE+AI ∥ spec-writer FE]          ← 병렬
+    → shared types
+    → [code-gen-backend ∥ (code-gen-ai) ∥ code-gen-frontend]  ← 병렬
+    → [reviewer-backend ∥ reviewer-frontend]         ← 병렬
+    → security-auditor-pipeline → handover-packager
+```
 
 *code-generator-ai는 요구사항에 AI 기능이 포함된 경우에만 실행*
+*∥ = Agent Team으로 병렬 실행*
 
 ## Language Convention
 - 파이프라인이 생성하는 **마크다운 문서** (.md): 한국어로 작성

@@ -48,73 +48,120 @@ Execute the complete prototype generation pipeline from customer brief to handov
 
 ## Execution Sequence
 
-Execute each stage sequentially. After each stage, update `state.json` and present results to the user.
+순차 실행이 필요한 단계와 병렬 실행이 가능한 단계를 구분한다. 병렬 가능한 단계는 **Agent Team** (단일 메시지에서 여러 Agent 도구를 동시 호출)으로 실행하여 파이프라인 전체 소요 시간을 단축한다.
 
-### Stage 1: Requirements Analysis
+```
+Stage 1 (순차)     요구사항 분석 ← 승인 게이트
+    ↓
+Stage 2 (순차)     아키텍처 설계 ← 승인 게이트
+    ↓
+Stage 3 (병렬)     ┌─ spec-writer (backend 스펙) ─┐
+                   └─ spec-writer (frontend 스펙) ─┘
+    ↓
+Stage 4.0 (순차)   공유 타입 생성 (code-generator-backend: types phase만)
+    ↓
+Stage 4 (병렬)     ┌─ code-generator-backend (나머지) ─┐
+                   ├─ code-generator-ai (조건부)        ├─→ npm run build
+                   └─ code-generator-frontend ──────────┘
+    ↓
+Stage 5 (병렬)     ┌─ reviewer (backend 리뷰) ─┐
+                   └─ reviewer (frontend 리뷰) ─┘─→ 결과 병합
+    ↓
+Stage 6 (순차)     보안 점검
+    ↓
+Stage 7 (순차)     핸드오버 패키지
+```
+
+### Stage 1: Requirements Analysis (순차)
 - Launch the `requirements-analyst` agent
 - Input: `.pipeline/input/customer-brief.md`
 - Output: `.pipeline/artifacts/v{N}/01-requirements/`
 - **APPROVAL GATE**: Present requirements summary to user. Wait for approval before proceeding.
 - If user requests changes: re-run stage 1 with feedback
 
-### Stage 2: Architecture Design
+### Stage 2: Architecture Design (순차)
 - Launch the `architect` agent
 - Input: `01-requirements/requirements.json`
 - Output: `.pipeline/artifacts/v{N}/02-architecture/`
 - **APPROVAL GATE**: Present component tree and data flow. Wait for approval.
 
-### Stage 3: Specification
-- Launch the `spec-writer` agent
-- Input: `01-requirements/requirements.json` + `02-architecture/architecture.json`
-- Output: `.pipeline/artifacts/v{N}/03-specs/`
-- Present spec count and generation order to user (no approval gate — proceed automatically)
+### Stage 3: Specification (병렬 — Agent Team)
 
-### Stage 4A: Backend Code Generation
-- Launch the `code-generator-backend` agent
-- Input: `03-specs/_manifest.json` (generator: "backend" phases) + backend spec files
-- Output: `src/types/`, `src/lib/`, `src/app/api/`, `src/data/`, `src/middleware.ts` + `04-codegen/generation-log-backend.json`
-- Verify `npm run build` passes
-- If build fails after 3 attempts: halt and report to user
+`spec-writer`를 **2개 병렬 에이전트**로 동시 실행한다. 둘 다 같은 requirements.json + architecture.json을 읽지만, 담당 범위가 다르다.
 
-### Stage 4A-2: AI Agent Code Generation (조건부)
-- requirements.json에 AI 관련 FR이 있는지 확인 (챗봇, RAG, 에이전트, 콘텐츠 생성, 요약 등)
-- **AI 기능이 없으면 이 단계를 건너뛴다**
-- Launch the `code-generator-ai` agent
-- Input: `03-specs/_manifest.json` (generator: "ai" phases) + AI spec files + backend generation log
-- Output: `src/lib/ai/`, `src/app/api/chat/`, AI types + `04-codegen/generation-log-ai.json`
-- Verify `npm run build` passes
+**동시에 실행:**
+- **Agent A** — `spec-writer` (backend + AI 스펙)
+  - Input: requirements.json + architecture.json
+  - 지시: `generator: "backend"` 및 `generator: "ai"` phase의 스펙만 작성
+  - Output: backend 스펙 파일 + AI 스펙 파일 + `_manifest-backend.json`
 
-### Stage 4B: Frontend Code Generation
-- Launch the `code-generator-frontend` agent
-- Input: `03-specs/_manifest.json` (generator: "frontend" phases) + frontend spec files + backend generation log
-- Output: `src/components/`, `src/hooks/`, `src/contexts/`, `src/app/` pages + `04-codegen/generation-log-frontend.json`
-- **Important**: 프론트엔드는 백엔드가 생성한 타입과 API를 import한다. 백엔드 완료 후 실행.
-- Verify `npm run build` passes
-- If build fails after 3 attempts: halt and report to user
+- **Agent B** — `spec-writer` (frontend 스펙)
+  - Input: requirements.json + architecture.json
+  - 지시: `generator: "frontend"` phase의 스펙만 작성
+  - Output: frontend 스펙 파일 + `_manifest-frontend.json`
 
-### Stage 5: Code Review
-- Launch the `reviewer` agent
-- Input: `src/` + `04-codegen/generation-log-backend.json` + `04-codegen/generation-log-frontend.json` + `01-requirements/requirements.json`
-- Output: `.pipeline/artifacts/v{N}/05-review/`
-- If **FAIL**:
-  - Check `return_to` field in `review-result.json`
-  - If `"code-generator-backend"`: write feedback file, re-run stage 4A (max 3 iterations)
-  - If `"code-generator-frontend"`: write feedback file, re-run stage 4B (max 3 iterations)
-  - If `"spec-writer"`: write feedback file, re-run from stage 3 (max 2 iterations)
-  - If max iterations reached: halt with `halt-report.md`
-- If **PASS**: proceed to stage 6
+**병합:** 두 에이전트 완료 후 `_manifest-backend.json` + `_manifest-frontend.json`을 `_manifest.json`으로 병합
 
-### Stage 6: Security Audit
+### Stage 4.0: Shared Types Generation (순차 — 병렬의 전제)
+
+공유 타입은 BE/FE 모두 의존하므로 먼저 생성한다:
+- Launch `code-generator-backend` agent with 지시: **types phase만 실행**
+- Input: `03-specs/_manifest.json` → types 스펙만
+- Output: `src/types/` (공유 타입 정의)
+- 이 단계 완료 후 Stage 4의 3개 에이전트가 모두 `src/types/`를 import할 수 있다
+
+### Stage 4: Code Generation (병렬 — Agent Team)
+
+공유 타입이 준비된 후, **최대 3개 에이전트를 동시 실행**한다:
+
+**동시에 실행:**
+- **Agent A** — `code-generator-backend` (나머지 phase)
+  - 지시: types 이외의 backend phase 실행 (validation → data → db → services → api → middleware)
+  - Output: `src/lib/`, `src/app/api/`, `src/data/`, `src/middleware.ts` + `generation-log-backend.json`
+
+- **Agent B** — `code-generator-ai` (조건부 — AI FR이 있을 때만)
+  - Input: AI 스펙 + 공유 타입
+  - Output: `src/lib/ai/`, `src/app/api/chat/` + `generation-log-ai.json`
+
+- **Agent C** — `code-generator-frontend`
+  - 지시: `src/types/`를 import하여 UI 코드 생성. API 호출은 엔드포인트 경로만 참조 (스펙에 정의됨)
+  - Output: `src/components/`, `src/hooks/`, `src/contexts/`, `src/app/` pages + `generation-log-frontend.json`
+
+**병합 후 검증:** 3개 에이전트 모두 완료 후:
+1. `npm run build` 실행
+2. 빌드 실패 시 에러를 분석하여 해당 에이전트만 재실행 (최대 3회)
+
+### Stage 5: Code Review (병렬 — Agent Team)
+
+리뷰를 **2개 병렬 에이전트**로 분할한다:
+
+**동시에 실행:**
+- **Agent A** — `reviewer` (backend 리뷰)
+  - 지시: 백엔드 코드만 리뷰 (src/types/, src/lib/, src/app/api/, src/data/, src/middleware.ts)
+  - 리뷰 카테고리: TypeScript Quality, Backend Quality, Code Organization
+  - Output: `05-review/review-result-backend.json`
+
+- **Agent B** — `reviewer` (frontend 리뷰)
+  - 지시: 프론트엔드 코드만 리뷰 (src/components/, src/hooks/, src/contexts/, src/app/ pages)
+  - 리뷰 카테고리: Cloudscape Compliance, Next.js 15 Conventions, Accessibility, Requirements Coverage
+  - Output: `05-review/review-result-frontend.json`
+
+**결과 병합:**
+- 두 리뷰 결과를 합산하여 `review-result.json` + `review-report.md` 생성
+- 전체 verdict: 둘 다 PASS → PASS, 하나라도 FAIL → FAIL
+- FAIL 시 `return_to`는 해당 영역의 코드 제너레이터를 가리킨다
+
+### Stage 6: Security Audit (순차)
 - Launch the `security-auditor-pipeline` agent
 - Input: `src/` + `05-review/review-result.json` + `01-requirements/requirements.json`
 - Output: `.pipeline/artifacts/v{N}/06-security/`
 - If **FAIL**:
   - Write feedback file to `04-codegen/`
-  - `return_to` 필드에 따라 stage 4A(백엔드) 또는 4B(프론트엔드) 재실행 (max 2 iterations)
+  - `return_to` 필드에 따라 해당 코드 제너레이터 재실행 (max 2 iterations)
   - If max iterations reached: halt with `halt-report.md`
-- If **PASS**: pipeline complete
+- If **PASS**: proceed to stage 7
 
-### Stage 7: Handover Package
+### Stage 7: Handover Package (순차)
 - Launch the `handover-packager` agent
 - Input: 모든 파이프라인 아티팩트 + `src/` + `package.json`
 - Output: `.pipeline/artifacts/v{N}/07-handover/` + 프로젝트 루트에 문서 복사

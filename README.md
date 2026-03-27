@@ -19,19 +19,16 @@ AWS Solutions Architect가 고객 요구사항으로부터 **Next.js 15 + Clouds
 [2. 아키텍처 설계] → architecture.json + 컴포넌트 트리 + 데이터 플로우
     │
     ▼
-[3. 명세서 작성] → 컴포넌트별 spec 파일 + manifest
+[3. 명세서 작성] → BE 스펙 ∥ FE 스펙 (병렬)
     │
     ▼
-[4A. 백엔드 코드 생성] → types + API routes + data layer
+[4.0 공유 타입] → src/types/ 생성 (BE/FE 공통 의존)
     │
     ▼
-[4A-2. AI Agent 코드 생성] → Strands Agent + prompts + tools (조건부)
+[4. 코드 생성] → BE ∥ AI(조건부) ∥ FE (병렬)
     │
     ▼
-[4B. 프론트엔드 코드 생성] → Cloudscape UI components + pages
-    │
-    ▼
-[5. 코드 리뷰] → 6개 카테고리 품질 심사
+[5. 코드 리뷰] → BE 리뷰 ∥ FE 리뷰 (병렬) → 결과 병합
     │
     ▼
 [6. 보안 점검] → OWASP 기반 보안 감사

@@ -1,0 +1,48 @@
+{
+  "name": "fde-harness",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "type-check": "tsc --noEmit",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,css}": [
+      "prettier --write"
+    ]
+  },
+  "dependencies": {
+    "@cloudscape-design/board-components": "^3.0.159",
+    "@cloudscape-design/chat-components": "^1.0.107",
+    "@cloudscape-design/collection-hooks": "^1.0.87",
+    "@cloudscape-design/components": "^3.0.1253",
+    "@cloudscape-design/global-styles": "^1.0.54",
+    "next": "16.2.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.1",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.1",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

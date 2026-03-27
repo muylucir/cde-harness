@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm run format:*)",
+      "Bash(npm run type-check:*)",
+      "Bash(npm install:*)",
+      "Bash(npm audit:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx next:*)",
+      "Bash(npx lint-staged:*)",
+      "Bash(ls:*)",
+      "Bash(node:*)"
+    ]
+  }
+}

@@ -1,0 +1,2 @@
+# node_modules가 없으면 lint-staged 건너뜀 (하네스 자체 커밋 시)
+[ -d node_modules ] && npx lint-staged || true

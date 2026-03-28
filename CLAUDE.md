@@ -30,7 +30,7 @@ Sub-agent pipeline for generating Next.js 15 + Cloudscape Design System prototyp
 ## Pipeline Agent Order (순차 + 품질 루프)
 
 ```
-(brief-composer) → requirements-analyst → architect → spec-writer
+(brief-composer) → domain-researcher → requirements-analyst → architect → spec-writer
     → code-gen-backend → (code-gen-ai) → code-gen-frontend
     → [review → test(Playwright) → fix]* ← 품질 루프 (최대 3회)
     → security-auditor-pipeline → handover-packager

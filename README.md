@@ -13,6 +13,9 @@ AWS Solutions Architect가 고객 요구사항으로부터 **Next.js 15 + Clouds
 [0. 브리프 작성] → customer-brief.md + source-analysis.md (/brief)
     │
     ▼
+[0.5 도메인 리서치] → 업계 워크플로우 + KPI + 용어 + 유사 제품 패턴
+    │
+    ▼
 [1. 요구사항 분석] → requirements.json + requirements.md
     │
     ▼
@@ -146,8 +149,9 @@ requirements-analyst → architect → spec-writer → code-generator → review
 ```
 cde-harness/
 ├── .claude/
-│   ├── agents/                     # 서브에이전트 정의 (11개)
+│   ├── agents/                     # 서브에이전트 정의 (12개)
 │   │   ├── brief-composer.md         # 입력 통합 → 브리프 생성
+│   │   ├── domain-researcher.md      # 도메인 리서치 (워크플로우/KPI/용어)
 │   │   ├── feedback-analyzer.md      # 피드백 영향 분석 + 변경 추적
 │   │   ├── requirements-analyst.md   # 요구사항 분석
 │   │   ├── architect.md              # 아키텍처 설계
@@ -204,8 +208,15 @@ cde-harness/
   - 표준 brief 포맷으로 통합
 - **특수 처리**: 입력 부족 시 추가 정보 요청, 이미지만 있을 경우 추론 결과에 주의사항 추가
 
+### 0.5 도메인 리서치 (Domain Researcher)
+- **입력**: 고객 브리프
+- **출력**: 도메인 컨텍스트 JSON + 한국어 보고서
+- **하는 일**: 웹 검색으로 업계 워크플로우, KPI, 용어, 유사 제품 패턴, 규제 요건을 리서치
+- **핵심 가치**: 고객이 명시하지 않았지만 도메인 표준인 기능을 "제안 요구사항"으로 식별
+- **후속 활용**: 요구사항 분석(용어+FR 품질), 아키텍처(데이터 모델), 코드 생성(현실적 목데이터)
+
 ### 1. 요구사항 분석 (Requirements Analyst)
-- **입력**: 자유 형식의 고객 브리프
+- **입력**: 고객 브리프 + 도메인 컨텍스트
 - **출력**: 구조화된 요구사항 JSON + 한국어 마크다운 보고서
 - **하는 일**: 기능 요구사항(FR) 추출, 우선순위 분류, 수용 기준 정의, 페르소나 도출
 - **입력이 모호할 때**: 명확화 질문 목록을 생성하고 대기

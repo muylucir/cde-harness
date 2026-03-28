@@ -27,6 +27,7 @@ Execute the complete prototype generation pipeline from customer brief to handov
 3. Create the version directory structure:
    ```
    .pipeline/artifacts/v{N}/
+   ├── 00-domain/
    ├── 01-requirements/
    ├── 02-architecture/
    ├── 03-specs/
@@ -51,6 +52,8 @@ Execute the complete prototype generation pipeline from customer brief to handov
 모든 단계를 순차 실행한다. 코드 생성 후에는 **리뷰→테스트→수정 품질 루프**를 돌며 코드 품질을 보장한다.
 
 ```
+Stage 0.5 도메인 리서치 ← 승인 게이트 (제안 요구사항)
+    ↓
 Stage 1   요구사항 분석 ← 승인 게이트
     ↓
 Stage 2   아키텍처 설계 ← 승인 게이트
@@ -70,9 +73,16 @@ Stage 6   보안 점검
 Stage 7   핸드오버 패키지
 ```
 
+### Stage 0.5: Domain Research
+- Launch the `domain-researcher` agent
+- Input: `.pipeline/input/customer-brief.md`
+- Output: `.pipeline/artifacts/v{N}/00-domain/domain-context.json` + `domain-context.md`
+- 웹 리서치로 도메인 워크플로우, KPI, 용어, 유사 제품 패턴, 규제 요건 수집
+- **APPROVAL GATE**: 제안 요구사항을 사용자에게 제시. 추가할 것이 있으면 customer-brief.md에 반영.
+
 ### Stage 1: Requirements Analysis
 - Launch the `requirements-analyst` agent
-- Input: `.pipeline/input/customer-brief.md`
+- Input: `.pipeline/input/customer-brief.md` + `.pipeline/artifacts/v{N}/00-domain/domain-context.json`
 - Output: `.pipeline/artifacts/v{N}/01-requirements/`
 - **APPROVAL GATE**: Present requirements summary to user. Wait for approval before proceeding.
 - If user requests changes: re-run stage 1 with feedback

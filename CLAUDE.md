@@ -14,6 +14,7 @@ Sub-agent pipeline for generating Next.js 15 + Cloudscape Design System prototyp
 - `npm run lint` — ESLint
 - `npm run format` — Prettier format all
 - `npm run type-check` — TypeScript check
+- `npm run test:e2e` — Playwright E2E tests
 
 ## Pipeline
 - Raw input: `.pipeline/input/raw/` (회의록, 다이어그램, 요구사항 문서 등)
@@ -26,19 +27,17 @@ Sub-agent pipeline for generating Next.js 15 + Cloudscape Design System prototyp
 - Resume: `/pipeline-from {stage-name}`
 - Status: `/pipeline-status`
 
-## Pipeline Agent Order (병렬 구간 포함)
+## Pipeline Agent Order (순차 + 품질 루프)
 
 ```
-(brief-composer) → requirements-analyst → architect
-    → [spec-writer BE+AI ∥ spec-writer FE]          ← 병렬
-    → shared types
-    → [code-gen-backend ∥ (code-gen-ai) ∥ code-gen-frontend]  ← 병렬
-    → [reviewer-backend ∥ reviewer-frontend]         ← 병렬
+(brief-composer) → requirements-analyst → architect → spec-writer
+    → code-gen-backend → (code-gen-ai) → code-gen-frontend
+    → [review → test(Playwright) → fix]* ← 품질 루프 (최대 3회)
     → security-auditor-pipeline → handover-packager
 ```
 
 *code-generator-ai는 요구사항에 AI 기능이 포함된 경우에만 실행*
-*∥ = Agent Team으로 병렬 실행*
+*[...]* = 리뷰+테스트+수정 이터레이션 (PASS까지 반복)*
 
 ## Language Convention
 - 파이프라인이 생성하는 **마크다운 문서** (.md): 한국어로 작성
@@ -56,6 +55,7 @@ Sub-agent pipeline for generating Next.js 15 + Cloudscape Design System prototyp
 7. Server Components by default
 8. All mock data typed with proper interfaces
 9. Run `npm run build` after every code generation cycle
+10. Run `npm run test:e2e` after code generation to verify actual behavior
 
 ## Directory Convention (파이프라인이 생성)
 

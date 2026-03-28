@@ -19,16 +19,13 @@ AWS Solutions Architect가 고객 요구사항으로부터 **Next.js 15 + Clouds
 [2. 아키텍처 설계] → architecture.json + 컴포넌트 트리 + 데이터 플로우
     │
     ▼
-[3. 명세서 작성] → BE 스펙 ∥ FE 스펙 (병렬)
+[3. 명세서 작성] → BE + AI + FE 스펙
     │
     ▼
-[4.0 공유 타입] → src/types/ 생성 (BE/FE 공통 의존)
+[4. 코드 생성] → BE → (AI) → FE (순차)
     │
     ▼
-[4. 코드 생성] → BE ∥ AI(조건부) ∥ FE (병렬)
-    │
-    ▼
-[5. 코드 리뷰] → BE 리뷰 ∥ FE 리뷰 (병렬) → 결과 병합
+[5. 품질 루프] → 리뷰 → 테스트(Playwright) → 수정 (PASS까지 반복, 최대 3회)
     │
     ▼
 [6. 보안 점검] → OWASP 기반 보안 감사
@@ -246,11 +243,24 @@ cde-harness/
 - **하는 일**: hooks → contexts → layout → shared → feature → page 순서로 생성
 - **중요**: 백엔드가 생성한 `src/types/`를 import하고, API 호출은 커스텀 훅(`useResources` 등)을 통해
 
-### 5. 코드 리뷰 (Reviewer)
-- **입력**: 전체 코드(FE+BE) + 요구사항
-- **출력**: 7개 카테고리 리뷰 보고서 (PASS/FAIL)
-- **심사 항목**: Cloudscape 준수, Next.js 15 규약, TypeScript 품질, 접근성, 요구사항 커버리지, **백엔드 품질**, 코드 조직
-- **FAIL 시**: 백엔드/프론트엔드 코드 생성 또는 명세서 단계로 피드백 전달 (최대 3회)
+### 5. 품질 루프 (Review → Test → Fix)
+
+코드 생성 후 PASS할 때까지 리뷰와 테스트를 반복합니다 (최대 3회).
+
+**5a. 리뷰 (정적 분석)**
+- 7개 카테고리: Cloudscape 준수, Next.js 15 규약, TypeScript 품질, 접근성, 요구사항 커버리지, 백엔드 품질, 코드 조직
+
+**5b. 테스트 (동적 검증)**
+- `npm run build` + `npm run lint` + `npm run type-check`
+- **Playwright E2E**: 요구사항 기반 자동 생성 테스트
+  - 모든 페이지 네비게이션 가능 여부
+  - 테이블 렌더링 + 필터링 + 정렬
+  - 폼 제출 + 유효성 검증
+  - API 응답 → UI 표시
+  - 에러/빈 상태 처리
+
+**5c. 수정 (이슈 기반)**
+- 리뷰/테스트 실패 → 해당 코드 제너레이터에 타겟 수정 요청 → 5a로 복귀
 
 ### 7. 핸드오버 패키지 (Handover Packager)
 - **입력**: 모든 파이프라인 아티팩트 + 생성된 코드
@@ -456,4 +466,6 @@ npm run lint         # ESLint 검사
 npm run format       # Prettier 전체 포맷
 npm run format:check # Prettier 검사만
 npm run type-check   # TypeScript 타입 검사
+npm run test:e2e     # Playwright E2E 테스트
+npm run test:e2e:ui  # Playwright UI 모드 (디버깅용)
 ```

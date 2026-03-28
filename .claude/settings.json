@@ -11,6 +11,8 @@
       "Bash(npx tsc:*)",
       "Bash(npx next:*)",
       "Bash(npx lint-staged:*)",
+      "Bash(npx playwright:*)",
+      "Bash(npm run test:*)",
       "Bash(ls:*)",
       "Bash(node:*)"
     ]

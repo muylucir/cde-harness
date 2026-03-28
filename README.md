@@ -13,7 +13,7 @@ AWS Solutions Architect가 고객 요구사항으로부터 **Next.js 15 + Clouds
 [0. 브리프 작성] → customer-brief.md + source-analysis.md (/brief)
     │
     ▼
-[0.5 도메인 리서치] → 업계 워크플로우 + KPI + 용어 + 유사 제품 패턴
+[1. 도메인 리서치] → 업계 워크플로우 + KPI + 용어 + 유사 제품 패턴
     │
     ▼
 [1. 요구사항 분석] → requirements.json + requirements.md
@@ -222,7 +222,7 @@ cde-harness/
   - 표준 brief 포맷으로 통합
 - **특수 처리**: 입력 부족 시 추가 정보 요청, 이미지만 있을 경우 추론 결과에 주의사항 추가
 
-### 0.5 도메인 리서치 (Domain Researcher)
+### 1. 도메인 리서치 (Domain Researcher)
 - **입력**: 고객 브리프
 - **출력**: 도메인 컨텍스트 JSON + 한국어 보고서
 - **하는 일**: 웹 검색으로 업계 워크플로우, KPI, 용어, 유사 제품 패턴, 규제 요건을 리서치

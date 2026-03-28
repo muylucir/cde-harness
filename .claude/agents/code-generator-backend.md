@@ -182,6 +182,30 @@ export const config = {
 - 타입은 `src/types/`에 정의하고 프론트엔드와 공유
 - API 응답 타입도 명시적으로 정의
 
+### 주석 규칙 (핸드오버용)
+- 모든 파일에 **파일 헤더** 필수 (한국어 설명 + @requirements 태그)
+- 모든 export 함수/타입에 **JSDoc** 필수 (한국어 설명 + @param/@returns/@throws)
+- 비즈니스 로직, SLA 기준, 도메인 특화 상수에 **인라인 주석** (한국어)
+- 자명한 코드에는 주석 달지 않음
+
+```typescript
+/**
+ * 차량 데이터 접근 레이어
+ *
+ * 인메모리 스토어 기반. DynamoDB로 교체 시 이 파일만 수정하면 된다.
+ *
+ * @requirements FR-001, FR-002
+ */
+
+/**
+ * ID로 차량을 조회한다.
+ *
+ * @param id - 차량 고유 ID
+ * @returns 차량 정보 또는 undefined (미발견 시)
+ */
+export function findById(id: string): Vehicle | undefined { ... }
+```
+
 ## 생성 프로세스
 
 ### 0단계: 프로젝트 부트스트랩

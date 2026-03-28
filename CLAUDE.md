@@ -57,6 +57,22 @@ Sub-agent pipeline for generating Next.js 15 + Cloudscape Design System prototyp
 9. Run `npm run build` after every code generation cycle
 10. Run `npm run test:e2e` after code generation to verify actual behavior
 
+## Coding Convention
+
+ESLint가 강제하는 규칙 (eslint.config.mjs 참조):
+- 네이밍: `@typescript-eslint/naming-convention` (PascalCase 타입, camelCase 변수, UPPER_CASE 상수)
+- JSDoc: `eslint-plugin-jsdoc` (export 함수/클래스에 필수)
+- Import 순서: `eslint-plugin-import` (builtin → external → internal, 순환 금지)
+- 함수 길이: `max-lines-per-function` (80줄 이하)
+- 타입: `no-explicit-any` (any 금지)
+
+ESLint가 강제할 수 없는 규칙 (에이전트가 준수):
+- **파일명**: 컴포넌트 PascalCase.tsx, 유틸/훅 camelCase.ts, API 라우트 kebab-case 디렉토리
+- **주석 언어**: 설명은 한국어, JSDoc 태그/코드는 영어
+- **주석 범위**: 파일 헤더(필수) + export JSDoc(필수) + 인라인(의도 불명확 시만)
+- **barrel export (index.ts) 금지**
+- **파일 당 1개 export default**
+
 ## Directory Convention (파이프라인이 생성)
 
 `src/`는 하네스에 포함되지 않으며, 파이프라인 실행 시 코드 제너레이터가 생성한다.

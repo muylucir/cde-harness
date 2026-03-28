@@ -40,11 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# pipeline runtime (generated per run, not committed)
-/.pipeline/state.json
-/.pipeline/input/customer-brief.md
-/.pipeline/input/source-analysis.md
-/.pipeline/artifacts/v*/
-/.pipeline/revisions/v*
-/.pipeline/input/manifest.json
+# pipeline raw input (사용자가 직접 넣는 원본 자료 — 민감 데이터 가능)
+/.pipeline/input/raw/*
+!/.pipeline/input/raw/.gitkeep
+
+# test assets (하네스 테스트용, 프로토타입과 무관)
 /files

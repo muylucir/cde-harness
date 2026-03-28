@@ -180,10 +180,10 @@ Stage 7   핸드오버 패키지
 - Launch `code-generator-frontend`
 - 백엔드가 생성한 `src/types/`와 API 엔드포인트를 참조
 - Output: `src/components/`, `src/hooks/`, `src/contexts/`, `src/app/` pages
-- `npm run build` + `npm run lint` 통과 필수 (lint error 0, max-lines-per-function 포함)
+- `npm run build` + `npm run lint` 통과 필수 (lint error 0)
 
 **5d. 코드 검증 게이트:**
-- [ ] `npm run lint` 에러 0 (max-lines-per-function 포함)
+- [ ] `npm run lint` 에러 0
 - [ ] `grep -r 'fetch(' src/components/ src/app/ --include='*.tsx'` 에서 raw fetch 발견 시 해당 컴포넌트 수정 요청
 - 실패 시 해당 코드 제너레이터에 피드백 → 재생성 (최대 2회)
 

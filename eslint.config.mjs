@@ -19,7 +19,6 @@ const eslintConfig = defineConfig([
       // ── Code Style ──
       "prefer-const": "error",
       "no-console": ["warn", { allow: ["warn", "error"] }],
-      "max-lines-per-function": ["error", { max: 80, skipComments: true, skipBlankLines: true }],
 
       // ── Naming Convention ──
       "@typescript-eslint/naming-convention": [

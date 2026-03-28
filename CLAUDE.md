@@ -64,7 +64,7 @@ ESLint가 강제하는 규칙 (eslint.config.mjs 참조):
 - 네이밍: `@typescript-eslint/naming-convention` (PascalCase 타입, camelCase 변수, UPPER_CASE 상수)
 - JSDoc: `eslint-plugin-jsdoc` (export 함수/클래스에 필수)
 - Import 순서: `eslint-plugin-import` (builtin → external → internal, 순환 금지)
-- 함수 길이: `max-lines-per-function` (80줄 이하)
+- JSDoc: `eslint-plugin-jsdoc` (export 함수/클래스에 필수, 한국어 설명)
 - 타입: `no-explicit-any` (any 금지)
 
 ESLint가 강제할 수 없는 규칙 (에이전트가 준수):

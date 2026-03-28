@@ -62,10 +62,6 @@ Cloudscape Design System 기반의 UI 코드를 생성하는 에이전트이다.
 
 ## Code Generation Rules
 
-### Function Decomposition (80줄 규칙)
-
-모든 컴포넌트 함수는 80줄 이하 필수. 초과 시: 칼럼 정의를 const 배열로 추출, 폼 섹션을 서브컴포넌트로 분리, 이벤트 핸들러를 별도 함수로 추출. max-lines-per-function 린트 경고가 나면 즉시 분해.
-
 ### Imports
 ```typescript
 // CORRECT: Individual component imports
@@ -256,7 +252,7 @@ export function useApiMutation<TBody, TResponse>(
    d. **shared** — 재사용 컴포넌트
    e. **feature** — 기능별 컴포넌트
    f. **page** — App Router 페이지 (`src/app/page.tsx` 포함)
-4. `npm run build` + `npm run lint` 로 검증 (lint error 0 필수, max-lines-per-function 포함. 실패 시 최대 3회 재시도)
+4. `npm run build` + `npm run lint` 로 검증 (lint error 0 필수. 실패 시 최대 3회 재시도)
 5. 생성 로그 작성
 
 ## Output

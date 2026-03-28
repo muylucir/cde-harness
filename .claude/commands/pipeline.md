@@ -6,6 +6,17 @@ description: "Run the full CDE prototype pipeline from customer brief to handove
 
 Execute the complete prototype generation pipeline from customer brief to handover-ready code.
 
+## Auto Mode
+
+`$ARGUMENTS`에 `auto`가 포함되면 모든 승인 게이트를 건너뛰고 파이프라인을 끝까지 자동 실행한다.
+
+```
+/pipeline auto     ← 승인 게이트 없이 전체 자동 실행
+/pipeline          ← 기본: 각 게이트에서 사용자 승인 대기
+```
+
+Auto 모드에서도 **품질 루프(Stage 5)**와 **서킷 브레이커**는 정상 작동한다.
+
 ## Pre-flight Checks
 
 1. Read `.pipeline/input/customer-brief.md`
@@ -78,20 +89,20 @@ Stage 7   핸드오버 패키지
 - Input: `.pipeline/input/customer-brief.md`
 - Output: `.pipeline/artifacts/v{N}/00-domain/domain-context.json` + `domain-context.md`
 - 웹 리서치로 도메인 워크플로우, KPI, 용어, 유사 제품 패턴, 규제 요건 수집
-- **APPROVAL GATE**: 제안 요구사항을 사용자에게 제시. 추가할 것이 있으면 customer-brief.md에 반영.
+- **APPROVAL GATE** (auto 모드 시 건너뜀): 제안 요구사항을 사용자에게 제시. 추가할 것이 있으면 customer-brief.md에 반영.
 
 ### Stage 1: Requirements Analysis
 - Launch the `requirements-analyst` agent
 - Input: `.pipeline/input/customer-brief.md` + `.pipeline/artifacts/v{N}/00-domain/domain-context.json`
 - Output: `.pipeline/artifacts/v{N}/01-requirements/`
-- **APPROVAL GATE**: Present requirements summary to user. Wait for approval before proceeding.
+- **APPROVAL GATE** (auto 모드 시 건너뜀): Present requirements summary to user. Wait for approval before proceeding.
 - If user requests changes: re-run stage 1 with feedback
 
 ### Stage 2: Architecture Design
 - Launch the `architect` agent
 - Input: `01-requirements/requirements.json`
 - Output: `.pipeline/artifacts/v{N}/02-architecture/`
-- **APPROVAL GATE**: Present component tree and data flow. Wait for approval.
+- **APPROVAL GATE** (auto 모드 시 건너뜀): Present component tree and data flow. Wait for approval.
 
 ### Stage 3: Specification
 - Launch the `spec-writer` agent

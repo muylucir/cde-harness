@@ -126,7 +126,8 @@ npm run dev
 | 커맨드 | 설명 |
 |--------|------|
 | `/brief` | 다양한 입력 자료에서 customer-brief.md 자동 생성 |
-| `/pipeline` | 전체 파이프라인 실행 (브리프 → 핸드오버) |
+| `/pipeline` | 전체 파이프라인 실행 (승인 게이트 포함) |
+| `/pipeline auto` | 승인 게이트 없이 전체 자동 실행 |
 | `/iterate` | 고객 피드백 분석 → 영향 범위 추적 → 최소 재생성 |
 | `/pipeline-from {stage}` | 특정 단계부터 재개 |
 | `/pipeline-status` | 현재 진행 상태 확인 |

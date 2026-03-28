@@ -102,26 +102,38 @@ For each FR in requirements.json:
 - [ ] No circular imports
 - [ ] No dead code or unused imports
 
+### 8. 주석 언어 검증 (L3)
+- [ ] 파일 헤더 주석이 한국어로 작성되어 있는가
+- [ ] JSDoc 설명(`@description` 및 본문)이 한국어로 작성되어 있는가 (태그명과 코드 예시는 영어 유지)
+- [ ] 인라인 주석이 한국어로 작성되어 있는가 (의도 불명확 시만 작성)
+
+### 9. 시드 데이터 일관성 (L4)
+- [ ] teamId 등 FK 참조가 유효한가 (존재하지 않는 ID 참조 없음)
+- [ ] FK 관계 정합성: 모든 외래 키가 대응하는 엔티티에 존재
+- [ ] 데이터 볼륨이 NFR 요구사항과 부합 (예: "최소 50건" 요구 시 시드 데이터가 충분한가)
+- [ ] 시드 데이터의 상태값이 정의된 enum에 포함되는가
+
 ## Process
 
 ### Phase 1: 빌드 검증
 1. `npm run build` — 컴파일 에러 확인
-2. `npm run lint` — 린트 에러/경고 기록
+2. `npm run lint` — 린트 에러/경고 기록. lint 스크립트 실패 시 `npx eslint src/ --ext .ts,.tsx`로 직접 실행. N/A 처리 금지 — lint를 실행하지 못했다면 FAIL로 처리
 3. `npx tsc --noEmit` — 타입 에러 기록
 
 ### Phase 2: 정적 리뷰
-4. `src/` 하위 모든 파일을 읽고 7개 카테고리별 체크
+4. `src/` 하위 모든 파일을 읽고 9개 카테고리별 체크
 5. 각 체크 항목에 대해 **검사한 파일**, **검사 방법**, **결과(PASS/FAIL)**, **근거**를 기록
+6. FR 카운트와 우선순위 분포는 반드시 requirements.json을 파싱하여 프로그래밍적으로 추출. 수동 카운트 금지
 
 ### Phase 3: E2E 테스트 작성 및 실행
-6. 요구사항(requirements.json)과 아키텍처(architecture.json)를 기반으로 **Playwright E2E 테스트를 생성**
-7. 테스트 파일을 `e2e/` 디렉토리에 작성
-8. `npx playwright install --with-deps chromium` (최초 1회)
-9. `npm run test:e2e` 실행
-10. 테스트 결과 기록
+7. 요구사항(requirements.json)과 아키텍처(architecture.json)를 기반으로 **Playwright E2E 테스트를 생성**
+8. 테스트 파일을 `e2e/` 디렉토리에 작성
+9. `npx playwright install --with-deps chromium` (최초 1회)
+10. `npm run test:e2e` 실행
+11. 테스트 결과 기록
 
 ### Phase 4: 리포트 작성
-11. 리뷰 리포트, 테스트 리포트, 머신 리더블 결과 JSON 작성
+12. 리뷰 리포트, 테스트 리포트, 머신 리더블 결과 JSON 작성
 
 ## E2E 테스트 작성 가이드
 
@@ -145,6 +157,21 @@ e2e/
 | 대시보드 | KPI 위젯, 차트 렌더링 | `expect(chart).toBeVisible()` |
 | 액션 | 상태 변경, 모달 확인 | `page.click(action)` → `expect(modal)` |
 | API | 엔드포인트 응답 형식, 상태 코드 | `expect(response.status()).toBe(200)` |
+
+### E2E 테스트 품질 규칙 (M8)
+
+**금지 패턴:**
+- 테스트에서 `page.waitForTimeout()` 사용 금지 — `expect(locator).toBeVisible()`, `page.waitForSelector()`, `page.waitForResponse()` 사용
+- 테스트에서 `page.textContent('body')` + `includes()` 사용 금지 — `getByRole`, `getByText`, 특정 locator 사용
+- `page.on('pageerror', ...)` 리스너는 반드시 `page.goto()` 전에 등록
+
+**Cloudscape 테스트 주의사항:**
+- Cloudscape Table은 sticky header용 table + data table 2개를 렌더링한다. `getByRole('grid', { name: '...' })` 사용 권장
+- Cloudscape 컴포넌트의 `data-testid`보다 역할 기반 selector를 우선 사용
+
+### E2E 테스트 FR 커버리지 심화 (M11)
+
+- P0 FR은 최소 1개 이상의 사용자 인터랙션 테스트(click, fill, navigate) 필수. 페이지 로드 확인이나 텍스트 존재 확인만으로는 P0 FR 커버리지로 인정하지 않는다
 
 ### Playwright 설정
 테스트 작성 시 `playwright.config.ts`도 함께 생성한다:
@@ -296,6 +323,11 @@ export default defineConfig({
     "files": [
       { "file": "e2e/navigation.spec.ts", "tests": 4, "passed": 4, "failed": 0, "frs": ["all"] },
       { "file": "e2e/incidents.spec.ts", "tests": 5, "passed": 5, "failed": 0, "frs": ["FR-001", "FR-002"] }
+    ],
+    "iterations": [
+      { "iteration": 1, "total": 20, "passed": 2, "failed": 18, "fixes_applied": ["Fixed waitForResponse to waitForSelector"] },
+      { "iteration": 2, "total": 20, "passed": 17, "failed": 3, "fixes_applied": ["Used getByRole('grid') for Cloudscape tables"] },
+      { "iteration": 3, "total": 20, "passed": 20, "failed": 0 }
     ]
   },
   "issues": []
@@ -304,7 +336,7 @@ export default defineConfig({
 
 ## Verdict Rules
 
-- **PASS**: 7개 카테고리 전부 PASS + E2E 테스트 전부 통과 + critical 이슈 0건
+- **PASS**: 9개 카테고리 전부 PASS + E2E 테스트 전부 통과 + critical 이슈 0건
 - **FAIL**: 카테고리 1개라도 FAIL OR E2E 테스트 실패 OR critical 이슈 존재
   - `return_to: "code-generator-backend"` — API, 검증, 데이터 레이어 이슈
   - `return_to: "code-generator-frontend"` — Cloudscape, UI, 컴포넌트 이슈
@@ -322,6 +354,6 @@ verdict가 FAIL이면 피드백 파일도 작성한다:
 
 `.pipeline/state.json` 업데이트. 한국어로 사용자에게 보고:
 - 빌드/린트/타입 검증 결과
-- 7개 카테고리 PASS/FAIL 요약 (각각 근거 1줄)
+- 9개 카테고리 PASS/FAIL 요약 (각각 근거 1줄)
 - E2E 테스트 결과 (통과/실패 수, 실패 시 원인)
 - 최종 판정과 다음 단계

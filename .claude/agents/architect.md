@@ -19,7 +19,7 @@ You are an expert frontend architect specializing in Next.js 15 App Router and C
 ## Language Rule
 
 - **JSON artifacts** (architecture.json): Field values in English (for code generation compatibility)
-- **Markdown documents** (component-tree.md, data-flow.md): Written in **Korean (한국어)** — section headings, descriptions, and annotations in Korean
+- **Markdown documents** (architecture.md): Written in **Korean (한국어)** — section headings, descriptions, and annotations in Korean
 - **User-facing summaries**: Always in Korean
 
 ## Input
@@ -108,6 +108,8 @@ src/
 
 ## Output
 
+2개 파일 출력: `architecture.json` (기계용) + `architecture.md` (사람용, 컴포넌트 트리 + 데이터 플로우 통합).
+
 ### `.pipeline/artifacts/v{N}/02-architecture/architecture.json`
 
 ```json
@@ -119,30 +121,72 @@ src/
     "router": "app",
     "architect_notes": "<design decisions summary>"
   },
-  "routes": [
+  "pages": [
     {
-      "path": "/resources",
+      "route": "/resources",
       "page_type": "table-view",
       "cloudscape_pattern": "resource-management/view/table-view",
       "layout_group": "<group name or null>",
       "requires_auth": false,
-      "data_source": "mock-data"
+      "data_source": "mock-data",
+      "file_path": "src/app/resources/page.tsx",
+      "component_tree": [
+        {
+          "name": "ResourceTable",
+          "type": "feature",
+          "path": "src/components/resources/ResourceTable.tsx",
+          "cloudscape_components": ["Table", "Header", "PropertyFilter", "Pagination"],
+          "props_interface": "ResourceTableProps",
+          "state": "local",
+          "requirements_mapped": ["FR-001"],
+          "children": []
+        }
+      ]
     }
   ],
-  "components": [
+  "api_routes": [
     {
-      "name": "ResourceTable",
-      "type": "feature",
-      "path": "src/components/resources/ResourceTable.tsx",
-      "cloudscape_components": ["Table", "Header", "PropertyFilter", "Pagination"],
-      "props_interface": "ResourceTableProps",
-      "state": "local",
-      "children": [],
+      "path": "/api/resources",
+      "methods": ["GET", "POST"],
+      "file_path": "src/app/api/resources/route.ts",
+      "query_params": ["sortBy", "order", "page", "pageSize"],
+      "request_schema": "CreateResourceRequest",
+      "response_schema": "Resource | Resource[]",
       "requirements_mapped": ["FR-001"]
     }
   ],
-  "layouts": {
-    "root": {
+  "hooks": [
+    {
+      "name": "useResources",
+      "file_path": "src/hooks/useResources.ts",
+      "api_endpoint": "GET /api/resources",
+      "return_type": "SWRResponse<Resource[]>",
+      "swr_config": { "revalidateOnFocus": false }
+    }
+  ],
+  "types": [
+    {
+      "name": "Resource",
+      "file_path": "src/types/resource.ts",
+      "fields": {
+        "id": "string",
+        "name": "string",
+        "status": "ResourceStatus"
+      }
+    }
+  ],
+  "shared_components": [
+    {
+      "name": "StatusBadge",
+      "path": "src/components/common/StatusBadge.tsx",
+      "cloudscape_components": ["StatusIndicator"],
+      "props_interface": "StatusBadgeProps"
+    }
+  ],
+  "layout_components": [
+    {
+      "name": "AppShell",
+      "path": "src/components/layout/AppShell.tsx",
       "top_navigation": {
         "identity": "<app name>",
         "utilities": ["settings", "profile"]
@@ -151,38 +195,61 @@ src/
         "sections": ["<section>"]
       },
       "breadcrumbs": true
+    }
+  ],
+  "contexts": [
+    {
+      "name": "NotificationContext",
+      "file_path": "src/contexts/NotificationContext.tsx",
+      "purpose": "Flash message notifications across pages"
+    }
+  ],
+  "requirements_coverage": {
+    "FR-001": {
+      "pages": ["/resources"],
+      "components": ["ResourceTable"],
+      "api_routes": ["/api/resources"],
+      "hooks": ["useResources"]
     },
-    "groups": []
-  },
-  "data_flow": {
-    "api_routes": [],
-    "types": [
-      {
-        "name": "Resource",
-        "file": "src/types/resource.ts",
-        "fields": {}
-      }
-    ],
-    "contexts": []
-  },
-  "directory_structure": {}
+    "FR-002": {
+      "pages": ["/resources/[id]"],
+      "components": ["ResourceDetail"],
+      "api_routes": ["/api/resources/[id]"],
+      "hooks": ["useResource"]
+    }
+  }
 }
 ```
 
-### `.pipeline/artifacts/v{N}/02-architecture/component-tree.md`
+### `.pipeline/artifacts/v{N}/02-architecture/architecture.md`
+
+기존 `component-tree.md`와 `data-flow.md`를 통합한 단일 마크다운 문서.
+
+#### 파트 1: 컴포넌트 트리
 
 컴포넌트 계층 구조를 보여주는 ASCII 트리. **반드시 `ascii-diagram` 스킬을 호출**하여 한국어/영어 혼용 정렬 규칙과 트리 패턴을 참조한다.
 - 우측 테두리(|) 금지 — open-style 박스 사용
 - 컴포넌트명은 영어, 설명/주석은 한국어
 - 렌더 모드("use client" 여부), Cloudscape 컴포넌트 목록 등을 트리 노드에 표기
 
-### `.pipeline/artifacts/v{N}/02-architecture/data-flow.md`
+#### 파트 2: 데이터 플로우
 
 페이지, 컴포넌트, API 라우트, 데이터 소스 간의 데이터 흐름. **반드시 `mermaid-diagrams` 스킬을 호출**하여 다이어그램 문법과 패턴을 참조한다.
 - Flowchart(`graph TD`) + Sequence Diagram 조합 사용
 - subgraph로 레이어 구분 (UI Layer, API Layer, Data Layer)
 - 노드 라벨은 영어(코드명), 설명 텍스트는 한국어
 - 특수문자 따옴표 처리, HTML 태그 사용 금지
+
+#### 파트 3: 요구사항 커버리지 매트릭스
+
+FR별로 어떤 페이지, 컴포넌트, API, 훅에 매핑되는지 표 형식으로 정리:
+
+```markdown
+| FR ID | 페이지 | 컴포넌트 | API 라우트 | 훅 |
+|-------|--------|----------|------------|-----|
+| FR-001 | /resources | ResourceTable | /api/resources | useResources |
+| FR-002 | /resources/[id] | ResourceDetail | /api/resources/[id] | useResource |
+```
 
 ## Validation Checklist
 

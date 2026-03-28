@@ -108,6 +108,22 @@ export const resourceRepository = {
 };
 ```
 
+### 타입 안전한 정렬 패턴
+
+Repository에서 정렬을 지원할 때 `as unknown as Record` 이중 캐스트를 금지한다. 대신 타입 안전한 정렬 키 접근자 패턴을 사용한다:
+
+```typescript
+// 타입 안전한 정렬 — `as unknown as Record` 이중 캐스트 금지
+const SORTABLE_FIELDS: Record<string, (item: Resource) => string | number> = {
+  createdAt: (i) => i.createdAt,
+  severity: (i) => i.severity,
+  title: (i) => i.title,
+};
+const accessor = SORTABLE_FIELDS[sortBy];
+if (!accessor) throw new Error(`Invalid sort field: ${sortBy}`);
+items.sort((a, b) => String(accessor(a)).localeCompare(String(accessor(b))));
+```
+
 ### API Route Handlers
 
 ```typescript
@@ -268,7 +284,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     { "path": "src/app/api/vehicles/route.ts", "spec": "vehicles-api.spec.md", "lines": 30, "status": "created" }
   ],
   "dependencies_installed": ["zod"],
-  "build_result": { "success": true, "attempts": 1, "errors": [], "warnings": [] }
+  "build_result": {
+    "success": true,
+    "attempts": 1,
+    "errors": [
+      { "message": "Type error...", "file": "src/types/vehicle.ts", "fix_applied": "Changed type to..." }
+    ],
+    "warnings": []
+  }
 }
 ```
 

@@ -57,144 +57,232 @@ Read from the current pipeline version directory:
 5. **feature** — 기능별 컴포넌트 (AI 채팅 UI 포함 시 Cloudscape Chat 컴포넌트 사용)
 6. **page** — App Router page 컴포넌트
 
-## 백엔드 스펙 파일 포맷
+## Output 구조
 
-API 라우트와 데이터 레이어에 대해 `.pipeline/artifacts/v{N}/03-specs/{kebab-case-name}.spec.md` 작성:
+이중 출력 — `.spec.md` (사람용 상세 스펙) + `.spec.json` (기계용 구조화 데이터)
+
+```
+03-specs/
+├── _manifest.json              ← 집계 요약 + FR 커버리지 + 생성 순서
+├── backend-spec.json           ← 코드 제너레이터가 파싱하는 기계용 스펙
+├── frontend-spec.json          ← 코드 제너레이터가 파싱하는 기계용 스펙
+├── backend-spec.md             ← 사람이 리뷰하는 상세 마크다운 (한국어)
+├── frontend-spec.md            ← 사람이 리뷰하는 상세 마크다운 (한국어)
+└── specs-summary.md            ← 전체 요약 (한국어)
+```
+
+## 백엔드 스펙 마크다운 포맷 (backend-spec.md)
+
+`.pipeline/artifacts/v{N}/03-specs/backend-spec.md` — 사람이 리뷰하는 한국어 상세 문서.
+
+리소스/API별로 다음을 포함:
 
 ```markdown
-# API Spec: {ResourceName} API
+# 백엔드 스펙
 
-## 메타데이터
+## {ResourceName} API
+
+### 메타데이터
 - **파일 경로**: src/app/api/{resource}/route.ts
 - **타입**: api-route
 - **요구사항**: FR-001
 
-## 엔드포인트
+### 엔드포인트
 | Method | Path | 설명 | Request Body | Response |
 |--------|------|------|-------------|----------|
 | GET | /api/{resource} | 목록 조회 | - | {Type}[] |
 | POST | /api/{resource} | 신규 생성 | Create{Type}Request | {Type} |
-| GET | /api/{resource}/[id] | 상세 조회 | - | {Type} |
-| PUT | /api/{resource}/[id] | 수정 | Partial<{Type}> | {Type} |
-| DELETE | /api/{resource}/[id] | 삭제 | - | { success: boolean } |
 
-## 요청 검증 (zod)
+### 요청 검증 (zod)
 \`\`\`typescript
 const create{Type}Schema = z.object({
   // 필드별 검증 규칙
 });
 \`\`\`
 
-## Repository 인터페이스
+### Repository 인터페이스
 \`\`\`typescript
 // 인메모리 스토어 기반, DynamoDB 교체 가능하도록 추상화
 \`\`\`
 
-## 시드 데이터
+### 시드 데이터
 \`\`\`typescript
 // 5~10개 현실적인 목데이터
 \`\`\`
 
-## 에러 처리
+### 에러 처리
 - 400: 유효성 검증 실패
 - 404: 리소스 미발견
 - 500: 서버 오류
 ```
 
-## 프론트엔드 스펙 파일 포맷
+## 프론트엔드 스펙 마크다운 포맷 (frontend-spec.md)
 
-UI 컴포넌트에 대해 `.pipeline/artifacts/v{N}/03-specs/{kebab-case-name}.spec.md` 작성:
+`.pipeline/artifacts/v{N}/03-specs/frontend-spec.md` — 사람이 리뷰하는 한국어 상세 문서.
+
+컴포넌트별로 **반드시** 다음 섹션을 포함:
 
 ```markdown
-# Component Spec: {ComponentName}
+# 프론트엔드 스펙
 
-## Metadata
-- **File Path**: src/components/{feature}/{ComponentName}.tsx
-- **Type**: page | layout | feature | shared | provider
-- **Requirements**: FR-001, FR-003
-- **Cloudscape Pattern**: {pattern-path}
+## {ComponentName}
 
-## Props Interface
+### 메타데이터
+- **파일 경로**: src/components/{feature}/{ComponentName}.tsx
+- **타입**: page | layout | feature | shared | provider
+- **요구사항**: FR-001, FR-003
+- **Cloudscape 패턴**: {pattern-path}
+
+### Props 인터페이스
 \`\`\`typescript
 interface {ComponentName}Props {
-  // Exact TypeScript interface with all props typed
+  // 모든 props에 대한 정확한 TypeScript 인터페이스
 }
 \`\`\`
 
-## Cloudscape Components Used
+### Cloudscape 컴포넌트 사용
 | Component | Import Path | Key Props | Event Handlers |
 |-----------|-------------|-----------|----------------|
 | Table | @cloudscape-design/components/table | items, columnDefinitions, ... | onSelectionChange |
 
-## State Management
+### 상태 관리
 - **Local state**: { variableName: type = initialValue }
 - **useCollection**: { filtering: boolean, sorting: boolean, pagination: { pageSize: N } }
 
-## Data Requirements
-- **Source**: mock-data | api-route | server-action
-- **API endpoint**: GET /api/{resource} (if applicable)
-- **Type**: {TypeName}[]
-
-## Mock Data
+### 목데이터 예시
 \`\`\`typescript
 export const MOCK_{RESOURCE}: {TypeName}[] = [
-  // 3-5 realistic entries matching the TypeScript interface
+  // 3~5개 현실적인 엔트리 (TypeScript 인터페이스와 일치)
 ];
 \`\`\`
 
-## Behavior Specification
-1. On mount: {behavior}
-2. On {event}: {behavior}
-3. Error state: {how to handle}
-4. Loading state: {component to show}
-5. Empty state: {what to display}
+### 동작 명세
+1. 마운트 시: {동작}
+2. {이벤트} 발생 시: {동작}
+3. 에러 상태: {처리 방법}
+4. 로딩 상태: {표시할 컴포넌트}
+5. 빈 상태: {표시할 내용}
 
-## Accessibility
+### 접근성 요구사항
 - enableKeyboardNavigation: {boolean}
 - ariaLabel: "{label}"
-- Other a11y requirements
+- 기타 접근성 요구사항
 
-## File Dependencies
+### 파일 의존성
 - src/types/{type}.ts
 - src/lib/{util}.ts
 ```
 
-## Manifest
+## 백엔드 스펙 JSON 포맷 (backend-spec.json)
 
-Also produce `.pipeline/artifacts/v{N}/03-specs/_manifest.json`:
+`.pipeline/artifacts/v{N}/03-specs/backend-spec.json` — 코드 제너레이터가 직접 파싱하는 구조화 데이터.
 
 ```json
 {
+  "generator": "backend",
+  "specs": [
+    {
+      "component": "ResourceAPI",
+      "file_path": "src/app/api/resources/route.ts",
+      "type": "api-route",
+      "requirements": ["FR-001"],
+      "endpoints": [
+        { "method": "GET", "path": "/api/resources", "response_type": "Resource[]" },
+        { "method": "POST", "path": "/api/resources", "request_schema": "CreateResourceRequest", "response_type": "Resource" }
+      ],
+      "validation_schema": "createResourceSchema",
+      "dependencies": ["src/types/resource.ts", "src/lib/db/resource.repository.ts"],
+      "imports": ["zod", "next/server"]
+    }
+  ],
+  "types": [
+    {
+      "name": "Resource",
+      "file_path": "src/types/resource.ts",
+      "fields": { "id": "string", "name": "string", "status": "ResourceStatus" }
+    }
+  ],
+  "seed_data": [
+    {
+      "file_path": "src/data/resources.ts",
+      "type": "Resource",
+      "count": 10
+    }
+  ],
+  "generation_order": ["types", "validation", "data", "db", "services", "api", "middleware"]
+}
+```
+
+## 프론트엔드 스펙 JSON 포맷 (frontend-spec.json)
+
+`.pipeline/artifacts/v{N}/03-specs/frontend-spec.json` — 코드 제너레이터가 직접 파싱하는 구조화 데이터.
+
+```json
+{
+  "generator": "frontend",
   "specs": [
     {
       "component": "ResourceTable",
-      "file": "resource-table.spec.md",
-      "path": "src/components/resources/ResourceTable.tsx",
+      "file_path": "src/components/resources/ResourceTable.tsx",
       "type": "feature",
-      "generator": "frontend",
-      "dependencies": ["src/types/resource.ts", "src/hooks/useResources.ts"]
-    },
-    {
-      "component": "ResourceAPI",
-      "file": "resource-api.spec.md",
-      "path": "src/app/api/resources/route.ts",
-      "type": "api-route",
-      "generator": "backend",
-      "dependencies": ["src/types/resource.ts", "src/lib/db/resource.repository.ts"]
+      "requirements": ["FR-001"],
+      "cloudscape_components": [
+        { "name": "Table", "import_path": "@cloudscape-design/components/table", "key_props": ["items", "columnDefinitions"], "event_handlers": ["onSelectionChange"] }
+      ],
+      "props_interface": "ResourceTableProps",
+      "use_collection": { "filtering": true, "sorting": true, "pagination": { "pageSize": 10 } },
+      "state": "local",
+      "dependencies": ["src/types/resource.ts", "src/hooks/useResources.ts"],
+      "imports": ["@cloudscape-design/components/table", "@cloudscape-design/collection-hooks"]
     }
   ],
+  "hooks": [
+    {
+      "name": "useResources",
+      "file_path": "src/hooks/useResources.ts",
+      "api_endpoint": "GET /api/resources",
+      "return_type": "Resource[]"
+    }
+  ],
+  "generation_order": ["hooks", "contexts", "layout", "shared", "feature", "page"]
+}
+```
+
+## Manifest
+
+`.pipeline/artifacts/v{N}/03-specs/_manifest.json` — 집계 요약, FR 커버리지, 생성 순서.
+
+```json
+{
+  "metadata": {
+    "created": "<ISO-8601>",
+    "total_specs": 12,
+    "backend_specs": 6,
+    "frontend_specs": 6
+  },
+  "requirements_coverage": {
+    "FR-001": { "backend": ["resource-api"], "frontend": ["ResourceTable", "ResourcesPage"] },
+    "FR-002": { "backend": ["resource-api"], "frontend": ["ResourceDetail"] }
+  },
+  "uncovered_requirements": [],
   "generation_order": [
-    { "phase": "types", "generator": "backend", "specs": ["resource-types.spec.md"] },
-    { "phase": "validation", "generator": "backend", "specs": ["resource-validation.spec.md"] },
-    { "phase": "data", "generator": "backend", "specs": ["seed-data.spec.md"] },
-    { "phase": "db", "generator": "backend", "specs": ["resource-repository.spec.md"] },
-    { "phase": "api", "generator": "backend", "specs": ["resource-api.spec.md"] },
-    { "phase": "middleware", "generator": "backend", "specs": ["middleware.spec.md"] },
-    { "phase": "hooks", "generator": "frontend", "specs": ["use-resources.spec.md"] },
-    { "phase": "layout", "generator": "frontend", "specs": ["app-shell.spec.md"] },
-    { "phase": "feature", "generator": "frontend", "specs": ["resource-table.spec.md"] },
-    { "phase": "page", "generator": "frontend", "specs": ["resources-page.spec.md"] }
-  ]
+    { "phase": "types", "generator": "backend", "file": "backend-spec.json" },
+    { "phase": "validation", "generator": "backend", "file": "backend-spec.json" },
+    { "phase": "data", "generator": "backend", "file": "backend-spec.json" },
+    { "phase": "db", "generator": "backend", "file": "backend-spec.json" },
+    { "phase": "api", "generator": "backend", "file": "backend-spec.json" },
+    { "phase": "middleware", "generator": "backend", "file": "backend-spec.json" },
+    { "phase": "hooks", "generator": "frontend", "file": "frontend-spec.json" },
+    { "phase": "contexts", "generator": "frontend", "file": "frontend-spec.json" },
+    { "phase": "layout", "generator": "frontend", "file": "frontend-spec.json" },
+    { "phase": "shared", "generator": "frontend", "file": "frontend-spec.json" },
+    { "phase": "feature", "generator": "frontend", "file": "frontend-spec.json" },
+    { "phase": "page", "generator": "frontend", "file": "frontend-spec.json" }
+  ],
+  "output_files": {
+    "machine_readable": ["backend-spec.json", "frontend-spec.json"],
+    "human_readable": ["backend-spec.md", "frontend-spec.md", "specs-summary.md"]
+  }
 }
 ```
 

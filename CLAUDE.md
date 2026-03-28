@@ -43,7 +43,7 @@ Sub-agent pipeline for generating Next.js 15 + Cloudscape Design System prototyp
 ## Language Convention
 - 파이프라인이 생성하는 **마크다운 문서** (.md): 한국어로 작성
 - **JSON 아티팩트** (.json): 영어 (머신 리더블, 코드 생성 호환)
-- **생성 코드** (.ts, .tsx): 영어 (코드, 주석, 변수명 모두 영어)
+- **생성 코드** (.ts, .tsx): 영어 (변수명, 함수명, 코드). 주석 설명은 한국어.
 - **사용자 대면 요약/보고**: 항상 한국어
 
 ## Critical Coding Rules
@@ -73,6 +73,7 @@ ESLint가 강제할 수 없는 규칙 (에이전트가 준수):
 - **주석 범위**: 파일 헤더(필수) + export JSDoc(필수) + 인라인(의도 불명확 시만)
 - **barrel export (index.ts) 금지**
 - **파일 당 1개 export default**
+- **기술 용어**: PASS/FAIL, FR-001, P0 등은 한국어 문장 내에서도 영어 유지
 
 ## Directory Convention (파이프라인이 생성)
 

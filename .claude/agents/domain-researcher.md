@@ -81,12 +81,18 @@ allowedTools:
 
 ### `.pipeline/artifacts/v{N}/00-domain/domain-context.json`
 
+**소스 URL 의무화 (M13)**: 각 출처에 반드시 URL을 포함한다. 예: `{ "name": "Google SRE Book", "url": "https://sre.google/sre-book/..." }`. URL을 찾을 수 없는 경우 `"url": null`로 명시.
+
 ```json
 {
   "metadata": {
     "industry": "Logistics / Supply Chain",
     "subdomain": "Fleet Management",
-    "researched_at": "<ISO-8601>"
+    "researched_at": "<ISO-8601>",
+    "sources": [
+      { "name": "Google SRE Book", "url": "https://sre.google/sre-book/..." },
+      { "name": "Industry whitepaper (offline)", "url": null }
+    ]
   },
   "core_entities": [
     {
@@ -196,6 +202,7 @@ allowedTools:
 - [ ] 고객 브리프에 없지만 도메인 표준인 기능이 `suggested_requirements`에 있는가
 - [ ] 도메인 용어가 최소 5개 이상 정리되었는가
 - [ ] domain-context.json과 domain-context.md 모두 생성되었는가
+- [ ] metadata.sources에 URL이 포함되어 있는가 (찾을 수 없는 경우 `null`로 명시)
 
 ## 완료 후
 

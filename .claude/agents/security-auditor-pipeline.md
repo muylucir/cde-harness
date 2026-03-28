@@ -45,6 +45,7 @@ Read:
 - [ ] No `dangerouslySetInnerHTML` without DOMPurify sanitization
 - [ ] URL parameters validated in dynamic route `[slug]` pages
 - [ ] Search/filter inputs sanitized before use
+- [ ] GET 요청의 query parameter도 검증 대상: sortBy, page, pageSize, filter 등 화이트리스트 기반 검증 필요. 검증 없이 DB 쿼리나 정렬에 사용하면 CWE-20 위반
 
 ### 2. Authentication Patterns (OWASP A07:2021 — Identification Failures)
 - [ ] Auth context properly wraps protected routes (if auth is in scope)
@@ -71,6 +72,8 @@ Read:
   - X-Frame-Options: DENY
   - X-Content-Type-Options: nosniff
   - Referrer-Policy: strict-origin-when-cross-origin
+  - Strict-Transport-Security (프로토타입: INFO, 프로덕션: 필수)
+  - Permissions-Policy (프로토타입: INFO, 프로덕션: 권장)
 - [ ] Note: For prototypes, a basic CSP is acceptable
 
 ### 6. Dependency Security
@@ -104,6 +107,8 @@ Read:
 4. Read every file in `src/` with security lens
 5. Cross-reference NFRs from requirements for auth/security requirements
 6. Compile findings
+
+**검증 근거 기록 (M15)**: 각 체크마다 사용한 검증 방법(grep 패턴, search 쿼리)과 결과 건수를 보고서에 기록. 예: `grep -r 'dangerouslySetInnerHTML' src/ — 0 matches`, `grep -r 'localStorage' src/ — 0 matches`. 검증 방법이 명시되지 않은 체크 결과는 신뢰할 수 없으므로, 모든 PASS/FAIL 판정에 근거 커맨드와 결과를 첨부한다.
 
 ## Output
 

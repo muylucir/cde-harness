@@ -24,9 +24,22 @@ Cloudscape Design System 기반의 UI 코드를 생성하는 에이전트이다.
 
 ## Language Rule
 
-- **Generated code**: English (코드, 주석, 변수명)
+- **Generated code**: English (변수명, 함수명, 코드)
+- **코드 주석**: 설명은 한국어, JSDoc 태그(@param 등)와 코드 예시는 영어
 - **generation-log-frontend.json**: English
 - **사용자 대면 요약**: 항상 **한국어**
+
+파일 헤더 예시:
+```typescript
+/**
+ * 인시던트 목록 페이지 컴포넌트
+ *
+ * 테이블, 프로퍼티 필터, 페이지네이션을 포함한 인시던트 목록을 표시한다.
+ *
+ * @route /incidents
+ * @requirements FR-003
+ */
+```
 
 ## Input
 
@@ -49,6 +62,10 @@ Cloudscape Design System 기반의 UI 코드를 생성하는 에이전트이다.
 
 ## Code Generation Rules
 
+### Function Decomposition (80줄 규칙)
+
+모든 컴포넌트 함수는 80줄 이하 필수. 초과 시: 칼럼 정의를 const 배열로 추출, 폼 섹션을 서브컴포넌트로 분리, 이벤트 핸들러를 별도 함수로 추출. max-lines-per-function 린트 경고가 나면 즉시 분해.
+
 ### Imports
 ```typescript
 // CORRECT: Individual component imports
@@ -70,6 +87,8 @@ import { Table, Header } from '@cloudscape-design/components';
 'use client';  // At the very top of the file, before imports
 ```
 
+**Cloudscape 예외**: Cloudscape 컴포넌트는 내부적으로 React 훅을 사용하므로 클라이언트 컨텍스트가 필요하다. 이벤트/훅이 없는 순수 래퍼 컴포넌트도 Cloudscape를 사용하면 `"use client"` 포함이 안전하다. 이것은 Server Components 기본 규칙의 예외.
+
 ### Events
 ```typescript
 // CORRECT: Destructure detail from event
@@ -78,6 +97,11 @@ onSortingChange={({ detail }) => setSorting(detail)}
 
 // WRONG: Access event.detail
 onSelectionChange={(event) => setSelected(event.detail.selectedItems)}
+```
+
+**onFollow 예외**: onFollow에서 SPA 네비게이션을 위해 preventDefault가 필요한 경우가 유일한 `(event) =>` 예외:
+```typescript
+onFollow={(event) => { event.preventDefault(); router.push(event.detail.href); }}
 ```
 
 ### useCollection
@@ -113,6 +137,13 @@ const { items, collectionProps, filterProps, paginationProps } = useCollection(a
 - Export interfaces from `src/types/` files
 - Name interfaces with PascalCase, no `I` prefix
 
+### Hook Exports
+- 훅 파일은 named export만 사용. default export 금지.
+- Import는 `import { useXxx } from '@/hooks/useXxx'` 형식.
+
+### Mutation 패턴
+모든 POST/PUT/DELETE 호출은 반드시 `useApiMutation` 커스텀 훅을 통해야 한다. 컴포넌트에서 raw `fetch()` 금지 — 에러 처리와 알림 시스템을 우회한다.
+
 ## 담당 범위
 
 이 에이전트가 생성하는 코드:
@@ -140,29 +171,77 @@ src/
 
 ## API 호출 패턴
 
-백엔드 API를 호출할 때는 다음 패턴을 사용한다:
+SWR을 기본 데이터 페칭 전략으로 사용한다. `useState`/`useEffect`/`fetch` 조합은 금지.
+
+### 읽기 (GET) — SWR
 
 ```typescript
 // src/hooks/use{Resource}.ts
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import useSWR from 'swr';
 import type { Resource } from '@/types/resource';
 
+/** JSON fetcher — SWR 전역 설정 또는 훅에서 사용 */
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
+/** 리소스 목록을 조회한다. */
 export function useResources() {
-  const [items, setItems] = useState<Resource[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, error, isLoading, mutate } = useSWR<Resource[]>('/api/resources', fetcher);
+  return { items: data ?? [], loading: isLoading, error, refresh: mutate };
+}
 
-  const fetchItems = useCallback(async () => {
-    setLoading(true);
-    const res = await fetch('/api/resources');
-    const data = await res.json();
-    setItems(data);
-    setLoading(false);
-  }, []);
+/** 단일 리소스를 조회한다. */
+export function useResource(id: string | null) {
+  const { data, error, isLoading } = useSWR<Resource>(
+    id ? `/api/resources/${id}` : null,
+    fetcher,
+  );
+  return { item: data, loading: isLoading, error };
+}
+```
 
-  useEffect(() => { fetchItems(); }, [fetchItems]);
+### 변경 (POST/PUT/DELETE) — useApiMutation
 
-  return { items, loading, refresh: fetchItems };
+```typescript
+// src/hooks/useApiMutation.ts
+'use client';
+import { useCallback, useState } from 'react';
+
+interface MutationState<T> {
+  data: T | null;
+  error: Error | null;
+  loading: boolean;
+}
+
+/** POST/PUT/DELETE 호출용 공통 mutation 훅 */
+export function useApiMutation<TBody, TResponse>(
+  url: string,
+  method: 'POST' | 'PUT' | 'DELETE' = 'POST',
+) {
+  const [state, setState] = useState<MutationState<TResponse>>({
+    data: null, error: null, loading: false,
+  });
+
+  const execute = useCallback(async (body?: TBody) => {
+    setState({ data: null, error: null, loading: true });
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      const data = (await res.json()) as TResponse;
+      setState({ data, error: null, loading: false });
+      return data;
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      setState({ data: null, error, loading: false });
+      throw error;
+    }
+  }, [url, method]);
+
+  return { ...state, execute };
 }
 ```
 

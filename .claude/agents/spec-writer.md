@@ -59,15 +59,23 @@ Read from the current pipeline version directory:
 
 ## Output 구조
 
-이중 출력 — `.spec.md` (사람용 상세 스펙) + `.spec.json` (기계용 구조화 데이터)
+이중 출력 — `.spec.json` (기계용 구조화 데이터) + `.spec.md` (사람용 상세 스펙)
 
-**생성 순서: 마크다운을 먼저 작성한다.**
-1. `backend-spec.md` 작성 (한국어 상세 스펙)
-2. `frontend-spec.md` 작성 (한국어 상세 스펙)
-3. `specs-summary.md` 작성 (전체 요약)
-4. `backend-spec.json` 작성 (md의 내용을 구조화)
-5. `frontend-spec.json` 작성 (md의 내용을 구조화)
-6. `_manifest.json` 작성 (집계 + FR 커버리지)
+**2단계 분할 생성 — 컨텍스트 유지를 위해 BE/FE를 분리하여 순차 생성한다.**
+
+JSON 스펙이 충실한 만큼 용량이 크다 (50~70KB). 한 세션에서 BE+FE를 전부 JSON으로 쓴 뒤 마크다운을 쓰면 컨텍스트가 포화되어 md가 부실해진다. 따라서 **도메인별로 json→md를 연속 작성**하여 json 내용이 컨텍스트에 살아있는 상태에서 md를 쓴다.
+
+### 1차 호출: 백엔드 스펙 (BE 도메인에 집중)
+1. `backend-spec.json` 작성 — 타입, 검증, 시드데이터, repository, API 라우트, 미들웨어
+2. `backend-spec.md` 작성 — json 내용을 바로 이어서 한국어 상세 마크다운으로 작성
+
+### 2차 호출: 프론트엔드 스펙 (BE 스펙을 참조하여 FE 집중)
+3. `frontend-spec.json` 작성 — 훅, 컨텍스트, 레이아웃, 공유 컴포넌트, 기능 컴포넌트, 페이지
+4. `frontend-spec.md` 작성 — json 내용을 바로 이어서 한국어 상세 마크다운으로 작성
+
+### 마무리
+5. `specs-summary.md` 작성 — BE + FE 전체 요약 (한국어)
+6. `_manifest.json` 작성 — 집계 + FR 커버리지 + 생성 순서
 
 **마크다운 파일이 없으면 JSON만 생성해서는 안 된다.** 파이프라인 검증 게이트가 .spec.md 파일 존재를 확인하며, 누락 시 재실행된다.
 

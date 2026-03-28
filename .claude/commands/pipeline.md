@@ -139,10 +139,19 @@ Stage 7   핸드오버 패키지
 - Output: `.pipeline/artifacts/v{N}/02-architecture/`
 - **APPROVAL GATE** (auto 모드 시 건너뜀): Present component tree and data flow. Wait for approval.
 
-### Stage 4: Specification
-- Launch the `spec-writer` agent
+### Stage 4: Specification (2회 분할 호출)
+
+컨텍스트 포화를 방지하기 위해 `spec-writer`를 BE/FE 순차 2회로 분할 호출한다.
+
+**4-1. 백엔드 스펙**
+- Launch `spec-writer` with 지시: "백엔드 스펙만 작성 (backend-spec.json → backend-spec.md)"
 - Input: `01-requirements/requirements.json` + `02-architecture/architecture.json`
-- Output: `.pipeline/artifacts/v{N}/03-specs/` (BE 스펙 + AI 스펙(조건부) + FE 스펙 + `_manifest.json`)
+- Output: `backend-spec.json` + `backend-spec.md`
+
+**4-2. 프론트엔드 스펙**
+- Launch `spec-writer` with 지시: "프론트엔드 스펙만 작성 (frontend-spec.json → frontend-spec.md). 백엔드 스펙을 참조"
+- Input: 위와 동일 + `backend-spec.json` (BE 타입/API 참조)
+- Output: `frontend-spec.json` + `frontend-spec.md` + `specs-summary.md` + `_manifest.json`
 
 **검증 게이트 (다음 단계 진행 전 확인):**
 - [ ] `backend-spec.md` 파일이 존재하는가 (사람이 리뷰할 수 있는 한국어 마크다운)

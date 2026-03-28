@@ -21,9 +21,11 @@ Launch the `handover-packager` agent:
 
 ## 완료 후
 
-사용자에게 한국어로 보고:
-- 생성된 핸드오버 문서 목록
-- 프로덕션 전환 시 필수 작업 수
-- "이 프로젝트를 고객 개발팀에 전달하세요" 안내
+1. Launch `git-manager` agent with action: `post-handover`
+   - 핸드오버 문서(docs/, README.md, .env.local.example) 자동 커밋
+2. 사용자에게 한국어로 보고:
+   - 생성된 핸드오버 문서 목록
+   - 프로덕션 전환 시 필수 작업 수
+   - "이 프로젝트를 고객 개발팀에 전달하세요" 안내
 
 $ARGUMENTS

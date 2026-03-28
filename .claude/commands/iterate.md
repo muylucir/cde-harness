@@ -60,14 +60,9 @@ source-analysis.md (v2):
 
 ### Phase 3: 브랜치 생성 + state.json 버전 추가
 
-**v2부터는 새 브랜치에서 작업한다.** main은 항상 승인된 최신 버전을 유지한다.
-
-```bash
-# 브랜치 생성
-git checkout -b iterate/v{N+1}
-```
-
-브랜치 네이밍: `iterate/v2`, `iterate/v3`, ...
+Launch `git-manager` agent with action: `pre-iterate`
+- 워킹 트리 클린 확인
+- `iterate/v{N+1}` 브랜치 생성
 
 `.pipeline/state.json`에 **새 버전을 추가** (기존 버전 이력 보존):
 
@@ -123,7 +118,9 @@ git checkout -b iterate/v{N+1}
 ## 완료 후
 
 1. `.pipeline/state.json`의 현재 버전을 `"completed"`로 업데이트
-2. 변경사항을 `iterate/v{N}` 브랜치에 커밋
+2. Launch `git-manager` agent with action: `post-iterate`
+   - 변경사항을 `iterate/v{N}` 브랜치에 자동 커밋
+   - 리비전 로그에서 피드백 항목을 추출하여 커밋 메시지 구성
 3. 사용자에게 한국어 요약:
    - 브랜치: `iterate/v{N}`
    - 입력 파일 갱신 내역 (brief, manifest, source-analysis)
@@ -132,7 +129,7 @@ git checkout -b iterate/v{N+1}
    - 수정된 기능/페이지
    - `npm run dev`로 확인 안내
 4. 다음 단계 안내:
-   - 결과 확인 후 승인 시: `git checkout main && git merge iterate/v{N}`
+   - 결과 확인 후 승인 시: "머지해줘" → `git-manager(merge)` 실행
    - 결과 불만족 시: `git checkout main` (브랜치 버리기)
    - 추가 피드백 시: 같은 브랜치에서 다시 `/iterate`
 

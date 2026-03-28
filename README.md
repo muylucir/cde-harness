@@ -37,10 +37,10 @@ AWS Solutions Architect가 고객 요구사항으로부터 **Next.js 15 + Clouds
 [6. 보안 점검] → OWASP 기반 보안 감사
     │
     ▼
-[7. 핸드오버] → 아키텍처/API 문서 + 프로덕션 체크리스트 + 환경 설정 가이드
+완료 → npm run dev로 확인 → 고객 데모 → /iterate로 반복 개선
     │
-    ▼
-완료: 고객 개발팀에 패키지 전달
+    ▼ (최종 핸드오버 시)
+[/handover] → 아키텍처/API 문서 + 프로덕션 체크리스트 + 환경 설정 가이드
 ```
 
 ---
@@ -132,6 +132,7 @@ npm run dev
 | `/pipeline` | 전체 파이프라인 실행 (승인 게이트 포함) |
 | `/pipeline auto` | 승인 게이트 없이 전체 자동 실행 |
 | `/iterate` | 고객 피드백 분석 → 영향 범위 추적 → 최소 재생성 |
+| `/handover` | 최종 핸드오버 패키지 생성 (이터레이션 완료 후) |
 | `/pipeline-from {stage}` | 특정 단계부터 재개 |
 | `/pipeline-status` | 현재 진행 상태 확인 |
 

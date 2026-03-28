@@ -33,7 +33,8 @@ Sub-agent pipeline for generating Next.js 15 + Cloudscape Design System prototyp
 (brief-composer) → domain-researcher → requirements-analyst → architect → spec-writer
     → code-gen-backend → (code-gen-ai) → code-gen-frontend
     → [test(Playwright) → fix]* → review ← 먼저 동작하게, 그 다음 품질 리뷰
-    → security-auditor-pipeline → handover-packager
+    → security-auditor-pipeline
+    (/handover) → handover-packager  ← 별도 실행, 최종 핸드오버 시만
 ```
 
 *code-generator-ai는 요구사항에 AI 기능이 포함된 경우에만 실행*

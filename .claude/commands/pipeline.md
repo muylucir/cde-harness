@@ -225,12 +225,6 @@ Output:
   - 수정 후 Stage 5 품질 루프 재실행 (max 1회)
 - If **PASS**: proceed to stage 7
 
-### Stage 7: Handover Package
-- Launch the `handover-packager` agent
-- Input: 모든 파이프라인 아티팩트 + `src/` + `package.json`
-- Output: `.pipeline/artifacts/v{N}/07-handover/` + 프로젝트 루트에 문서 복사
-- 생성 문서: README.md, ARCHITECTURE.md, API.md, AI-AGENT.md(조건부), PRODUCTION-CHECKLIST.md, REVISION-HISTORY.md(조건부), .env.local.example
-
 ## Completion
 
 When all stages pass:
@@ -238,11 +232,13 @@ When all stages pass:
 2. Present summary to user:
    - Requirements count and coverage
    - Components generated
-   - Build status
+   - Build/test status
    - Review score
    - Security audit result
-   - Production readiness notes
-3. Suggest: "Run `npm run dev` to preview the prototype"
+3. Suggest:
+   - `npm run dev`로 프로토타입 확인
+   - 고객 피드백 후 `/iterate`로 반복 개선
+   - 최종 핸드오버 시 `/handover` 실행
 
 ## Circuit Breaker
 

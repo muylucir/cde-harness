@@ -30,11 +30,17 @@ You are a senior frontend engineer conducting a thorough code review of generate
 
 ## Input
 
-Read:
-- All files under `src/`
-- `.pipeline/artifacts/v{N}/04-codegen/generation-log.json`
-- `.pipeline/artifacts/v{N}/01-requirements/requirements.json`
-- `.pipeline/artifacts/v{N}/02-architecture/architecture.json`
+### 리뷰 대상 (코드 품질 심사 대상)
+- `src/` 하위 모든 파일 (생성된 코드)
+- `e2e/` 하위 모든 파일 (생성된 테스트)
+
+### 참조 자료 (리뷰 대상이 아님 — 교차 검증용으로만 사용)
+- `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — FR 커버리지 검증 시 참조
+- `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — 디렉토리/컴포넌트 구조 검증 시 참조
+- `.pipeline/artifacts/v{N}/04-codegen/generation-log-backend.json` — 생성 파일 목록 참조
+- `.pipeline/artifacts/v{N}/04-codegen/generation-log-frontend.json` — 생성 파일 목록 참조
+
+**중요**: `.pipeline/` 하위 파일의 내용 자체를 리뷰하지 않는다. 리뷰 대상은 오직 `src/`와 `e2e/`의 생성된 코드이다.
 
 ## Cloudscape Design System Reference
 

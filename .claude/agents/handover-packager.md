@@ -26,16 +26,29 @@ allowedTools:
 
 ## Input
 
-파이프라인의 모든 아티팩트를 읽는다:
-- `.pipeline/artifacts/v{N}/01-requirements/requirements.json` + `.md`
-- `.pipeline/artifacts/v{N}/02-architecture/architecture.json` + `component-tree.md` + `data-flow.md`
-- `.pipeline/artifacts/v{N}/03-specs/_manifest.json` + 스펙 파일들
-- `.pipeline/artifacts/v{N}/04-codegen/generation-log-*.json`
-- `.pipeline/artifacts/v{N}/05-review/review-report.md`
-- `.pipeline/artifacts/v{N}/06-security/security-audit.md` + `security-result.json`
-- `.pipeline/revisions/` (있는 경우 — 리비전 이력)
+**모든 버전**의 아티팩트와 리비전 이력을 읽는다. 최종 버전만이 아니라 v1부터 현재까지 전체를 파악하여 프로토타입의 발전 과정을 문서화한다.
+
+### 버전 이력 (전체)
+- `.pipeline/state.json` — `versions` 객체의 모든 버전 이력 (trigger, stages, timing)
+- `.pipeline/revisions/v*-to-v*-analysis.md` — 버전 간 변경 분석 보고서 전체
+- `.pipeline/revisions/v*-to-v*.json` — 버전 간 리비전 로그 전체
+
+### 최종 버전 아티팩트
+- `.pipeline/artifacts/v{latest}/01-requirements/requirements.json` + `.md`
+- `.pipeline/artifacts/v{latest}/02-architecture/architecture.json` + `component-tree.md` + `data-flow.md`
+- `.pipeline/artifacts/v{latest}/03-specs/_manifest.json` + 스펙 파일들
+- `.pipeline/artifacts/v{latest}/04-codegen/generation-log-*.json`
+- `.pipeline/artifacts/v{latest}/05-review/review-report.md` + `test-report.md`
+- `.pipeline/artifacts/v{latest}/06-security/security-audit.md` + `security-result.json`
+
+### 이전 버전 아티팩트 (리비전 이력 문서화용)
+- `.pipeline/artifacts/v{1..latest-1}/01-requirements/requirements.json` — 각 버전의 요구사항 변화 추적
+- `.pipeline/artifacts/v{1..latest-1}/02-architecture/architecture.json` — 아키텍처 변화 추적
+
+### 현재 코드 + 설정
 - 생성된 코드 전체: `src/`
 - `package.json`
+- `.pipeline/input/customer-brief.md` — 최종 통합 브리프
 
 ## 핸드오버 패키지 구성
 
@@ -200,25 +213,55 @@ http://localhost:3000 에서 확인
 - [ ] 성능 최적화 (이미지, 번들 사이즈)
 ```
 
-### 6. `REVISION-HISTORY.md` — 변경 이력 (리비전이 있는 경우)
+### 6. `REVISION-HISTORY.md` — 전체 변경 이력
+
+`state.json`의 `versions` 객체와 `.pipeline/revisions/` 로그를 기반으로 **v1부터 최종 버전까지** 전체 이력을 문서화한다.
 
 ```markdown
 # 프로토타입 변경 이력
 
-## v1 (초기 프로토타입)
-- 날짜: {date}
-- 요구사항: {FR 수}개
-- 주요 기능: {목록}
+## 요약
+| 버전 | 날짜 | 트리거 | 요구사항 | 주요 변경 |
+|------|------|--------|---------|----------|
+| v1 | 2026-03-28 | /pipeline | FR 5개 | 초기 프로토타입 |
+| v2 | 2026-03-30 | /iterate | FR 5+1개 | 이미지 업로드 추가, 매출 페이지 신규 |
+| v3 | 2026-04-02 | /iterate | FR 6개 | 대시보드 레이아웃 변경 |
 
-## v2 (1차 피드백 반영)
-- 날짜: {date}
-- 변경 사항:
-  - {FB-001}: {설명}
-  - {FB-002}: {설명}
-- 추가된 기능: {목록}
-- 수정된 기능: {목록}
+## v1 — 초기 프로토타입
+- **날짜**: {state.json versions.1.started_at}
+- **트리거**: /pipeline
+- **요구사항**: {FR 수}개 (must-have {N}, should-have {N})
+- **생성 파일**: {generation-log에서 파일 수}
+- **테스트 결과**: {test-report에서 통과/전체}
+- **리뷰 결과**: {review-result에서 카테고리별 PASS/FAIL}
+- **주요 기능**:
+  - {FR-001}: {제목}
+  - {FR-002}: {제목}
+  - ...
 
-{리비전 로그에서 추출}
+## v2 — 1차 고객 피드백 반영
+- **날짜**: {state.json versions.2.started_at}
+- **트리거**: /iterate
+- **재진입 지점**: {versions.2.reentry_point}
+- **고객 피드백 원본**: {revisions/v1-to-v2-analysis.md에서 피드백 항목 요약}
+- **요구사항 변경**:
+  | 변경 유형 | FR | 설명 |
+  |----------|-----|------|
+  | 수정 | FR-003 | {revisions 로그의 requirements_impact에서 추출} |
+  | 추가 | FR-006 | {revisions 로그에서 추출} |
+- **영향받은 파일**: {revisions 로그의 code_impact에서 추출}
+- **보존된 파일**: {변경 안 된 파일 수}
+- **테스트 결과**: {통과/전체}
+- **리뷰 결과**: {카테고리별}
+
+{v3, v4... 동일한 형식으로 반복}
+
+## 의사결정 기록
+프로토타입 과정에서의 주요 설계 결정:
+| 결정 | 버전 | 이유 |
+|------|------|------|
+| {예: 인메모리 스토어 → DynamoDB 변경} | v2 | {고객 요청: 데모에서 데이터 유지 필요} |
+{architect_notes, feedback items에서 추출}
 ```
 
 ### 7. `.env.local.example` — 환경 변수 템플릿

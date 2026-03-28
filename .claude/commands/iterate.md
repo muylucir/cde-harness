@@ -85,6 +85,34 @@ Launch `git-manager` agent with action: `pre-iterate`
 }
 ```
 
+### Phase 3.5: 건너뛴 단계 아티팩트 패치
+
+reentry 지점이 `spec-writer` 이후일 때, 건너뛰는 단계(domain-researcher, requirements-analyst, architect)의 아티팩트도 **리비전 로그 기반으로 패치**한다. 아티팩트가 항상 현재 상태를 반영해야 핸드오버 시 정합성이 보장된다.
+
+**패치 프로세스:**
+
+1. v{N}의 아티팩트를 v{N+1} 디렉토리에 복사
+2. `revisions/v{N}-to-v{N+1}.json`의 영향 분석을 읽는다
+3. 영향이 있는 아티팩트만 패치:
+
+**requirements.json 패치** (`requirements_impact`가 있을 때):
+- `action: "modify"` → 해당 FR의 필드를 업데이트 (priority, acceptance_criteria 등)
+- `action: "add"` → 새 FR 추가 (다음 순번 ID 부여)
+- `action: "remove"` → 해당 FR 제거 또는 `"status": "removed"` 마크
+- `metadata.version`을 v{N+1}로 업데이트
+- `requirements.md`도 JSON 변경에 맞춰 재생성
+
+**architecture.json 패치** (`architecture_impact`가 있을 때):
+- `action: "modify"` → 해당 컴포넌트/라우트의 필드 업데이트
+- `action: "add"` → 새 컴포넌트/라우트/API 엔드포인트 추가
+- `requirements_coverage` 매핑 업데이트
+- `metadata.version`을 v{N+1}로 업데이트
+- `architecture.md`도 JSON 변경에 맞춰 재생성
+
+**패치하지 않는 것:**
+- `domain-context.json/md` — 도메인 지식은 버전 간 변하지 않음 (v{N}에서 그대로 복사)
+- 리비전 로그에 영향이 없는 아티팩트 — 그대로 복사
+
 ### Phase 4: 파이프라인 재실행
 
 1. 새 버전 디렉토리 생성: `.pipeline/artifacts/v{N+1}/`

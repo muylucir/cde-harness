@@ -47,6 +47,15 @@ AWS Solutions Architect가 고객 요구사항으로부터 **Next.js 15 + Clouds
 
 ## 빠른 시작
 
+### 0. 새 프로젝트 생성 (템플릿에서)
+
+```bash
+gh repo create my-prototype --template muylucir/cde-harness --clone --private
+cd my-prototype
+```
+
+`my-prototype` 자리에 고객/프로젝트명을 넣으면 됩니다. `--private`은 `--public`으로 변경 가능.
+
 ### 1. 사전 준비
 
 하네스에는 `node_modules/`와 `src/`가 포함되지 않습니다. 파이프라인이 실행될 때 자동으로 생성됩니다.

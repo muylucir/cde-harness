@@ -31,8 +31,8 @@ Auto 모드에서도 **품질 루프(Stage 5)**와 **서킷 브레이커**는 �
      ```
 
 2. Check `.pipeline/state.json`
-   - If exists with a completed run: increment version
-   - If exists with an in-progress run: warn and ask to resume with `/pipeline-from` or overwrite
+   - If exists with an in-progress version: warn and ask to resume with `/pipeline-from` or overwrite
+   - If exists with completed version(s): increment version, **기존 버전 이력은 보존**
    - If doesn't exist: create with version 1
 
 3. Create the version directory structure:
@@ -48,15 +48,39 @@ Auto 모드에서도 **품질 루프(Stage 5)**와 **서킷 브레이커**는 �
    └── 07-handover/
    ```
 
-4. Initialize `.pipeline/state.json`:
+4. Update `.pipeline/state.json` (기존 이력 보존):
    ```json
    {
-     "current_version": N,
-     "current_stage": "requirements-analyst",
-     "stage_history": [],
-     "feedback_loops": []
+     "current_version": 2,
+     "versions": {
+       "1": {
+         "status": "completed",
+         "started_at": "2026-03-28T10:00:00Z",
+         "completed_at": "2026-03-28T11:30:00Z",
+         "trigger": "pipeline",
+         "stages": [
+           { "stage": "domain-researcher", "status": "completed", "duration_ms": 45000 },
+           { "stage": "requirements-analyst", "status": "completed", "duration_ms": 60000 }
+         ],
+         "feedback_loops": [],
+         "test_iterations": 1,
+         "review_iterations": 1
+       },
+       "2": {
+         "status": "in-progress",
+         "started_at": "2026-03-29T14:00:00Z",
+         "trigger": "iterate",
+         "current_stage": "architect",
+         "stages": [],
+         "feedback_loops": []
+       }
+     }
    }
    ```
+
+   - 최초 실행 시 `versions: { "1": { status: "in-progress", ... } }`로 시작
+   - 새 버전 시작 시 이전 버전은 그대로 두고 새 키 추가
+   - `trigger` 필드로 어떻게 시작되었는지 기록 (`"pipeline"` | `"iterate"` | `"pipeline-from"`)
 
 ## Execution Sequence
 

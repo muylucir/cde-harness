@@ -41,7 +41,6 @@ yarn-error.log*
 next-env.d.ts
 
 # pipeline runtime (generated per run, not committed)
-/src/
 /.pipeline/state.json
 /.pipeline/input/customer-brief.md
 /.pipeline/input/source-analysis.md

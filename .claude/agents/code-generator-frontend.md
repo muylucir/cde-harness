@@ -256,7 +256,7 @@ export function useApiMutation<TBody, TResponse>(
    d. **shared** — 재사용 컴포넌트
    e. **feature** — 기능별 컴포넌트
    f. **page** — App Router 페이지 (`src/app/page.tsx` 포함)
-4. `npm run build`로 검증 (실패 시 최대 3회 재시도)
+4. `npm run build` + `npm run lint` 로 검증 (lint error 0 필수, max-lines-per-function 포함. 실패 시 최대 3회 재시도)
 5. 생성 로그 작성
 
 ## Output
@@ -308,7 +308,7 @@ src/
 
 - 피드백 파일에서 프론트엔드 관련 이슈만 수정
 - 백엔드 코드(API 라우트, types, db 레이어)는 절대 수정하지 않음
-- 수정 후 반드시 `npm run build` 재검증
+- 수정 후 반드시 `npm run build` + `npm run lint` 재검증
 
 ## Validation
 

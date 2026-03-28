@@ -269,7 +269,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
    e. **services** — AWS 서비스 래퍼 (필요 시)
    f. **api** — Route Handlers
    g. **middleware** — 보안 헤더, 인증
-3. `npm run build`로 검증 (실패 시 최대 3회 재시도)
+3. `npm run build` + `npm run lint` 로 검증 (lint error 0 필수. 실패 시 최대 3회 재시도)
 4. 생성 로그 작성
 
 ## Output
@@ -298,7 +298,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 ## 피드백 처리
 
 - 피드백 파일에서 백엔드 관련 이슈만 수정
-- 수정 후 반드시 `npm run build` 재검증
+- 수정 후 반드시 `npm run build` + `npm run lint` 재검증
 - 프론트엔드 코드는 절대 수정하지 않음
 
 ## 검증 체크리스트

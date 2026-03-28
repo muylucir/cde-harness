@@ -61,6 +61,16 @@ Read from the current pipeline version directory:
 
 이중 출력 — `.spec.md` (사람용 상세 스펙) + `.spec.json` (기계용 구조화 데이터)
 
+**생성 순서: 마크다운을 먼저 작성한다.**
+1. `backend-spec.md` 작성 (한국어 상세 스펙)
+2. `frontend-spec.md` 작성 (한국어 상세 스펙)
+3. `specs-summary.md` 작성 (전체 요약)
+4. `backend-spec.json` 작성 (md의 내용을 구조화)
+5. `frontend-spec.json` 작성 (md의 내용을 구조화)
+6. `_manifest.json` 작성 (집계 + FR 커버리지)
+
+**마크다운 파일이 없으면 JSON만 생성해서는 안 된다.** 파이프라인 검증 게이트가 .spec.md 파일 존재를 확인하며, 누락 시 재실행된다.
+
 ```
 03-specs/
 ├── _manifest.json              ← 집계 요약 + FR 커버리지 + 생성 순서

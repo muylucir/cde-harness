@@ -144,26 +144,39 @@ Stage 7   핸드오버 패키지
 - Input: `01-requirements/requirements.json` + `02-architecture/architecture.json`
 - Output: `.pipeline/artifacts/v{N}/03-specs/` (BE 스펙 + AI 스펙(조건부) + FE 스펙 + `_manifest.json`)
 
+**검증 게이트 (다음 단계 진행 전 확인):**
+- [ ] `backend-spec.md` 파일이 존재하는가 (사람이 리뷰할 수 있는 한국어 마크다운)
+- [ ] `frontend-spec.md` 파일이 존재하는가
+- [ ] `backend-spec.json` 파일이 존재하는가 (코드 제너레이터용 기계 리더블)
+- [ ] `frontend-spec.json` 파일이 존재하는가
+- [ ] `_manifest.json`에 `requirements_coverage`가 포함되어 있는가
+- 하나라도 누락 시: spec-writer를 재실행하여 누락 파일 생성 (최대 1회)
+
 ### Stage 5: Code Generation (순차)
 
 순서대로 코드를 생성한다. 각 단계의 산출물이 다음 단계의 입력이 된다.
 
-**4a. Backend**
+**5a. Backend**
 - Launch `code-generator-backend`
 - Output: `src/types/`, `src/lib/`, `src/app/api/`, `src/data/`, `src/middleware.ts`
-- `npm run build` 확인
+- `npm run build` + `npm run lint` 통과 필수 (lint error 0)
 
-**4b. AI Agent (조건부)**
+**5b. AI Agent (조건부)**
 - requirements.json에 AI 관련 FR이 없으면 건너뜀
 - Launch `code-generator-ai`
 - Output: `src/lib/ai/`, `src/app/api/chat/`
-- `npm run build` 확인
+- `npm run build` + `npm run lint` 통과 필수
 
-**4c. Frontend**
+**5c. Frontend**
 - Launch `code-generator-frontend`
 - 백엔드가 생성한 `src/types/`와 API 엔드포인트를 참조
 - Output: `src/components/`, `src/hooks/`, `src/contexts/`, `src/app/` pages
-- `npm run build` 확인
+- `npm run build` + `npm run lint` 통과 필수 (lint error 0, max-lines-per-function 포함)
+
+**5d. 코드 검증 게이트:**
+- [ ] `npm run lint` 에러 0 (max-lines-per-function 포함)
+- [ ] `grep -r 'fetch(' src/components/ src/app/ --include='*.tsx'` 에서 raw fetch 발견 시 해당 컴포넌트 수정 요청
+- 실패 시 해당 코드 제너레이터에 피드백 → 재생성 (최대 2회)
 
 ### Stage 6a: Test Loop (기능 검증 — 먼저 동작하게 만든다)
 
@@ -228,21 +241,29 @@ Output: `05-review/test-result.json`
 **모든 테스트가 통과한 코드**에 대해 정적 품질 리뷰를 수행한다.
 
 - Launch `reviewer` agent
-- 리뷰 카테고리 (7개):
-  - Cloudscape Compliance (개별 임포트, useCollection, TopNav 위치, 이벤트 패턴)
-  - Next.js 15 Conventions (App Router, "use client", Server Components)
-  - TypeScript Quality (no any, strict mode)
-  - Accessibility (enableKeyboardNavigation, ariaLabel, FormField)
-  - Backend Quality (HTTP 메서드, zod 검증, repository 패턴, 에러 코드)
-  - Requirements Coverage (모든 FR이 구현되었는가)
-  - Code Organization (디렉토리 규칙, 네이밍, 순환 의존성)
+- 리뷰 카테고리 (**9개** — 모두 리포트에 명시적으로 출력해야 함):
+  1. Cloudscape Compliance (개별 임포트, useCollection, TopNav 위치, 이벤트 패턴)
+  2. Next.js 15 Conventions (App Router, "use client", Server Components)
+  3. TypeScript Quality (no any, strict mode)
+  4. Accessibility (enableKeyboardNavigation, ariaLabel, FormField)
+  5. Backend Quality (HTTP 메서드, zod 검증, repository 패턴, 에러 코드)
+  6. Requirements Coverage (모든 FR이 구현되었는가)
+  7. Code Organization (디렉토리 규칙, 네이밍, 순환 의존성)
+  8. 주석 언어 검증 (파일 헤더 한국어, JSDoc 한국어)
+  9. 시드 데이터 일관성 (FK 참조 유효, 데이터 볼륨, enum 정합)
 
 Output:
-- `05-review/review-report.md` — 카테고리별 근거 포함 한국어 리포트
+- `05-review/review-report.md` — **9개** 카테고리별 근거 포함 한국어 리포트
 - `05-review/test-report.md` — 테스트 목록 + FR 커버리지 + 결과 한국어 리포트
-- `05-review/review-result.json` — 머신 리더블 (scores with evidence + test results)
+- `05-review/review-result.json` — 머신 리더블 (scores with evidence + test results + **iterations[]** 배열)
 
-**리뷰 PASS 시**: Stage 6으로 진행
+**리뷰 출력 검증 게이트:**
+- [ ] review-report.md에 9개 카테고리가 모두 명시적 섹션으로 존재하는가
+- [ ] review-result.json에 `iterations` 배열이 있고 각 이터레이션의 실패/수정 내역이 기록되었는가
+- [ ] test-report.md에 P0 FR별 인터랙션 테스트(click/fill) 존재 여부가 명시되었는가
+- 누락 시 reviewer에 재실행 요청 (최대 1회)
+
+**리뷰 PASS 시**: Stage 7으로 진행
 **리뷰 FAIL 시**:
   - 해당 코드 제너레이터에 수정 요청: `.pipeline/artifacts/v{N}/04-codegen/feedback-review-iter-{N}.json`
   - 수정 후 **Stage 6a(테스트)부터 재실행** — 리뷰 수정이 기능을 깨뜨리지 않았는지 확인

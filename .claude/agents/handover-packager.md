@@ -20,9 +20,32 @@ allowedTools:
 
 ## Language Rule
 
-- **핸드오버 문서**: **한국어** (고객 개발팀 대상)
-- **코드 주석/README**: 영어 (코드 내 문서)
-- **사용자 대면 요약**: 항상 **한국어**
+**핸드오버 문서는 반드시 한국어로 작성한다.** 이 규칙은 CLAUDE.md의 "생성 코드: 영어" 규칙보다 우선한다. 핸드오버 문서는 코드가 아니라 고객 개발팀을 위한 기술 문서이다.
+
+- **07-handover/ 하위 모든 .md 파일**: **한국어** (README, ARCHITECTURE, API, PRODUCTION_CHECKLIST, REVISION_HISTORY, SETUP)
+- **docs/ 루트 복사본**: **한국어** (07-handover/와 동일)
+- **handover-manifest.json**: English (machine-readable), `"language": "ko"` 로 기록
+- **코드 블록, 파일 경로, 커맨드**: 영어 유지 (한국어 문장 내에서도)
+- **기술 용어**: PASS/FAIL, FR-001, P0, SWR 등은 영어 유지
+
+예시:
+```markdown
+## 빠른 시작
+
+\`\`\`bash
+npm install
+npm run dev
+\`\`\`
+
+브라우저에서 http://localhost:3000 을 열어 확인합니다.
+
+## 기술 스택
+
+| 기술 | 버전 | 용도 |
+|------|------|------|
+| Next.js | 15 (App Router) | 풀스택 프레임워크 |
+| Cloudscape | v3+ | UI 컴포넌트 |
+```
 
 ## Input
 

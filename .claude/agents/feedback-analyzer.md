@@ -134,18 +134,19 @@ vehicle-create-form.spec.md 변경
 
 ### 7단계: 재진입 지점 결정
 
-영향 범위에 따라 최소 재진입 지점을 결정한다:
+영향 범위에 따라 재진입 지점을 결정한다.
+
+**핵심 원칙: 요구사항이 변경되면 requirements-analyst부터 다시 돌린다.** FR의 acceptance_criteria, priority, api_endpoints가 변하면 requirements.json이 업데이트되어야 하고, 그에 따라 architecture.json도 변해야 한다. "스펙부터" 또는 "아키텍처부터"로 건너뛰면 아티팩트 정합성이 깨진다.
 
 | 영향 범위 | 재진입 지점 | 이유 |
 |-----------|------------|------|
-| 새 요구사항 추가 | `requirements-analyst` | 새 FR 정의 → 아키텍처 → 스펙 → 코드 전체 |
-| 기존 요구사항 수정 (구조 변경) | `architect` | 컴포넌트/라우트 구조 변경 가능 |
-| 기존 요구사항 수정 (UI만) | `spec-writer` | 기존 구조 내에서 스펙만 수정 |
-| UI/UX 피드백만 | `code-generator-frontend` | 코드만 수정 |
-| 데이터 필드 추가 | `spec-writer` | 타입 + 스펙 + 코드 변경 |
+| 새 요구사항 추가 | `requirements-analyst` | 새 FR 정의 필요 |
+| **기존 요구사항 수정** | **`requirements-analyst`** | FR 필드 변경 → requirements.json + architecture.json 갱신 필요 |
+| 데이터 필드/모델 추가 | `requirements-analyst` | data_model 변경 → 타입/API/UI 전체 영향 |
+| UI/UX 피드백만 (요구사항 변경 없음) | `code-generator-frontend` | 코드만 수정 |
 | 버그 수정만 | `code-generator-frontend` 또는 `code-generator-backend` | 해당 코드만 수정 |
 
-**규칙**: 여러 유형이 혼합되면 가장 상위 재진입 지점을 선택한다.
+**규칙**: 여러 유형이 혼합되면 가장 상위 재진입 지점을 선택한다. requirements에 영향이 있으면 무조건 `requirements-analyst`부터.
 
 ## Output
 

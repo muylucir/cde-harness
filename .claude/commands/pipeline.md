@@ -187,22 +187,20 @@ Stage 7   핸드오버 패키지
 - [ ] `grep -r 'fetch(' src/components/ src/app/ --include='*.tsx'` 에서 raw fetch 발견 시 해당 컴포넌트 수정 요청
 - 실패 시 해당 코드 제너레이터에 피드백 → 재생성 (최대 2회)
 
-### Stage 6a: Test Loop (기능 검증 — 먼저 동작하게 만든다)
+### Stage 6a: QA (기능 검증 — 먼저 동작하게 만든다)
+
+Launch `qa-engineer` agent.
 
 동작하지 않는 코드를 리뷰하는 건 의미가 없다. **먼저 빌드 + E2E 테스트가 통과하는 코드**를 확보한다.
 
+QA 에이전트의 핵심 원칙: **테스트는 계약이다.** requirements.json의 acceptance_criteria를 기반으로 테스트를 생성하며, 테스트 실패 시 테스트가 아닌 앱 코드를 수정한다.
+
 ```
-test_iteration = 0
-while test_iteration < 3:
-    1. 빌드 + 린트 + 타입 검증
-    2. Playwright E2E 테스트 생성 (최초) 또는 재실행
-    if all pass:
-        break → Stage 6b (리뷰)
-    else:
-        3. 에러 분석 → 해당 코드 제너레이터에 수정 요청
-        test_iteration += 1
-if test_iteration >= 3:
-    halt with report
+Phase A: 빌드/린트/타입 검증 (게이트)
+Phase B: requirements.json 기반 E2E 테스트 생성 (src/ 코드를 보지 않음)
+Phase C: 테스트 실행
+Phase D: 실패 분류 (인프라 이슈 → 셀렉터 수정 / 기능 이슈 → 코드 제너레이터 피드백)
+→ 최대 3회 이터레이션
 ```
 
 **5a-1. 빌드 검증**
@@ -245,9 +243,9 @@ Output: `05-review/test-result.json`
 - 피드백 파일: `.pipeline/artifacts/v{N}/04-codegen/feedback-test-iter-{N}.json`
 - 수정 후 5a-1(빌드)부터 재실행
 
-### Stage 6b: Review (품질 검증 — 동작하는 코드를 리뷰한다)
+### Stage 6b: Review (품질 검증 — QA 통과한 코드를 리뷰한다)
 
-**모든 테스트가 통과한 코드**에 대해 정적 품질 리뷰를 수행한다.
+Launch `reviewer` agent. QA가 통과시킨 코드에 대해 **정적 품질 리뷰만** 수행한다 (테스트 생성/실행은 하지 않음).
 
 - Launch `reviewer` agent
 - 리뷰 카테고리 (**9개** — 모두 리포트에 명시적으로 출력해야 함):

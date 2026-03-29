@@ -32,7 +32,7 @@ Sub-agent pipeline for generating Next.js 15 + Cloudscape Design System prototyp
 ```
 (brief-composer) → domain-researcher → requirements-analyst → architect → spec-writer
     → code-gen-backend → (code-gen-ai) → code-gen-frontend
-    → [test(Playwright) → fix]* → review ← 먼저 동작하게, 그 다음 품질 리뷰
+    → [qa-engineer(Playwright) → fix]* → reviewer ← QA가 기능 검증, reviewer가 품질 리뷰
     → security-auditor-pipeline
     (/handover) → handover-packager  ← 별도 실행, 최종 핸드오버 시만
 ```

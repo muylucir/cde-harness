@@ -22,8 +22,8 @@ AWS Solutions Architect가 고객 요구사항으로부터 **Next.js 15 + Clouds
 [3. 아키텍처 설계] → architecture.json + 컴포넌트 트리 + 데이터 플로우
     │                  ← CHECKPOINT: architecture.json/md 존재 확인
     ▼
-[4. 명세서 작성] → BE + AI + FE 스펙 (2회 분할 호출)
-    │                ← CHECKPOINT: 5개 스펙 파일 존재 확인
+[4. 명세서 작성] → BE + (AI) + FE 스펙 (3개 에이전트 분할)
+    │                ← CHECKPOINT: 스펙 파일 존재 확인
     ▼
 [5. 코드 생성] → BE → (AI) → FE (순차)
     │              ← CHECKPOINT: build + lint 통과 확인
@@ -148,8 +148,9 @@ npm run dev
 ### `/pipeline-from`에 사용 가능한 단계 이름
 
 ```
-domain-researcher → requirements-analyst → architect → spec-writer
-    → code-generator-backend → code-generator-ai → code-generator-frontend
+domain-researcher → requirements-analyst → architect
+    → spec-writer-backend → (spec-writer-ai) → spec-writer-frontend
+    → code-generator-backend → (code-generator-ai) → code-generator-frontend
     → qa-engineer → reviewer → security-auditor
 ```
 
@@ -304,10 +305,15 @@ cde-harness/
 - **출력**: `architecture.json` + `architecture.md`
 - **하는 일**: 라우트 설계, 컴포넌트 계층 구조, Cloudscape 패턴 매핑, 타입 정의
 
-### 4. 명세서 작성 (Spec Writer)
-- **입력**: `requirements.json` + `architecture.json`
-- **출력**: `backend-spec.json/md` + `frontend-spec.json/md` + `_manifest.json`
-- **하는 일**: BE/FE 분할 호출로 컨텍스트 포화 방지. Props, 상태 관리, 목 데이터, 동작 명세 정의
+### 4. 명세서 작성 (Spec Writer — BE/AI/FE 3개 에이전트)
+
+컨텍스트 오염 방지를 위해 3개 전용 에이전트로 분리. 각 에이전트가 도메인에 맞는 스킬만 로드합니다.
+
+| 에이전트 | 스킬 | 산출물 |
+|----------|------|--------|
+| `spec-writer-backend` | `mermaid-diagrams` | `backend-spec.json/md` |
+| `spec-writer-ai` (조건부) | `agent-patterns`, `prompt-engineering`, `strands-sdk-guide` | `ai-spec.json/md` |
+| `spec-writer-frontend` | `cloudscape-design`, `ascii-diagram` | `frontend-spec.json/md`, `specs-summary.md`, `_manifest.json` |
 
 ### 5A. 백엔드 코드 생성 (Code Generator — Backend)
 - **입력**: 백엔드 명세서 + 아키텍처
@@ -316,8 +322,9 @@ cde-harness/
 
 ### 5A-2. AI Agent 코드 생성 (Code Generator — AI) *조건부*
 - **실행 조건**: 요구사항에 AI 기능(챗봇, RAG, 에이전트 등)이 포함된 경우에만
-- **출력**: Strands Agent 정의, 시스템 프롬프트, 커스텀 도구, 스트리밍 API
-- **참조 스킬**: `agent-patterns`, `prompt-engineering`, `strands-sdk-guide`
+- **AI 기능은 Mocking 금지** — Amazon Bedrock을 통해 실제 모델 호출 필수
+- **출력**: `@strands-agents/sdk` 기반 Agent, `tool()` + Zod 도구, SSE 스트리밍 API
+- **참조 스킬**: `agent-patterns`, `prompt-engineering`, `strands-sdk-guide` (TypeScript)
 
 ### 5B. 프론트엔드 코드 생성 (Code Generator — Frontend)
 - **입력**: 프론트엔드 명세서 + 백엔드 생성 로그 (타입/API 참조)
@@ -428,6 +435,7 @@ Phase 5  requirements-analyst부터 파이프라인 전체 재실행
 | Cloudscape Design System | v3+ | UI 컴포넌트 라이브러리 |
 | TypeScript | strict mode | 타입 안전성 |
 | ESLint + Prettier | latest | 코드 컨벤션 |
+| Strands Agents SDK | TypeScript | AI Agent 구현 (`@strands-agents/sdk`) |
 | husky + lint-staged | latest | pre-commit hook |
 | Playwright | latest | E2E 테스트 |
 

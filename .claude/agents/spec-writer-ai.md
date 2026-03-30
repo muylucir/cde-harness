@@ -45,11 +45,11 @@ allowedTools:
 - Tool Use Prompting (도구 설명, 파라미터 정의)
 - Extended Thinking 활용 (복잡한 추론이 필요한 경우)
 
-### `strands-sdk-guide` — Strands Agents SDK 구현 스펙
-- Agent 구성 (model, systemPrompt, tools)
-- 커스텀 도구(@tool) 파라미터/핸들러 정의
-- MCP 서버/클라이언트 연동 스펙
-- 스트리밍, 대화 관리, Guardrails 설정
+### `strands-sdk-guide` — Strands Agents SDK TypeScript 구현 스펙
+- `@strands-agents/sdk` 패키지로 Agent 구성 (systemPrompt, tools)
+- `tool()` 함수 + Zod `inputSchema`로 커스텀 도구 정의
+- MCP 서버/클라이언트 연동 스펙 (stdio, Streamable HTTP)
+- Hooks, async iterator 스트리밍, 대화 관리 설정
 
 ## Input
 
@@ -63,7 +63,7 @@ allowedTools:
 2. **ai-prompts** — 시스템 프롬프트, 프롬프트 템플릿 (few-shot 포함)
 3. **ai-tools** — 에이전트 커스텀 도구 정의 (name, description, parameters, handler)
 4. **ai-rag** — RAG 파이프라인 (필요 시: 임베딩 모델, 검색 전략, Knowledge Base)
-5. **ai-agent** — Strands Agent 구성 (model, tools, systemPrompt)
+5. **ai-agent** — Strands Agent 구성 (`new Agent({ systemPrompt, tools })`)
 6. **ai-api** — 채팅/에이전트 API 라우트 (SSE 스트리밍)
 
 ## Output
@@ -163,8 +163,8 @@ allowedTools:
     {
       "name": "searchDocuments",
       "description": "문서에서 관련 정보를 검색합니다",
-      "parameters": { "query": { "type": "string", "description": "검색 쿼리" } },
-      "handler_type": "bedrock-knowledge-base",
+      "input_schema": { "query": { "type": "z.string()", "description": "검색 쿼리" } },
+      "callback_type": "bedrock-knowledge-base",
       "file_path": "src/lib/ai/tools/search.ts"
     }
   ],
@@ -189,7 +189,7 @@ allowedTools:
     }
   ],
   "env_vars": ["AWS_REGION", "AWS_PROFILE"],
-  "dependencies": ["strands-agents"],
+  "dependencies": ["@strands-agents/sdk"],
   "generation_order": ["ai-types", "ai-prompts", "ai-tools", "ai-rag", "ai-agent", "ai-api"]
 }
 ```

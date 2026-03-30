@@ -53,12 +53,12 @@ allowedTools:
 - Tool Use Prompting (도구 설명, 파라미터 정의)
 - Extended Thinking 활용 (복잡한 추론이 필요한 경우)
 
-### `strands-sdk-guide` — Strands Agents SDK 구현
-- Python/TypeScript 에이전트 코드
-- 커스텀 도구(@tool) 정의
-- MCP 서버/클라이언트 연동
+### `strands-sdk-guide` — Strands Agents SDK TypeScript 구현
+- `@strands-agents/sdk` 패키지로 에이전트 코드 작성
+- `tool()` 함수 + Zod 스키마로 커스텀 도구 정의
+- MCP 서버/클라이언트 연동 (stdio, Streamable HTTP)
 - 모델 프로바이더 설정 (Bedrock 등 — SDK가 모델 호출을 추상화)
-- 스트리밍, 대화 관리, Guardrails, A2A 프로토콜
+- Hooks, async iterator 스트리밍, 대화 관리, A2A 프로토콜
 
 ## Input
 
@@ -115,7 +115,7 @@ requirements.json에서 AI 관련 요구사항을 추출한다:
 | 복잡도 | 패턴 | Strands 구현 |
 |--------|------|-------------|
 | 단순 (Q&A, 요약) | Single Agent | Agent (도구 없이) |
-| 중간 (도구 사용, RAG) | ReAct Agent | Agent + @tool + MCP |
+| 중간 (도구 사용, RAG) | ReAct Agent | Agent + tool() + MCP |
 | 높음 (멀티스텝, 계획) | Plan-and-Execute | Agent + Graph/Workflow |
 | 최고 (여러 전문가) | Multi-Agent | Swarm / Agents as Tools |
 
@@ -149,34 +149,34 @@ export const SYSTEM_PROMPT = `
 
 ```typescript
 // src/lib/ai/agent.ts
-import { Agent } from 'strands-agents';
+import { Agent } from '@strands-agents/sdk';
 import { SYSTEM_PROMPT } from './prompts/system';
 import { searchDocuments } from './tools/search';
 import { getWeather } from './tools/weather';
 
 // 단순 Q&A: tools 없이 Agent만 생성
-// 도구 사용: tools 배열에 @tool 함수 추가
+// 도구 사용: tools 배열에 tool() 함수 추가
 // RAG: retrieval 도구를 tools에 포함
 export const agent = new Agent({
-  model: 'bedrock/us.anthropic.claude-sonnet-4-6-v1',
   systemPrompt: SYSTEM_PROMPT,
   tools: [searchDocuments, getWeather],  // 단순 Q&A 시 빈 배열
 });
 ```
 
-**커스텀 도구 예시:**
+**커스텀 도구 예시 (tool() + Zod 스키마):**
 
 ```typescript
 // src/lib/ai/tools/search.ts
-import { tool } from 'strands-agents/tool';
+import { tool } from '@strands-agents/sdk';
+import z from 'zod';
 
 export const searchDocuments = tool({
-  name: 'searchDocuments',
+  name: 'search_documents',
   description: '문서에서 관련 정보를 검색합니다',
-  parameters: {
-    query: { type: 'string', description: '검색 쿼리' },
-  },
-  handler: async ({ query }) => {
+  inputSchema: z.object({
+    query: z.string().describe('검색 쿼리'),
+  }),
+  callback: async (input) => {
     // Bedrock Knowledge Base 또는 인메모리 검색
     return results;
   },
@@ -217,8 +217,8 @@ export async function POST(request: NextRequest) {
 ## 의존성 설치
 
 ```bash
-# Strands Agents SDK (필수)
-npm install strands-agents
+# Strands Agents SDK TypeScript (필수)
+npm install @strands-agents/sdk
 
 # RAG에서 Bedrock Knowledge Base 사용 시
 npm install @aws-sdk/client-bedrock-agent-runtime
@@ -234,7 +234,7 @@ npm install @aws-sdk/client-bedrock-agent-runtime
   "ai_architecture": {
     "pattern": "react-agent",
     "model": "us.anthropic.claude-sonnet-4-6-v1",
-    "sdk": "strands-agents",
+    "sdk": "@strands-agents/sdk",
     "strands_pattern": "single-agent",
     "tools": ["searchDocuments", "getWeather"],
     "has_rag": false,
@@ -246,7 +246,7 @@ npm install @aws-sdk/client-bedrock-agent-runtime
     { "path": "src/lib/ai/prompts/system.ts", "lines": 30, "status": "created" },
     { "path": "src/app/api/chat/route.ts", "lines": 40, "status": "created" }
   ],
-  "dependencies_installed": ["strands-agents"],
+  "dependencies_installed": ["@strands-agents/sdk"],
   "build_result": { "success": true, "attempts": 1, "errors": [], "warnings": [] }
 }
 ```
@@ -262,7 +262,7 @@ npm install @aws-sdk/client-bedrock-agent-runtime
 - [ ] 에이전트 패턴이 `agent-patterns` 스킬의 권장에 부합
 - [ ] API 키/시크릿이 환경변수로 관리됨 (하드코딩 없음)
 - [ ] 스트리밍 API가 SSE 형식을 따름
-- [ ] Strands SDK 사용 시 도구 정의가 정확함
+- [ ] Strands SDK 사용 시 tool() + Zod inputSchema 도구 정의가 정확함
 - [ ] RAG 사용 시 임베딩 모델과 검색 로직이 구현됨
 - [ ] 에러 처리 (모델 호출 실패, 타임아웃 등)
 - [ ] 대화 메모리 관리 (필요 시)

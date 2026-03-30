@@ -30,7 +30,8 @@ Sub-agent pipeline for generating Next.js 15 + Cloudscape Design System prototyp
 ## Pipeline Agent Order (순차 + 품질 루프)
 
 ```
-(brief-composer) → domain-researcher → requirements-analyst → architect → spec-writer
+(brief-composer) → domain-researcher → requirements-analyst → architect
+    → spec-writer-backend → (spec-writer-ai) → spec-writer-frontend
     → code-gen-backend → (code-gen-ai) → code-gen-frontend
     → [qa-engineer(Playwright) → fix]* → reviewer ← QA가 기능 검증, reviewer가 품질 리뷰
     → security-auditor-pipeline

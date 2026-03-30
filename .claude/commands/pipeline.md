@@ -220,24 +220,33 @@ Stage 7   핸드오버 패키지
 - [ ] `02-architecture/architecture.json`
 - [ ] `02-architecture/architecture.md`
 
-### Stage 4: Specification (2회 분할 호출)
+### Stage 4: Specification (BE → AI → FE 3개 에이전트 순차 호출)
 
-컨텍스트 포화를 방지하기 위해 `spec-writer`를 BE/FE 순차 2회로 분할 호출한다.
+컨텍스트 오염 방지를 위해 각각 전용 에이전트로 분리. 각 에이전트가 도메인에 맞는 스킬만 로드한다.
 
 **4-1. 백엔드 스펙**
-- Launch `spec-writer` with 지시: "백엔드 스펙만 작성 (backend-spec.json → backend-spec.md)"
+- Launch the `spec-writer-backend` agent
 - Input: `01-requirements/requirements.json` + `02-architecture/architecture.json`
 - Output: `backend-spec.json` + `backend-spec.md`
 
-**4-2. 프론트엔드 스펙**
-- Launch `spec-writer` with 지시: "프론트엔드 스펙만 작성 (frontend-spec.json → frontend-spec.md). 백엔드 스펙을 참조"
+**4-2. AI 스펙 (조건부)**
+- `requirements.json`에 AI 관련 FR이 없으면 건너뜀
+- Launch the `spec-writer-ai` agent
 - Input: 위와 동일 + `backend-spec.json` (BE 타입/API 참조)
+- Output: `ai-spec.json` + `ai-spec.md`
+- 참조 스킬: `agent-patterns`, `prompt-engineering`, `strands-sdk-guide`
+
+**4-3. 프론트엔드 스펙**
+- Launch the `spec-writer-frontend` agent
+- Input: 위와 동일 + `backend-spec.json` + `ai-spec.json` (있을 때)
 - Output: `frontend-spec.json` + `frontend-spec.md` + `specs-summary.md` + `_manifest.json`
+- 참조 스킬: `cloudscape-design`, `ascii-diagram`
 
 **CHECKPOINT (Stage 4)**: 다음 파일이 존재하는지 확인한다. 누락 시 `spec-writer`를 재실행한다 (최대 1회).
 - [ ] `03-specs/backend-spec.md` (사람이 리뷰할 수 있는 한국어 마크다운)
-- [ ] `03-specs/frontend-spec.md`
 - [ ] `03-specs/backend-spec.json` (코드 제너레이터용 기계 리더블)
+- [ ] `03-specs/ai-spec.json` + `ai-spec.md` (AI FR이 있을 때만)
+- [ ] `03-specs/frontend-spec.md`
 - [ ] `03-specs/frontend-spec.json`
 - [ ] `03-specs/_manifest.json`에 `requirements_coverage`가 포함되어 있는가
 

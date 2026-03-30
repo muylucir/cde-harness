@@ -64,8 +64,9 @@ allowedTools:
 
 - `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — AI 관련 FR/NFR 확인
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — AI 컴포넌트 확인
-- `.pipeline/artifacts/v{N}/03-specs/_manifest.json` — `generator: "ai"` phase
-- `.pipeline/artifacts/v{N}/03-specs/*.spec.md` — AI 관련 스펙
+- `.pipeline/artifacts/v{N}/03-specs/ai-spec.json` — **AI 전용 스펙 (필수 입력)**
+- `.pipeline/artifacts/v{N}/03-specs/ai-spec.md` — AI 스펙 한국어 상세 문서
+- `.pipeline/artifacts/v{N}/03-specs/_manifest.json` — `generator: "ai"` phase 확인
 - `.pipeline/artifacts/v{N}/04-codegen/generation-log-backend.json` — 백엔드 생성 결과 참조
 
 ## 담당 범위

@@ -206,38 +206,41 @@ domain-researcher → requirements-analyst → architect → spec-writer
 
 ## 디렉토리 구조
 
+<!-- AUTOGEN:dir-tree:START -->
 ```
 cde-harness/
 ├── .claude/
-│   ├── agents/                     # 서브에이전트 정의 (14개)
-│   │   ├── brief-composer.md         # 입력 통합 → 브리프 생성
-│   │   ├── domain-researcher.md      # 도메인 리서치 (워크플로우/KPI/용어)
-│   │   ├── feedback-analyzer.md      # 피드백 영향 분석 + 변경 추적
-│   │   ├── requirements-analyst.md   # 요구사항 분석
-│   │   ├── architect.md              # 아키텍처 설계
-│   │   ├── spec-writer.md            # 명세서 작성 (BE+FE 분할)
-│   │   ├── code-generator-backend.md # 백엔드 코드 생성
-│   │   ├── code-generator-ai.md      # AI Agent 코드 생성 (조건부)
-│   │   ├── code-generator-frontend.md # 프론트엔드 코드 생성
-│   │   ├── qa-engineer.md            # QA 테스트 (Playwright E2E)
-│   │   ├── reviewer.md               # 정적 품질 리뷰 (9개 카테고리)
-│   │   ├── security-auditor-pipeline.md  # 보안 점검
-│   │   ├── git-manager.md            # Git 브랜치/커밋 관리
-│   │   └── handover-packager.md      # 핸드오버 패키지 생성
+│   ├── agents/                     # 서브에이전트 정의 (16개)
+│   │   ├── architect.md
+│   │   ├── brief-composer.md
+│   │   ├── code-generator-ai.md
+│   │   ├── code-generator-backend.md
+│   │   ├── code-generator-frontend.md
+│   │   ├── domain-researcher.md
+│   │   ├── feedback-analyzer.md
+│   │   ├── git-manager.md
+│   │   ├── handover-packager.md
+│   │   ├── qa-engineer.md
+│   │   ├── requirements-analyst.md
+│   │   ├── reviewer.md
+│   │   ├── security-auditor-pipeline.md
+│   │   ├── spec-writer-ai.md
+│   │   ├── spec-writer-backend.md
+│   │   └── spec-writer-frontend.md
 │   ├── commands/                   # 파이프라인 커맨드 (6개)
-│   │   ├── brief.md                  # /brief
-│   │   ├── pipeline.md               # /pipeline
-│   │   ├── iterate.md                # /iterate
-│   │   ├── handover.md               # /handover
-│   │   ├── pipeline-from.md          # /pipeline-from
-│   │   └── pipeline-status.md        # /pipeline-status
-│   ├── skills/                     # 참조 스킬 (컴포넌트/패턴 가이드)
-│   │   ├── cloudscape-design/        # Cloudscape 101개 컴포넌트 + 73개 패턴
-│   │   ├── agent-patterns/           # AI Agent 설계 패턴
-│   │   ├── prompt-engineering/       # 프롬프트 설계 가이드
-│   │   ├── strands-sdk-guide/        # Strands Agents SDK 가이드
-│   │   ├── mermaid-diagrams/         # Mermaid 다이어그램 가이드
-│   │   └── ascii-diagram/            # ASCII 다이어그램 가이드
+│   │   ├── brief.md
+│   │   ├── handover.md
+│   │   ├── iterate.md
+│   │   ├── pipeline-from.md
+│   │   ├── pipeline-status.md
+│   │   └── pipeline.md
+│   ├── skills/                     # 참조 스킬 (6개)
+│   │   ├── agent-patterns/
+│   │   ├── ascii-diagram/
+│   │   ├── cloudscape-design/
+│   │   ├── mermaid-diagrams/
+│   │   ├── prompt-engineering/
+│   │   └── strands-sdk-guide/
 │   └── settings.json               # Claude Code 권한 설정
 │
 ├── .pipeline/
@@ -270,6 +273,7 @@ cde-harness/
 ├── eslint.config.mjs               # ESLint 규칙
 └── .prettierrc                     # Prettier 설정
 ```
+<!-- AUTOGEN:dir-tree:END -->
 
 ---
 
@@ -489,13 +493,17 @@ https://cloudscape.design/patterns/{path}/index.html.md
 
 ## NPM 스크립트
 
+<!-- AUTOGEN:npm-scripts:START -->
 ```bash
-npm run dev          # 개발 서버 (Turbopack)
-npm run build        # 프로덕션 빌드
-npm run lint         # ESLint 검사
-npm run format       # Prettier 전체 포맷
-npm run format:check # Prettier 검사만
-npm run type-check   # TypeScript 타입 검사
-npm run test:e2e     # Playwright E2E 테스트
-npm run test:e2e:ui  # Playwright UI 모드 (디버깅용)
+npm run dev           # next dev --turbopack
+npm run build         # next build
+npm run start         # next start
+npm run lint          # next lint
+npm run format        # prettier --write .
+npm run format:check  # prettier --check .
+npm run type-check    # tsc --noEmit
+npm run test:e2e      # playwright test
+npm run test:e2e:ui   # playwright test --ui
+npm run prepare       # husky
 ```
+<!-- AUTOGEN:npm-scripts:END -->

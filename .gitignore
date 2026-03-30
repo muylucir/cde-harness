@@ -46,3 +46,5 @@ next-env.d.ts
 
 # test assets (하네스 테스트용, 프로토타입과 무관)
 /files
+
+.mcp.json

@@ -1,4 +1,26 @@
-# 모델 프로바이더 가이드
+# 모델 프로바이더 가이드 (TypeScript)
+
+## 목차
+- [지원 프로바이더](#지원-프로바이더)
+- [Amazon Bedrock](#amazon-bedrock)
+- [OpenAI](#openai)
+- [Google (Gemini)](#google-gemini)
+- [Vercel](#vercel)
+- [커스텀 프로바이더](#커스텀-프로바이더)
+
+## 지원 프로바이더
+
+TypeScript SDK에서 지원하는 프로바이더:
+
+| 프로바이더 | 설치 | 설명 |
+|----------|-----|------|
+| Amazon Bedrock | 내장 | 기본 프로바이더 (Claude, Nova, Llama 등) |
+| OpenAI | `npm install openai` | GPT 모델 + OpenAI 호환 API |
+| Google | `npm install @google/genai` | Gemini 모델 |
+| Vercel | `npm install @ai-sdk/amazon-bedrock` 등 | Vercel AI SDK 프로바이더 |
+| Custom | - | 자체 구현 |
+
+> Python에서만 지원: Anthropic(직접 API), Ollama, LiteLLM, llama.cpp, LlamaAPI, MistralAI, SageMaker, Writer, Amazon Nova(직접)
 
 ## Amazon Bedrock
 
@@ -6,156 +28,168 @@
 
 ### 기본 사용
 
-```python
-from strands import Agent
-from strands.models import BedrockModel
-
-# 기본값 (Claude Sonnet 4)
-agent = Agent()
-
-# 모델 ID 직접 지정
-agent = Agent(model="us.anthropic.claude-sonnet-4-20250514-v1:0")
-
-# BedrockModel 인스턴스
-bedrock = BedrockModel(
-    model_id="us.anthropic.claude-sonnet-4-20250514-v1:0",
-    temperature=0.3,
-    max_tokens=4096
-)
-agent = Agent(model=bedrock)
-```
-
-### TypeScript
-
 ```typescript
 import { Agent } from '@strands-agents/sdk'
-import { BedrockModel } from '@strands-agents/sdk/bedrock'
+
+// 기본값 (Claude Sonnet 4.5)
+const agent = new Agent()
+const result = await agent.invoke('Tell me about Amazon Bedrock.')
+
+// 모델 ID 직접 지정
+const agent2 = new Agent({ model: 'anthropic.claude-sonnet-4-20250514-v1:0' })
+```
+
+### BedrockModel 인스턴스
+
+```typescript
+import { Agent, BedrockModel } from '@strands-agents/sdk'
 
 const bedrock = new BedrockModel({
   modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+  region: 'us-west-2',
   temperature: 0.3,
-  maxTokens: 4096
+  topP: 0.8,
 })
 
 const agent = new Agent({ model: bedrock })
 ```
 
-### 상세 설정
+### 설정 옵션
 
-```python
-from strands.models import BedrockModel
-from botocore.config import Config as BotocoreConfig
-
-boto_config = BotocoreConfig(
-    retries={"max_attempts": 3, "mode": "standard"},
-    connect_timeout=5,
-    read_timeout=60
-)
-
-bedrock = BedrockModel(
-    model_id="us.anthropic.claude-sonnet-4-20250514-v1:0",
-    region_name="us-east-1",
-    temperature=0.3,
-    top_p=0.8,
-    stop_sequences=["###", "END"],
-    boto_client_config=boto_config
-)
+```typescript
+const bedrock = new BedrockModel({
+  modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+  region: 'us-east-1',
+  temperature: 0.3,
+  topP: 0.8,
+  maxTokens: 4096,
+  // streaming: false  // 비스트리밍 모드
+})
 ```
 
-### 가드레일
+### 주요 모델 ID
 
-```python
-bedrock = BedrockModel(
-    model_id="us.anthropic.claude-sonnet-4-20250514-v1:0",
-    guardrail_id="your-guardrail-id",
-    guardrail_version="DRAFT",
-    guardrail_trace="enabled",
-    guardrail_redact_input=True,
-    guardrail_redact_output=False
-)
+- Claude: `us.anthropic.claude-sonnet-4-20250514-v1:0`, `anthropic.claude-3-5-haiku-20241022-v1:0`
+- Nova: `us.amazon.nova-premier-v1:0`, `us.amazon.nova-pro-v1:0`
+- Llama: `us.meta.llama3-2-90b-instruct-v1:0`
+
+## OpenAI
+
+GPT 모델 및 OpenAI 호환 API 지원.
+
+```bash
+npm install openai
 ```
 
-### 캐싱
+```typescript
+import { Agent } from '@strands-agents/sdk'
+import { OpenAIModel } from '@strands-agents/sdk/openai'
 
-프롬프트, 도구, 메시지 캐싱으로 비용 절감:
+const openai = new OpenAIModel({
+  apiKey: process.env.OPENAI_API_KEY,
+  modelId: 'gpt-4o',
+})
 
-```python
-from strands import Agent
-from strands.types.content import SystemContentBlock
-
-# 시스템 프롬프트 캐싱
-system_content = [
-    SystemContentBlock(text="긴 시스템 프롬프트..." * 500),
-    SystemContentBlock(cachePoint={"type": "default"})
-]
-
-agent = Agent(system_prompt=system_content)
-
-# 도구 캐싱
-from strands.models import BedrockModel
-
-bedrock = BedrockModel(
-    model_id="us.anthropic.claude-sonnet-4-20250514-v1:0",
-    cache_tools="default"
-)
-agent = Agent(model=bedrock, tools=[tool1, tool2])
+const agent = new Agent({ model: openai })
 ```
 
-### 메시지 캐싱
+## Google (Gemini)
 
-```python
-messages = [
-    {
-        "role": "user",
-        "content": [
-            {"document": {"format": "txt", "name": "doc", "source": {"bytes": b"..."}}},
-            {"text": "Use this document"},
-            {"cachePoint": {"type": "default"}}
-        ]
-    },
-    {
-        "role": "assistant",
-        "content": [{"text": "I will reference that document."}]
+```bash
+npm install @google/genai
+```
+
+```typescript
+import { Agent } from '@strands-agents/sdk'
+import { GoogleModel } from '@strands-agents/sdk/google'
+
+const google = new GoogleModel({
+  apiKey: process.env.GOOGLE_API_KEY,
+  modelId: 'gemini-pro',
+})
+
+const agent = new Agent({ model: google })
+```
+
+## Vercel
+
+Vercel AI SDK의 프로바이더를 Strands에서 사용.
+
+```bash
+npm install @ai-sdk/amazon-bedrock  # 또는 다른 Vercel AI 프로바이더
+```
+
+```typescript
+import { Agent } from '@strands-agents/sdk'
+import { VercelModel } from '@strands-agents/sdk/vercel'
+import { bedrock } from '@ai-sdk/amazon-bedrock'
+
+const vercel = new VercelModel({
+  model: bedrock('us.anthropic.claude-sonnet-4-20250514-v1:0'),
+})
+
+const agent = new Agent({ model: vercel })
+```
+
+## 커스텀 프로바이더
+
+자체 모델 프로바이더를 구현:
+
+```typescript
+import { Model, ModelConfig, Message, ToolSpec } from '@strands-agents/sdk'
+
+class CustomModel implements Model {
+  private apiKey: string
+  private modelId: string
+
+  constructor(apiKey: string, modelId: string) {
+    this.apiKey = apiKey
+    this.modelId = modelId
+  }
+
+  getConfig(): ModelConfig {
+    return {
+      modelId: this.modelId,
+      maxTokens: 4096,
+      temperature: 0.7,
     }
-]
+  }
 
-agent = Agent(messages=messages)
+  updateConfig(config: Partial<ModelConfig>): void {
+    // 설정 업데이트
+  }
+
+  formatRequest(messages: Message[], tools: ToolSpec[], systemPrompt: string) {
+    return { messages, tools, system: systemPrompt }
+  }
+
+  async *stream(request: any): AsyncGenerator<any> {
+    // 스트리밍 구현
+  }
+}
+
+const agent = new Agent({ model: new CustomModel('key', 'model-id') })
 ```
 
-### 멀티모달 입력
+## 트러블슈팅
 
-```python
-response = agent([
-    {
-        "document": {
-            "format": "txt",
-            "name": "example",
-            "source": {"bytes": b"Document content..."}
-        }
-    },
-    {"text": "Summarize this document."}
-])
+### Cross-Region Inference 에러
+
+```typescript
+// 잘못됨
+const model = 'anthropic.claude-sonnet-4-20250514-v1:0'
+
+// 올바름 — 리전 접두사 추가
+const model = 'us.anthropic.claude-sonnet-4-20250514-v1:0'
 ```
 
-### 추론(Reasoning) 모드
+### 스트리밍 vs 비스트리밍
 
-```python
-bedrock = BedrockModel(
-    model_id="us.anthropic.claude-sonnet-4-20250514-v1:0",
-    additional_request_fields={
-        "thinking": {
-            "type": "enabled",
-            "budget_tokens": 4096
-        }
-    }
-)
-```
+일부 모델은 스트리밍 도구 사용을 지원하지 않는다:
 
-### 런타임 설정 변경
-
-```python
-bedrock = BedrockModel(model_id="...", temperature=0.7)
-
-# 나중에 설정 변경
-bedrock.update_config(temperature=0.3, top_p=0.8)
+```typescript
+const bedrock = new BedrockModel({
+  modelId: 'us.meta.llama3-2-90b-instruct-v1:0',
+  streaming: false,  // 비스트리밍 모드
+})
 ```

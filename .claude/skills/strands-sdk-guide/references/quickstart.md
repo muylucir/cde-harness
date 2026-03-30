@@ -1,36 +1,33 @@
-# 빠른 시작 가이드
+# 빠른 시작 가이드 (TypeScript)
 
 ## 목차
 - [설치](#설치)
 - [AWS 자격증명 설정](#aws-자격증명-설정)
+- [프로젝트 구조](#프로젝트-구조)
 - [첫 에이전트 생성](#첫-에이전트-생성)
 - [도구 추가](#도구-추가)
 - [스트리밍 응답](#스트리밍-응답)
+- [모델 선택](#모델-선택)
+- [대화 유지](#대화-유지)
 
 ## 설치
 
-### Python
-
 ```bash
-# 기본 설치
-pip install strands-agents
+mkdir my-agent && cd my-agent
+npm init -y
+npm pkg set type=module
 
-# 특정 프로바이더 설치
-pip install 'strands-agents[bedrock]'
-pip install 'strands-agents[openai]'
-pip install 'strands-agents[anthropic]'
-
-# 모든 프로바이더 설치
-pip install 'strands-agents[all]'
-```
-
-### TypeScript
-
-```bash
+# SDK 설치
 npm install @strands-agents/sdk
 
-# OpenAI 사용 시
-npm install openai
+# 개발 의존성
+npm install --save-dev @types/node typescript
+```
+
+Vended Tools는 SDK에 포함되어 있어 별도 설치 불필요:
+
+```typescript
+import { bash } from '@strands-agents/sdk/vended-tools/bash'
 ```
 
 ## AWS 자격증명 설정
@@ -52,241 +49,215 @@ export AWS_SESSION_TOKEN=your_session_token  # 임시 자격증명 사용 시
 export AWS_REGION="us-west-2"
 ```
 
-### 방법 3: 커스텀 Boto3 세션 (Python)
+### 방법 3: Bedrock API 키
 
-```python
-import boto3
-from strands.models import BedrockModel
-
-session = boto3.Session(
-    aws_access_key_id='your_access_key',
-    aws_secret_access_key='your_secret_key',
-    region_name='us-west-2',
-    profile_name='your-profile'  # 선택사항
-)
-
-bedrock_model = BedrockModel(
-    model_id="us.anthropic.claude-sonnet-4-20250514-v1:0",
-    boto_session=session
-)
+```bash
+export AWS_BEARER_TOKEN_BEDROCK=your_bearer_token
 ```
+
+### 방법 4: IAM 역할
+
+EC2, ECS, Lambda 등 AWS 서비스에서 실행 시 IAM 역할 사용.
 
 ### IAM 권한
 
 필요한 최소 권한:
-- `bedrock:InvokeModelWithResponseStream` (스트리밍 모드)
-- `bedrock:InvokeModel` (비스트리밍 모드)
 
 ```json
 {
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "bedrock:InvokeModelWithResponseStream",
-                "bedrock:InvokeModel"
-            ],
-            "Resource": "*"
-        }
-    ]
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeModelWithResponseStream",
+        "bedrock:InvokeModel"
+      ],
+      "Resource": "*"
+    }
+  ]
 }
 ```
 
+## 프로젝트 구조
+
+```plaintext
+my-agent/
+├── src/
+│   └── agent.ts
+├── package.json
+└── README.md
+```
+
+`tsconfig.json`은 선택사항 — `npx tsx`로 직접 실행 가능.
+
 ## 첫 에이전트 생성
 
-### 기본 에이전트 (Python)
-
-```python
-from strands import Agent
-
-# 기본 설정 (Bedrock Claude Sonnet 4 사용)
-agent = Agent()
-response = agent("Hello, how are you?")
-print(response)
-```
-
-### 시스템 프롬프트 설정
-
-```python
-from strands import Agent
-
-agent = Agent(
-    system_prompt="You are a helpful coding assistant. Always provide code examples.",
-    name="CodeHelper"
-)
-response = agent("How do I read a file in Python?")
-```
-
-### TypeScript 에이전트
+### 기본 에이전트
 
 ```typescript
 import { Agent } from '@strands-agents/sdk'
 
+// 기본 설정 (Bedrock Claude Sonnet 4.5 사용)
+const agent = new Agent()
+const result = await agent.invoke('Hello, how are you?')
+console.log(result.lastMessage)
+```
+
+### 시스템 프롬프트 설정
+
+```typescript
 const agent = new Agent({
-  systemPrompt: 'You are a helpful assistant.'
+  systemPrompt: 'You are a helpful coding assistant. Always provide code examples.',
 })
 
-const response = await agent.invoke('Hello!')
-console.log(response.message)
+const result = await agent.invoke('How do I read a file in Node.js?')
 ```
+
+### 실행
+
+```bash
+npx tsx src/agent.ts
+```
+
+Node.js, Bun, Deno 등 모든 TypeScript 런타임에서 실행 가능.
 
 ## 도구 추가
 
-### Python 도구 정의
-
-```python
-from strands import Agent, tool
-
-@tool
-def get_weather(city: str) -> str:
-    """Get the current weather for a city.
-
-    Args:
-        city: The name of the city
-    """
-    # 실제로는 API 호출
-    return f"The weather in {city} is sunny, 25°C"
-
-@tool
-def calculate(expression: str) -> str:
-    """Calculate a mathematical expression.
-
-    Args:
-        expression: Mathematical expression to evaluate
-    """
-    try:
-        result = eval(expression)
-        return f"Result: {result}"
-    except Exception as e:
-        return f"Error: {e}"
-
-# 에이전트에 도구 등록
-agent = Agent(tools=[get_weather, calculate])
-response = agent("What's the weather in Seoul and what is 15 * 7?")
-```
-
-### TypeScript 도구 정의
-
 ```typescript
 import { Agent, tool } from '@strands-agents/sdk'
-import { z } from 'zod'
+import z from 'zod'
 
 const getWeather = tool({
   name: 'get_weather',
   description: 'Get the current weather for a city',
   inputSchema: z.object({
-    city: z.string().describe('The name of the city')
+    city: z.string().describe('The name of the city'),
   }),
   callback: (input) => {
     return `The weather in ${input.city} is sunny, 25°C`
-  }
+  },
 })
 
-const agent = new Agent({ tools: [getWeather] })
-const response = await agent.invoke('What is the weather in Tokyo?')
+const calculate = tool({
+  name: 'calculate',
+  description: 'Evaluate a mathematical expression',
+  inputSchema: z.object({
+    expression: z.string().describe('Mathematical expression'),
+  }),
+  callback: (input) => {
+    return `Result: ${eval(input.expression)}`
+  },
+})
+
+const agent = new Agent({ tools: [getWeather, calculate] })
+const result = await agent.invoke("What's the weather in Seoul and what is 15 * 7?")
 ```
+
+`tool()` 함수는 Zod 스키마 외에 plain JSON Schema도 지원한다.
 
 ## 스트리밍 응답
 
-### Python 비동기 스트리밍
+TypeScript에서는 `agent.stream()` async iterator를 사용한다 (callback handler 미지원).
 
-```python
-import asyncio
-from strands import Agent
-
-async def stream_response():
-    agent = Agent()
-
-    async for event in agent.stream_async("Tell me a story"):
-        if "data" in event:
-            print(event["data"], end="", flush=True)
-        if "result" in event:
-            print("\n--- Done ---")
-
-asyncio.run(stream_response())
-```
-
-### Python 콜백 핸들러
-
-```python
-from strands import Agent
-
-def my_callback(**kwargs):
-    if "data" in kwargs:
-        print(kwargs["data"], end="", flush=True)
-
-agent = Agent(callback_handler=my_callback)
-agent("Tell me about Python")
-```
-
-### TypeScript 스트리밍
+### 기본 스트리밍
 
 ```typescript
 import { Agent } from '@strands-agents/sdk'
 
-const agent = new Agent()
+const agent = new Agent({ printer: false })
 
 for await (const event of agent.stream('Tell me a story')) {
-  if (event.type === 'modelContentBlockDeltaEvent' &&
-      event.delta.type === 'textDelta') {
-    process.stdout.write(event.delta.text)
+  console.log('Event:', event.type)
+}
+```
+
+### 이벤트 타입별 처리
+
+```typescript
+for await (const event of agent.stream('Tell me a story')) {
+  switch (event.type) {
+    case 'modelContentBlockDeltaEvent':
+      if (event.delta.type === 'textDelta') {
+        process.stdout.write(event.delta.text)
+      }
+      break
+    case 'modelContentBlockStartEvent':
+      if (event.start?.type === 'toolUseStart') {
+        console.log(`\n[Tool: ${event.start.name}]`)
+      }
+      break
+    case 'afterInvocationEvent':
+      console.log('\nDone!')
+      break
   }
 }
-console.log('\nDone!')
+```
+
+## 모델 선택
+
+### Bedrock 기본 사용
+
+```typescript
+import { Agent } from '@strands-agents/sdk'
+
+// 기본값 (Claude Sonnet 4.5)
+const agent = new Agent()
+
+// 모델 ID 직접 지정
+const agent2 = new Agent({ model: 'anthropic.claude-sonnet-4-20250514-v1:0' })
+```
+
+### BedrockModel 인스턴스
+
+```typescript
+import { Agent, BedrockModel } from '@strands-agents/sdk'
+
+const bedrock = new BedrockModel({
+  modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+  region: 'us-west-2',
+  temperature: 0.3,
+})
+
+const agent = new Agent({ model: bedrock })
+```
+
+### AgentResult
+
+모든 `invoke()` 호출은 `AgentResult`를 반환한다:
+
+```typescript
+const result = await agent.invoke('What is the square root of 144?')
+console.log(result.lastMessage)  // 마지막 어시스턴트 메시지
+console.log(agent.messages)      // 전체 메시지 히스토리
 ```
 
 ## 대화 유지
 
 에이전트는 기본적으로 대화 히스토리를 유지한다:
 
-```python
-from strands import Agent
+```typescript
+const agent = new Agent()
 
-agent = Agent()
-
-# 첫 번째 메시지
-agent("My name is Alice")
-
-# 두 번째 메시지 - 이전 컨텍스트 기억
-response = agent("What is my name?")
-print(response)  # "Your name is Alice"
+await agent.invoke('My name is Alice')
+const result = await agent.invoke('What is my name?')
+// "Your name is Alice"
 ```
 
 ### 대화 초기화
 
-```python
-# 메시지 히스토리 직접 초기화
-agent.messages = []
-
-# 또는 새 에이전트 생성
-agent = Agent()
+```typescript
+// 새 에이전트 인스턴스 생성
+const freshAgent = new Agent()
 ```
 
-## 모델 선택
+## 콘솔 출력 제어
 
-### Bedrock 모델 지정
+에이전트는 기본적으로 실시간 콘솔 출력을 한다. 비활성화하려면:
 
-```python
-from strands import Agent
-from strands.models import BedrockModel
-
-# 문자열로 직접 지정
-agent = Agent(model="us.anthropic.claude-sonnet-4-20250514-v1:0")
-
-# BedrockModel 인스턴스로 상세 설정
-bedrock_model = BedrockModel(
-    model_id="us.amazon.nova-premier-v1:0",
-    temperature=0.3,
-    max_tokens=4096
-)
-agent = Agent(model=bedrock_model)
+```typescript
+const agent = new Agent({ printer: false })
 ```
-
-### 지원 모델
-- Claude (Anthropic): `anthropic.claude-sonnet-4-20250514-v1:0`, `anthropic.claude-3-5-haiku-20241022-v1:0`
-- Nova (Amazon): `us.amazon.nova-premier-v1:0`, `us.amazon.nova-pro-v1:0`
-- Llama (Meta): `us.meta.llama3-2-90b-instruct-v1:0`
 
 ## 트러블슈팅
 
@@ -294,19 +265,10 @@ agent = Agent(model=bedrock_model)
 
 Cross-Region Inference가 필요한 모델의 경우 리전 접두사 추가:
 
-```python
-# 잘못됨
-model_id = "anthropic.claude-sonnet-4-20250514-v1:0"
+```typescript
+// 잘못됨
+const agent = new Agent({ model: 'anthropic.claude-sonnet-4-20250514-v1:0' })
 
-# 올바름
-model_id = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-```
-
-### "model identifier is invalid" 에러
-
-Inference Profile을 지원하지 않는 리전에서 실행 중일 수 있음:
-
-```python
-# 기본 모델 ID 사용
-agent = Agent(model="anthropic.claude-3-5-sonnet-20241022-v2:0")
+// 올바름
+const agent = new Agent({ model: 'us.anthropic.claude-sonnet-4-20250514-v1:0' })
 ```

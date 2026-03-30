@@ -118,21 +118,40 @@ src/
 5. `ai-spec.json`의 `architecture`를 읽고 → `src/lib/ai/agent.ts` 생성 (Agent 정의)
 6. `ai-spec.json`의 `api_routes`를 읽고 → `src/app/api/chat/route.ts` 등 생성
 
-### 5단계: 스트리밍 API 라우트
+### 구현 시 필수 참조 사항 (strands-sdk-guide 스킬 기반)
 
+**Agent 생성 — BedrockModel 프로바이더 사용:**
+```typescript
+// src/lib/ai/agent.ts
+import { Agent, BedrockModel } from '@strands-agents/sdk';
+import { SYSTEM_PROMPT } from './prompts/system';
+
+const model = new BedrockModel({
+  modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0', // ai-spec.json에서 읽기
+  region: process.env.AWS_REGION ?? 'us-east-1',
+});
+
+export const agent = new Agent({
+  model,
+  systemPrompt: SYSTEM_PROMPT,
+  tools: [...],     // ai-spec.json의 tools에서 읽기
+  printer: false,   // 서버 환경에서 콘솔 출력 비활성화
+});
+```
+
+**스트리밍 API — async iterator 사용:**
 ```typescript
 // src/app/api/chat/route.ts
-import { NextRequest } from 'next/server';
 import { agent } from '@/lib/ai/agent';
 
 export async function POST(request: NextRequest) {
-  const { messages } = await request.json();
+  const { prompt } = await request.json();
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      for await (const chunk of agent.stream(messages)) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+      for await (const event of agent.stream(prompt)) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
       }
       controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       controller.close();
@@ -140,20 +159,24 @@ export async function POST(request: NextRequest) {
   });
 
   return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-    },
+    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
   });
 }
+```
+
+**비스트리밍 호출 — invoke 사용:**
+```typescript
+const result = await agent.invoke(prompt);
 ```
 
 ## 의존성 설치
 
 ```bash
-# Strands Agents SDK TypeScript (필수)
+# Strands Agents SDK TypeScript (필수) — BedrockModel 내장
 npm install @strands-agents/sdk
+
+# Zod (도구 inputSchema 정의)
+npm install zod
 
 # RAG에서 Bedrock Knowledge Base 사용 시
 npm install @aws-sdk/client-bedrock-agent-runtime
@@ -193,14 +216,15 @@ npm install @aws-sdk/client-bedrock-agent-runtime
 ## 검증 체크리스트
 
 - [ ] `npm run build` 성공
-- [ ] 시스템 프롬프트가 `prompt-engineering` 스킬 패턴을 따름
-- [ ] 에이전트 패턴이 `agent-patterns` 스킬의 권장에 부합
+- [ ] `@aws-sdk/client-bedrock-runtime` 직접 import가 없는가 (Strands SDK만 사용)
+- [ ] `BedrockModel` 인스턴스로 모델 프로바이더가 설정되었는가
+- [ ] Agent 생성 시 `printer: false`가 설정되었는가
+- [ ] 시스템 프롬프트가 XML 5개 섹션(`<role>`, `<context>`, `<tools>`, `<instructions>`, `<constraints>`)을 따르는가
+- [ ] 도구 정의가 `tool()` + Zod `inputSchema` + `callback` 패턴인가
+- [ ] 스트리밍이 `for await...of agent.stream()` async iterator인가
 - [ ] API 키/시크릿이 환경변수로 관리됨 (하드코딩 없음)
-- [ ] 스트리밍 API가 SSE 형식을 따름
-- [ ] Strands SDK 사용 시 tool() + Zod inputSchema 도구 정의가 정확함
 - [ ] RAG 사용 시 임베딩 모델과 검색 로직이 구현됨
 - [ ] 에러 처리 (모델 호출 실패, 타임아웃 등)
-- [ ] 대화 메모리 관리 (필요 시)
 
 ## 완료 후
 

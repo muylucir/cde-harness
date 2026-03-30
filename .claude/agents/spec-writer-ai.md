@@ -36,22 +36,52 @@ allowedTools:
 ## 참조 스킬 (3개 필수 호출)
 
 ### `agent-patterns` — 에이전트 아키텍처 결정
-- 3계층 택소노미로 자동화 수준 판단
+
+**반드시 자동화 수준을 먼저 판단한다:**
+1. Feasibility 평가의 자율성 요구도 점수를 산출 (스킬의 "자동화 수준 선택" 섹션 참조)
+2. 자율성 ≤5: AI-Assisted Workflow → Sequential Pipeline + LLM 호출 조합
+3. 자율성 ≥6: Agentic AI → 3계층 택소노미로 에이전트 유형 선택
+
+**자동화 수준 판단 결과를 ai-spec.json의 `architecture.automation_level`에 기록한다.**
+
+- 3계층 택소노미: Agent Pattern × LLM Workflow × Agentic Workflow
 - 에이전트 유형 선택 (ReAct, Plan-and-Execute, Multi-Agent 등)
-- 인지 패턴 설계 (도구 호출, 반성, 계획)
-- 멀티 에이전트 협업 구조 선택 (필요 시)
+- 싱글/멀티 에이전트 판단: 3축 점수 기반 (합산 0-1 = 싱글, 2-3 = 경계, 4-6 = 멀티)
 
 ### `prompt-engineering` — 프롬프트 설계
-- XML 태그 구조화된 시스템 프롬프트 작성
-- Structured Output 패턴
-- Tool Use Prompting (도구 설명, 파라미터 정의)
-- Extended Thinking 활용 (복잡한 추론이 필요한 경우)
+
+**자동화 수준에 따라 프롬프트 구조가 달라진다** (스킬의 "자동화 수준별 프롬프트 설계" 참조):
+- AI-Assisted: 짧고 명확, Structured Output 필수
+- Agentic: 길고 상세, Tool Use Prompting + Guardrails 포함
+
+**XML 태그 5개 섹션을 모두 사용한다:**
+```xml
+<role>역할 정의</role>
+<context>도메인 지식, 시스템 정보</context>
+<tools>사용 가능한 도구와 사용 시점</tools>
+<instructions>작업, 판단 기준, 출력 형식</instructions>
+<constraints>금지 사항, 제약 조건</constraints>
+```
 
 ### `strands-sdk-guide` — Strands Agents SDK TypeScript 구현 스펙
-- `@strands-agents/sdk` 패키지로 Agent 구성 (systemPrompt, tools)
-- `tool()` 함수 + Zod `inputSchema`로 커스텀 도구 정의
-- MCP 서버/클라이언트 연동 스펙 (stdio, Streamable HTTP)
-- Hooks, async iterator 스트리밍, 대화 관리 설정
+
+**모델 프로바이더 설정을 스펙에 포함한다:**
+```typescript
+// BedrockModel 인스턴스로 모델 설정
+import { Agent, BedrockModel } from '@strands-agents/sdk'
+const model = new BedrockModel({
+  modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+  region: 'us-east-1',
+})
+const agent = new Agent({ model, systemPrompt, tools })
+```
+
+**스펙에 반드시 포함할 항목:**
+- `tool()` 함수 + Zod `inputSchema` + `callback`으로 커스텀 도구 정의
+- 호출 방식 명시: `agent.invoke()` (비스트리밍) vs `agent.stream()` (async iterator 스트리밍)
+- 서버 환경: `printer: false` 설정
+- Vended Tools 사용 여부: `bash`, `fileEditor`, `httpRequest`, `notebook` (필요 시)
+- MCP 서버/클라이언트 연동 스펙 (필요 시)
 
 ## Input
 
@@ -63,7 +93,7 @@ allowedTools:
 
 1. **ai-types** — AI 관련 타입 (Message, Tool, AgentResponse 등)
 2. **ai-prompts** — 시스템 프롬프트, 프롬프트 템플릿 (few-shot 포함)
-3. **ai-tools** — 에이전트 커스텀 도구 정의 (name, description, parameters, handler)
+3. **ai-tools** — 에이전트 커스텀 도구 정의 (name, description, inputSchema, callback) + Vended Tools 선택
 4. **ai-rag** — RAG 파이프라인 (필요 시: 임베딩 모델, 검색 전략, Knowledge Base)
 5. **ai-agent** — Strands Agent 구성 (`new Agent({ systemPrompt, tools })`)
 6. **ai-api** — 채팅/에이전트 API 라우트 (SSE 스트리밍)
@@ -106,11 +136,12 @@ allowedTools:
 - 제약 조건
 
 ### 프롬프트 전문
-\`\`\`
+\`\`\`xml
 <role>...</role>
-<instructions>...</instructions>
+<context>...</context>
 <tools>...</tools>
-<output-format>...</output-format>
+<instructions>...</instructions>
+<constraints>...</constraints>
 \`\`\`
 
 ## 커스텀 도구
@@ -150,15 +181,19 @@ allowedTools:
 {
   "generator": "ai",
   "architecture": {
+    "automation_level": "agentic",
+    "autonomy_score": 7,
     "pattern": "react-agent",
     "strands_pattern": "single-agent",
-    "model_id": "us.anthropic.claude-sonnet-4-6-v1",
+    "model_id": "us.anthropic.claude-sonnet-4-20250514-v1:0",
     "provider": "bedrock",
-    "region": "us-east-1"
+    "region": "us-east-1",
+    "printer": false,
+    "invocation_mode": "stream"
   },
   "system_prompt": {
     "template": "xml-structured",
-    "sections": ["role", "instructions", "tools", "output-format"],
+    "sections": ["role", "context", "tools", "instructions", "constraints"],
     "language": "ko"
   },
   "tools": [

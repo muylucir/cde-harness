@@ -25,6 +25,13 @@ allowedTools:
 
 **이 에이전트는 조건부 실행이다**: 요구사항에 AI 기능(챗봇, RAG, 에이전트, 콘텐츠 생성, 요약 등)이 포함된 경우에만 실행한다. AI 기능이 없으면 건너뛴다.
 
+## 핵심 원칙: AI 기능은 반드시 실제 동작해야 한다
+
+- **AI 기능은 Mocking 금지** — 챗봇, RAG, 에이전트 등 AI 기능은 Amazon Bedrock을 통해 실제 모델을 호출해야 한다.
+- 데이터(고객 목록, 주문 내역 등)는 목 데이터를 사용하더라도, **AI 응답은 실제 LLM이 생성**해야 한다.
+- 환경변수(`AWS_REGION`, `AWS_PROFILE` 등)로 Bedrock 접근을 설정하고, `.env.local.example`에 필요한 변수를 문서화한다.
+- 프로토타입이지만 AI 기능은 고객 데모에서 항상 라이브로 동작해야 한다.
+
 ## Language Rule
 
 - **Generated code**: English (코드, 주석, 변수명)

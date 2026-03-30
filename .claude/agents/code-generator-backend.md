@@ -68,6 +68,10 @@ src/
 
 ## 코드 생성 규칙
 
+### AI/Bedrock 관련 코드 — 실제 동작 필수
+
+AI 기능이 요구사항에 포함된 경우, `src/lib/services/bedrock.ts` 등 AWS 서비스 래퍼는 **실제 Amazon Bedrock API를 호출하도록 구현**한다. Mock 응답이나 하드코딩된 AI 응답은 금지. 데이터(고객 목록 등)는 인메모리 목 데이터를 사용하더라도, AI 응답은 반드시 실제 LLM이 생성해야 한다.
+
 ### 데이터 레이어 — 인메모리 스토어 (프로토타입 기본)
 
 ```typescript

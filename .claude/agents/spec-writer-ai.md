@@ -20,10 +20,12 @@ allowedTools:
 
 **AI 기능 판단 기준**: FR의 description이나 tags에 다음 키워드가 포함되면 AI 기능으로 판단: `chatbot`, `chat`, `ai`, `agent`, `rag`, `llm`, `bedrock`, `생성형`, `대화형`, `요약`, `추천`, `자동 분류`, `콘텐츠 생성`.
 
-## 핵심 원칙: AI 기능은 반드시 실제 동작해야 한다
+## 핵심 원칙
 
-- AI 기능은 Mocking 금지. Amazon Bedrock을 통해 실제 모델을 호출하는 스펙을 작성한다.
-- 스펙에 모델 ID, 리전, 환경변수를 명시한다.
+1. **AI 기능은 반드시 Strands Agents SDK (`@strands-agents/sdk`)로 구현한다.** `@aws-sdk/client-bedrock-runtime` 직접 호출은 금지. 단순 Q&A/요약이라도 `new Agent()` 패턴을 사용한다.
+2. **AI 기능은 Mocking 금지.** Amazon Bedrock을 통해 실제 모델을 호출하는 스펙을 작성한다.
+3. 스펙에 모델 ID, 리전, 환경변수를 명시한다.
+4. **"direct-llm-call" 패턴을 선택하지 마라.** 가장 단순한 경우에도 `Agent (도구 없이)` 패턴을 사용한다.
 
 ## Language Rule
 

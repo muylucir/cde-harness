@@ -56,8 +56,9 @@ Sub-agent pipeline for generating Next.js 15 + Cloudscape Design System prototyp
 6. `"use client"` only on components with event handlers or hooks
 7. Server Components by default
 8. All mock data typed with proper interfaces — **단, AI 기능은 Mocking 금지. Amazon Bedrock을 통해 실제 동작해야 한다.**
-9. Run `npm run build` after every code generation cycle
-10. Run `npm run test:e2e` after code generation to verify actual behavior
+9. **AI 기능은 반드시 `@strands-agents/sdk`로 구현한다.** `@aws-sdk/client-bedrock-runtime` 직접 호출은 금지. 단순 Q&A/요약이라도 `new Agent()` 패턴을 사용한다.
+10. Run `npm run build` after every code generation cycle
+11. Run `npm run test:e2e` after code generation to verify actual behavior
 
 ## Coding Convention
 

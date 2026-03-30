@@ -48,8 +48,7 @@ src/
 │   ├── db/                   # 데이터 접근 레이어
 │   │   ├── store.ts          # 인메모리 스토어 (프로토타입 기본)
 │   │   └── {resource}.repository.ts  # 리소스별 CRUD
-│   ├── services/             # AWS 서비스 래퍼
-│   │   ├── bedrock.ts        # Amazon Bedrock (GenAI)
+│   ├── services/             # AWS 서비스 래퍼 (AI/Bedrock 제외 — code-generator-ai 담당)
 │   │   ├── dynamodb.ts       # DynamoDB (필요 시)
 │   │   └── s3.ts             # S3 (필요 시)
 │   ├── auth/                 # 인증 유틸리티
@@ -68,9 +67,9 @@ src/
 
 ## 코드 생성 규칙
 
-### AI/Bedrock 관련 코드 — 실제 동작 필수
+### AI/Bedrock 코드는 이 에이전트의 담당이 아니다
 
-AI 기능이 요구사항에 포함된 경우, `src/lib/services/bedrock.ts` 등 AWS 서비스 래퍼는 **실제 Amazon Bedrock API를 호출하도록 구현**한다. Mock 응답이나 하드코딩된 AI 응답은 금지. 데이터(고객 목록 등)는 인메모리 목 데이터를 사용하더라도, AI 응답은 반드시 실제 LLM이 생성해야 한다.
+AI 기능(Bedrock 호출, 에이전트, 채팅 API 등)은 `code-generator-ai` 에이전트가 `@strands-agents/sdk`로 구현한다. 이 에이전트는 `src/lib/services/bedrock.ts`를 생성하지 않는다. AI 관련 타입(`src/types/ai.ts` 등)이 필요한 경우에도 `code-generator-ai`가 생성한다.
 
 ### 데이터 레이어 — 인메모리 스토어 (프로토타입 기본)
 

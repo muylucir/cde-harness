@@ -97,91 +97,26 @@ src/
     └── ai.ts                    # AI 관련 타입 (Message, Tool, AgentResponse 등)
 ```
 
-## 설계 프로세스
+## 구현 프로세스
 
-### 1단계: AI 기능 분석
+**이 에이전트는 자체적으로 설계 결정을 하지 않는다.** `ai-spec.json`에 정의된 아키텍처, 패턴, 도구, API 라우트를 그대로 코드로 변환한다.
 
-requirements.json에서 AI 관련 요구사항을 추출한다:
-- 챗봇/대화형 AI → Chat 패턴
-- 문서 기반 Q&A → RAG 패턴
-- 자동화/작업 수행 → Tool Use Agent 패턴
-- 콘텐츠 생성/요약 → Direct LLM Call 패턴
-- 복합 작업 → Multi-Agent 패턴
+### 절대 규칙
 
-### 2단계: 에이전트 패턴 선택 (`agent-patterns` 스킬 호출)
+1. **`@aws-sdk/client-bedrock-runtime` 직접 호출 금지** — 모든 AI 기능은 `@strands-agents/sdk`의 `Agent`를 통해 구현한다.
+2. **ai-spec.json의 결정을 따른다** — 패턴, 도구, API 라우트를 자의적으로 변경하지 않는다.
+3. **3개 스킬을 참조하여 구현한다** — `agent-patterns`, `prompt-engineering`, `strands-sdk-guide`
 
-요구사항 복잡도에 따라 (모두 Strands SDK로 구현):
+### 구현 순서
 
-| 복잡도 | 패턴 | Strands 구현 |
-|--------|------|-------------|
-| 단순 (Q&A, 요약) | Single Agent | Agent (도구 없이) |
-| 중간 (도구 사용, RAG) | ReAct Agent | Agent + tool() + MCP |
-| 높음 (멀티스텝, 계획) | Plan-and-Execute | Agent + Graph/Workflow |
-| 최고 (여러 전문가) | Multi-Agent | Swarm / Agents as Tools |
+`ai-spec.json`의 `generation_order`를 따른다:
 
-### 3단계: 프롬프트 설계 (`prompt-engineering` 스킬 호출)
-
-```typescript
-// src/lib/ai/prompts/system.ts
-export const SYSTEM_PROMPT = `
-<role>
-  당신은 {고객 도메인}의 전문 어시스턴트입니다.
-</role>
-
-<instructions>
-  - {구체적 지시사항}
-  - {제약 조건}
-</instructions>
-
-<tools>
-  {사용 가능한 도구 설명}
-</tools>
-
-<output-format>
-  {응답 형식}
-</output-format>
-`;
-```
-
-### 4단계: 구현 (`strands-sdk-guide` 스킬 호출)
-
-모든 복잡도에서 Strands SDK를 사용한다. 모델 호출은 SDK가 추상화한다.
-
-```typescript
-// src/lib/ai/agent.ts
-import { Agent } from '@strands-agents/sdk';
-import { SYSTEM_PROMPT } from './prompts/system';
-import { searchDocuments } from './tools/search';
-import { getWeather } from './tools/weather';
-
-// 단순 Q&A: tools 없이 Agent만 생성
-// 도구 사용: tools 배열에 tool() 함수 추가
-// RAG: retrieval 도구를 tools에 포함
-export const agent = new Agent({
-  systemPrompt: SYSTEM_PROMPT,
-  tools: [searchDocuments, getWeather],  // 단순 Q&A 시 빈 배열
-});
-```
-
-**커스텀 도구 예시 (tool() + Zod 스키마):**
-
-```typescript
-// src/lib/ai/tools/search.ts
-import { tool } from '@strands-agents/sdk';
-import z from 'zod';
-
-export const searchDocuments = tool({
-  name: 'search_documents',
-  description: '문서에서 관련 정보를 검색합니다',
-  inputSchema: z.object({
-    query: z.string().describe('검색 쿼리'),
-  }),
-  callback: async (input) => {
-    // Bedrock Knowledge Base 또는 인메모리 검색
-    return results;
-  },
-});
-```
+1. `ai-spec.json`의 `types`를 읽고 → `src/types/ai.ts` 생성
+2. `ai-spec.json`의 `system_prompt`를 읽고 → `src/lib/ai/prompts/` 생성
+3. `ai-spec.json`의 `tools`를 읽고 → `src/lib/ai/tools/` 생성 (tool() + Zod 스키마)
+4. `ai-spec.json`의 `rag`을 읽고 → `src/lib/ai/rag/` 생성 (enabled일 때만)
+5. `ai-spec.json`의 `architecture`를 읽고 → `src/lib/ai/agent.ts` 생성 (Agent 정의)
+6. `ai-spec.json`의 `api_routes`를 읽고 → `src/app/api/chat/route.ts` 등 생성
 
 ### 5단계: 스트리밍 API 라우트
 

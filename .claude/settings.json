@@ -10,11 +10,19 @@
       "Bash(npm audit:*)",
       "Bash(npx tsc:*)",
       "Bash(npx next:*)",
-      "Bash(npx lint-staged:*)",
       "Bash(npx playwright:*)",
       "Bash(npm run test:*)",
-      "Bash(ls:*)",
-      "Bash(node:*)"
+      "Bash(ls:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          "bash -c '[[ \"$TOOL_INPUT\" != *\"--force\"* ]] && [[ \"$TOOL_INPUT\" != *\"--hard\"* ]] || { echo \"BLOCK: 위험한 git 명령은 사용자 확인 필요\"; exit 1; }'"
+        ]
+      }
     ]
   }
 }

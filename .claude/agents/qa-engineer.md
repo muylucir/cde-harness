@@ -166,7 +166,7 @@ npm run test:e2e                               # 실행
 **이 경우 테스트를 수정하지 않고**, 피드백 파일을 작성하여 해당 코드 제너레이터에 수정을 요청한다:
 
 ```json
-// .pipeline/artifacts/v{N}/04-codegen/feedback-qa-iter-{N}.json
+// .pipeline/artifacts/v{N}/04-codegen/feedback-from-qa-iter-{N}.json
 {
   "source": "qa-engineer",
   "iteration": 1,

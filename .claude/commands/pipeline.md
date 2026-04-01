@@ -333,7 +333,7 @@ Output: `05-review/test-result.json`
 
 - 빌드 에러: 에러 메시지 분석 → 해당 코드 제너레이터에 수정 요청
 - E2E 실패: 스크린샷 + 에러 스택 분석 → 해당 코드 제너레이터에 수정 요청
-- 피드백 파일: `.pipeline/artifacts/v{N}/04-codegen/feedback-test-iter-{N}.json`
+- 피드백 파일: `.pipeline/artifacts/v{N}/04-codegen/feedback-from-qa-iter-{N}.json`
 - 수정 후 5a-1(빌드)부터 재실행
 
 ### Stage 6b: Review (품질 검증 — QA 통과한 코드를 리뷰한다)
@@ -343,7 +343,7 @@ Launch `reviewer` agent. QA가 통과시킨 코드에 대해 **정적 품질 리
 - Launch `reviewer` agent
 - 리뷰 카테고리 (**9개** — 모두 리포트에 명시적으로 출력해야 함):
   1. Cloudscape Compliance (개별 임포트, useCollection, TopNav 위치, 이벤트 패턴)
-  2. Next.js 15 Conventions (App Router, "use client", Server Components)
+  2. Next.js 16 Conventions (App Router, "use client", Server Components)
   3. TypeScript Quality (no any, strict mode)
   4. Accessibility (enableKeyboardNavigation, ariaLabel, FormField)
   5. Backend Quality (HTTP 메서드, zod 검증, repository 패턴, 에러 코드)
@@ -353,18 +353,19 @@ Launch `reviewer` agent. QA가 통과시킨 코드에 대해 **정적 품질 리
   9. 시드 데이터 일관성 (FK 참조 유효, 데이터 볼륨, enum 정합)
 
 Output:
-- `05-review/review-report.md` — **9개** 카테고리별 근거 포함 한국어 리포트
-- `05-review/test-report.md` — 테스트 목록 + FR 커버리지 + 결과 한국어 리포트
+- `05-review/review-report.md` — **9개** 카테고리별 근거 포함 한국어 리포트 (QA의 test-report.md 결과를 요약 포함)
 - `05-review/review-result.json` — 머신 리더블 (scores with evidence + test results + **iterations[]** 배열)
+
+> **참고**: `test-report.md`와 `test-result.json`은 Stage 6a(qa-engineer)가 생성한다. reviewer는 이를 참조만 한다.
 
 **CHECKPOINT (Stage 6b)**: 다음 조건을 확인한다. 누락 시 `reviewer`를 재실행한다 (최대 1회).
 - [ ] `05-review/review-report.md`에 9개 카테고리가 모두 명시적 섹션으로 존재하는가
 - [ ] `05-review/review-result.json`에 `iterations` 배열이 있고 각 이터레이션의 실패/수정 내역이 기록되었는가
-- [ ] `05-review/test-report.md`에 P0 FR별 인터랙션 테스트(click/fill) 존재 여부가 명시되었는가
+- [ ] `05-review/test-report.md`(qa-engineer 생성)에 P0 FR별 인터랙션 테스트(click/fill) 존재 여부가 명시되었는가
 
 **리뷰 PASS 시**: Stage 7으로 진행
 **리뷰 FAIL 시**:
-  - 해당 코드 제너레이터에 수정 요청: `.pipeline/artifacts/v{N}/04-codegen/feedback-review-iter-{N}.json`
+  - 해당 코드 제너레이터에 수정 요청: `.pipeline/artifacts/v{N}/04-codegen/feedback-from-reviewer-iter-{N}.json`
   - 수정 후 **Stage 6a(테스트)부터 재실행** — 리뷰 수정이 기능을 깨뜨리지 않았는지 확인
   - 최대 2회 리뷰 이터레이션
 

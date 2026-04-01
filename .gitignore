@@ -48,3 +48,6 @@ next-env.d.ts
 /files
 
 .mcp.json
+.claude/settings.local.json
+playwright-report/
+test-results/

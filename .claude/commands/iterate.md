@@ -157,6 +157,11 @@ cp -r .pipeline/artifacts/v{N}/00-domain/ .pipeline/artifacts/v{N+1}/00-domain/
 
 ### Phase 5: 파이프라인 재실행 (requirements-analyst부터)
 
+> **설계 의도**: feedback-analyzer가 `recommended_reentry`를 산출하지만, /iterate는 항상 requirements-analyst부터 재실행한다.
+> 이유: 요구사항이 변경되면 요구사항 정의서 → 아키텍처 → 스펙이 모두 갱신되어야 FR → 아키텍처 → 스펙 → 코드 추적 체인이 유지된다.
+> 코드 생성으로 바로 진입하면 중간 문서가 갱신되지 않아 추적성이 끊어진다.
+> `recommended_reentry`는 영향 범위의 참고 정보로만 활용하며, 파이프라인 재진입 지점을 결정하지 않는다.
+
 domain-researcher는 건너뛴다 (도메인 지식은 버전 간 변하지 않으며, Phase 4에서 복사 완료).
 pipeline.md의 Stage 2-7을 순서대로 실행한다. 각 에이전트에 리비전 로그 경로를 추가 컨텍스트로 전달한다.
 

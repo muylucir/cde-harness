@@ -1,12 +1,12 @@
 # CDE Harness - Rapid Prototype Pipeline
 
-Sub-agent pipeline for generating Next.js 15 + Cloudscape Design System prototypes from customer pain points. Built for AWS Solutions Architects doing rapid customer demos.
+Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototypes from customer pain points. Built for AWS Solutions Architects doing rapid customer demos.
 
 ## Tech Stack
-- Next.js 15 (App Router only — NO Pages Router)
+- Next.js 16 (App Router only — NO Pages Router)
 - Cloudscape Design System (@cloudscape-design/components v3+)
 - TypeScript strict mode
-- ESLint + Prettier (pre-commit via husky + lint-staged)
+- ESLint + Prettier
 
 ## Commands
 - `npm run dev` — Dev server (Turbopack)

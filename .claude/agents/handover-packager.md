@@ -43,7 +43,7 @@ npm run dev
 
 | 기술 | 버전 | 용도 |
 |------|------|------|
-| Next.js | 15 (App Router) | 풀스택 프레임워크 |
+| Next.js | 16 (App Router) | 풀스택 프레임워크 |
 | Cloudscape | v3+ | UI 컴포넌트 |
 ```
 
@@ -58,7 +58,7 @@ npm run dev
 
 ### 최종 버전 아티팩트
 - `.pipeline/artifacts/v{latest}/01-requirements/requirements.json` + `.md`
-- `.pipeline/artifacts/v{latest}/02-architecture/architecture.json` + `component-tree.md` + `data-flow.md`
+- `.pipeline/artifacts/v{latest}/02-architecture/architecture.json` + `architecture.md`
 - `.pipeline/artifacts/v{latest}/03-specs/_manifest.json` + 스펙 파일들
 - `.pipeline/artifacts/v{latest}/04-codegen/generation-log-*.json`
 - `.pipeline/artifacts/v{latest}/05-review/review-report.md` + `test-report.md`
@@ -94,7 +94,7 @@ npm run dev
 http://localhost:3000 에서 확인
 
 ## 기술 스택
-- Next.js 15 (App Router)
+- Next.js 16 (App Router)
 - Cloudscape Design System
 - TypeScript (strict mode)
 - {추가 기술: Strands SDK, zod 등}
@@ -127,10 +127,10 @@ http://localhost:3000 에서 확인
 {고객 요구사항 요약 — requirements.md에서 추출}
 
 ## 시스템 구조
-{data-flow.md의 Mermaid 다이어그램 포함}
+{architecture.md 파트 2의 데이터 플로우 다이어그램 포함}
 
 ## 컴포넌트 계층
-{component-tree.md의 ASCII 트리 포함}
+{architecture.md 파트 1의 컴포넌트 트리 포함}
 
 ## 데이터 모델
 {src/types/ 의 인터페이스 목록 + 관계 설명}

@@ -1,6 +1,6 @@
 ---
 name: code-generator-backend
-description: "Next.js 15 API Route, 데이터 레이어, AWS 서비스 연동, 미들웨어 코드를 스펙에서 생성한다. 프론트엔드가 참조할 타입과 API를 먼저 확립하는 역할. code-generator-frontend 보다 먼저 실행한다."
+description: "Next.js 16 API Route, 데이터 레이어, AWS 서비스 연동, 미들웨어 코드를 스펙에서 생성한다. 프론트엔드가 참조할 타입과 API를 먼저 확립하는 역할. code-generator-frontend 보다 먼저 실행한다."
 model: opus
 color: teal
 allowedTools:
@@ -19,7 +19,7 @@ allowedTools:
 
 # Code Generator — Backend
 
-Next.js 15 백엔드 코드를 생성하는 에이전트이다. 타입 정의, 데이터 레이어, API 라우트, 서버 액션, 미들웨어를 생성하며, 프론트엔드 에이전트가 참조할 계약(contract)을 확립한다.
+Next.js 16 백엔드 코드를 생성하는 에이전트이다. 타입 정의, 데이터 레이어, API 라우트, 서버 액션, 미들웨어를 생성하며, 프론트엔드 에이전트가 참조할 계약(contract)을 확립한다.
 
 ## Language Rule
 

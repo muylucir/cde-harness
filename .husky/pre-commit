@@ -1,9 +1,0 @@
-# README.md 현행화 — 에이전트/커맨드/스킬/스크립트 변경 감지 시 자동 반영
-CHANGED=$(git diff --cached --name-only | grep -E '^(\.claude/(agents|commands|skills)/|package\.json)' || true)
-if [ -n "$CHANGED" ]; then
-  bash scripts/sync-readme.sh
-  git add README.md
-fi
-
-# node_modules가 없으면 lint-staged 건너뜀 (하네스 자체 커밋 시)
-[ -d node_modules ] && npx lint-staged || true

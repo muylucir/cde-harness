@@ -199,7 +199,7 @@ vehicle-create-form.spec.md 변경
     { "file": "src/app/stores/[id]/sales/page.tsx", "action": "add", "generator": "frontend" }
   ],
   "recommended_reentry": "architect",
-  "reentry_reason": "신규 요구사항(FR-006)으로 새 라우트/컴포넌트 추가 필요",
+  "reentry_reason": "신규 요구사항(FR-006)으로 새 라우트/컴포넌트 추가 필요 (참고용 — /iterate는 항상 requirements-analyst부터 재실행)",
   "scope": "partial",
   "estimated_changes": {
     "new_files": 3,

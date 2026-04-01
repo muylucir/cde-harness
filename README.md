@@ -1,6 +1,6 @@
 # CDE Harness — 빠른 프로토타이핑 파이프라인
 
-AWS Solutions Architect가 고객 요구사항으로부터 **Next.js 15 + Cloudscape Design System** 프로토타입을 자동 생성하기 위한 Claude Code 하네스입니다.
+AWS Solutions Architect가 고객 요구사항으로부터 **Next.js 16 + Cloudscape Design System** 프로토타입을 자동 생성하기 위한 Claude Code 하네스입니다.
 
 ## 개요
 
@@ -294,7 +294,7 @@ cde-harness/
 ├── e2e/                            # QA 에이전트가 생성하는 Playwright 테스트
 ├── node_modules/                   # npm install 시 생성 (하네스에 미포함)
 ├── CLAUDE.md                       # 프로젝트 규칙 (에이전트가 참조)
-├── package.json                    # Next.js 15 + Cloudscape + 린팅 도구
+├── package.json                    # Next.js 16 + Cloudscape + 린팅 도구
 ├── tsconfig.json                   # TypeScript strict mode
 ├── eslint.config.mjs               # ESLint 규칙
 └── .prettierrc                     # Prettier 설정
@@ -364,7 +364,7 @@ cde-harness/
 
 ### 6B. 코드 리뷰 (Reviewer)
 - QA 통과한 코드에 대해 **정적 품질 리뷰만** 수행 (테스트 생성/실행은 QA가 담당)
-- **9개 카테고리**: Cloudscape 준수, Next.js 15 규약, TypeScript 품질, 접근성, 백엔드 품질, 요구사항 커버리지, 코드 조직, 주석 언어 검증, 시드 데이터 일관성
+- **9개 카테고리**: Cloudscape 준수, Next.js 16 규약, TypeScript 품질, 접근성, 백엔드 품질, 요구사항 커버리지, 코드 조직, 주석 언어 검증, 시드 데이터 일관성
 - FAIL 시 수정 → **6A 테스트부터 재실행** (리뷰 수정이 기능을 깨뜨리지 않았는지 확인)
 - **산출물**: `review-report.md`, `test-report.md`, `review-result.json`
 
@@ -447,12 +447,11 @@ Phase 5  requirements-analyst부터 파이프라인 전체 재실행
 
 | 기술 | 버전 | 용도 |
 |------|------|------|
-| Next.js | 15 (App Router) | 프레임워크 |
+| Next.js | 16 (App Router) | 프레임워크 |
 | Cloudscape Design System | v3+ | UI 컴포넌트 라이브러리 |
 | TypeScript | strict mode | 타입 안전성 |
 | ESLint + Prettier | latest | 코드 컨벤션 |
 | Strands Agents SDK | TypeScript | AI Agent 구현 (`@strands-agents/sdk`) |
-| husky + lint-staged | latest | pre-commit hook |
 | Playwright | latest | E2E 테스트 |
 
 ---
@@ -528,6 +527,5 @@ npm run format:check  # prettier --check .
 npm run type-check    # tsc --noEmit
 npm run test:e2e      # playwright test
 npm run test:e2e:ui   # playwright test --ui
-npm run prepare       # husky
 ```
 <!-- AUTOGEN:npm-scripts:END -->

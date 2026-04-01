@@ -41,6 +41,17 @@ allowedTools:
 6. **api** — Next.js Route Handlers (REST endpoints)
 7. **middleware** — 보안 헤더, 인증 미들웨어
 
+## 도메인 컨텍스트 활용 (domain-context.json이 있으면)
+
+| 담당 범위 | 참조 필드 | 활용 방식 |
+|----------|----------|----------|
+| types | `core_entities` | `common_attributes`를 인터페이스 필드 목록으로, `common_statuses`를 string union 타입으로 사용 |
+| types | `data_model_hints.common_enums` | 각 enum을 TypeScript union 타입으로 정의 |
+| validation | `core_entities` | `common_statuses`를 `z.enum()` 값으로 사용 |
+| data | `core_entities` + `terminology` | 시드 데이터의 필드명은 `common_attributes`, 문자열 값에 `terminology`의 도메인 용어 사용 |
+| data | `kpis` | 시드 데이터의 상태 분포를 `typical_target` 범위에 맞게 조정 (예: 가동률 85-95% 목표 → 차량 90%를 in-operation으로) |
+| db | `data_model_hints.common_relationships` | 관계형 조회 메서드 추가 (예: "Vehicle hasMany MaintenanceRecords" → `findByVehicleId()`) |
+
 ## Output
 
 이중 출력 — json (기계용) → md (사람용) 순서로 연속 작성한다. json 내용이 컨텍스트에 살아있는 상태에서 md를 쓰면 품질이 보장된다.

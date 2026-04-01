@@ -41,6 +41,8 @@ allowedTools:
 
 추출한 키워드로 다음을 검색한다:
 
+> **URL 수집 원칙**: 모든 검색/조회에서 출처 URL을 반드시 수집한다. 각 WebSearch/WebFetch 결과의 URL을 `metadata.sources`에 기록한다. URL을 찾을 수 없는 경우 `"url": null`로 명시한다.
+
 **2a. 업계 표준 워크플로우**
 - "{domain} management workflow" 검색
 - "{domain} SaaS features" 검색
@@ -186,13 +188,13 @@ allowedTools:
 
 ## 후속 에이전트에서의 활용
 
-| 에이전트 | 활용 방식 |
-|----------|----------|
-| requirements-analyst | `suggested_requirements`를 사용자에게 제안, 도메인 용어로 FR 작성 |
-| architect | `data_model_hints`로 타입 설계, `domain_workflows`로 라우트 구조 참고 |
-| spec-writer | `kpis`로 대시보드 스펙, `terminology`로 UI 라벨 참고 |
-| code-generator-backend | `core_entities`로 시드 데이터 현실성 향상 |
-| code-generator-frontend | `kpis`로 대시보드 위젯, `terminology`로 테이블 칼럼명 |
+| 에이전트 | 활용 방식 | 관련 스킬 |
+|----------|----------|----------|
+| requirements-analyst | `suggested_requirements`를 사용자에게 제안, 도메인 용어로 FR 작성 | `cloudscape-design` (UI 패턴 매핑) |
+| architect | `data_model_hints`로 타입 설계, `domain_workflows`로 라우트 구조 참고 | `cloudscape-design` (레이아웃 패턴) |
+| spec-writer | `kpis`로 대시보드 스펙, `terminology`로 UI 라벨 참고 | `cloudscape-design` (대시보드 패턴) |
+| code-generator-backend | `core_entities`로 시드 데이터 현실성 향상 | — |
+| code-generator-frontend | `kpis`로 대시보드 위젯, `terminology`로 테이블 칼럼명 | `cloudscape-design` (컴포넌트 선택) |
 
 ## 검증 체크리스트
 
@@ -203,10 +205,33 @@ allowedTools:
 - [ ] 도메인 용어가 최소 5개 이상 정리되었는가
 - [ ] domain-context.json과 domain-context.md 모두 생성되었는가
 - [ ] metadata.sources에 URL이 포함되어 있는가 (찾을 수 없는 경우 `null`로 명시)
+- [ ] `.pipeline/state.json`에 domain-researcher 단계가 completed로 기록되었는가
+
+## 에러 처리
+
+| 시나리오 | 대응 |
+|----------|------|
+| `customer-brief.md` 미존재 | "고객 브리프가 없습니다. `/brief`를 먼저 실행하세요." 에러 출력 + 중단 |
+| WebSearch 결과 0건 | 키워드 변형으로 2회 재시도 (예: 영어→한국어, 동의어). 그래도 0건이면 해당 항목을 "리서치 불충분"으로 표기하고 나머지 계속 |
+| WebFetch 403/timeout/실패 | 다른 소스 URL로 대체 시도. 실패 시 `"url": null`로 기록하고 계속 |
+| 도메인 식별 불가 (브리프가 모호) | 사용자에게 산업/도메인 명확화 질문 출력 + 중단. "브리프에서 도메인을 식별할 수 없습니다. 산업을 명시해 주세요." |
+| 복수 도메인 감지 | 주 도메인/부 도메인으로 분리하여 사용자에게 확인: "다음 도메인이 감지되었습니다: {목록}. 주 도메인을 선택해 주세요." |
+| 검증 체크리스트 미충족 (엔티티/워크플로우/KPI 0개) | 리서치 범위를 확장하여 재시도 1회. 그래도 미충족이면 경고와 함께 최소 산출물 생성 |
+| state.json 파싱 실패 | 경고 출력 + 버전을 v1로 기본 설정 |
+
+## /iterate 시 재실행 조건
+
+기본적으로 `/iterate`에서 domain-researcher는 건너뛴다 (도메인 지식은 버전 간 유지). 단, feedback-analyzer가 다음 중 하나를 감지하면 재실행해야 한다:
+
+| 조건 | 예시 | 대응 |
+|------|------|------|
+| 산업/도메인 자체 변경 | "물류가 아니라 제조업으로 바꿔주세요" | 전체 리서치 재실행 |
+| 신규 서브도메인 추가 | "정비 관리 외에 연료 관리도 추가" | 기존 결과 유지 + 추가 리서치 |
+| 도메인 용어/KPI 피드백 | "가동률 대신 OEE를 사용해 주세요" | 해당 항목만 업데이트 |
 
 ## 완료 후
 
-한국어로 사용자에게 보고:
+`.pipeline/state.json`을 업데이트하여 이 단계를 완료로 표시한다. 한국어로 사용자에게 보고:
 - 리서치한 도메인 요약
 - 발견한 핵심 KPI/워크플로우
 - 고객 브리프에 없지만 추가를 제안하는 기능 목록

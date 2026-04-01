@@ -54,6 +54,16 @@ Cloudscape Design System 기반의 UI 코드를 생성하는 에이전트이다.
 피드백이 있으면:
 - `.pipeline/artifacts/v{N}/04-codegen/feedback-from-*-iter-{N}.json`
 
+## 도메인 컨텍스트 활용 (domain-context.json이 있으면)
+
+스펙이 1차 입력이며, domain-context.json은 **UI 라벨 정확성**과 **대시보드 위젯**에 사용한다:
+
+- **레이아웃** (`AppShell`): `metadata.subdomain`을 `TopNavigation` identity 타이틀로 사용. `domain_workflows` 이름을 `SideNavigation` 섹션 라벨로 사용
+- **대시보드 위젯**: `kpis` 배열의 각 KPI당 위젯 컴포넌트 생성 (Cloudscape Box/ColumnLayout/차트). `typical_target`으로 임계값 색상 표시
+- **테이블 컬럼명**: `terminology`의 도메인 용어를 Table `columnDefinitions`의 `header`에 사용. 약어는 풀네임 병기
+- **StatusBadge**: `core_entities`의 `common_statuses` → `StatusIndicator` type 매핑 (예: in-operation→success, under-maintenance→warning)
+- **상태 전환**: `domain_workflows`의 `steps[]`를 상세 페이지 액션 버튼과 Wizard 단계에 반영
+
 ## Cloudscape Design System Reference
 
 **반드시 `cloudscape-design` 스킬을 Skill 도구로 호출**하여 올바른 컴포넌트 사용법과 코드 패턴을 참조한다.

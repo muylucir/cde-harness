@@ -73,6 +73,32 @@ npm run dev
 - `package.json`
 - `.pipeline/input/customer-brief.md` — 최종 통합 브리프
 
+## 컨텍스트 관리 전략
+
+버전이 축적되면 아티팩트 총량이 컨텍스트 윈도우를 초과할 수 있다. 다음 전략을 적용한다:
+
+| 버전 수 | 읽기 전략 |
+|---------|----------|
+| 1~3개 | 전체 아티팩트 읽기 (기본) |
+| 4개 이상 | state.json의 versions 요약 읽기 + **최종 버전** 상세 + **직전 버전** diff만 읽기. 이전 버전은 revisions 로그 요약만 참조 |
+
+### 선행 아티팩트 누락 시 처리
+
+| 누락 아티팩트 | 대응 |
+|--------------|------|
+| security-result.json | "보안 감사가 완료되지 않았습니다" 경고 + PRODUCTION-CHECKLIST.md에 "보안 감사 미완료" 항목 추가 |
+| test-report.md | "테스트 리포트 없음" 경고 + REVISION-HISTORY.md에서 테스트 결과를 "N/A" 표기 |
+| revisions/ 디렉토리 | v1만 존재하는 것으로 판단, REVISION-HISTORY.md 생성 건너뛰기 |
+| architecture.json | "아키텍처 문서 누락" 에러 — ARCHITECTURE.md 생성 불가, 사용자에게 보고 |
+
+## 참조 스킬
+
+| 스킬 | 용도 | 호출 시점 |
+|------|------|----------|
+| mermaid-diagrams | ARCHITECTURE.md의 데이터 플로우/컴포넌트 다이어그램 생성 및 검증 | 문서 생성 3b단계 (ARCHITECTURE.md) |
+| ascii-diagram | README.md의 프로젝트 구조 디렉토리 트리 렌더링 | 문서 생성 3a단계 (README.md) |
+| cloudscape-design | 컴포넌트 목록 교차 검증, 페이지 패턴 설명 보강 | ARCHITECTURE.md 컴포넌트 계층 작성 시 |
+
 ## 핸드오버 패키지 구성
 
 출력 디렉토리: `.pipeline/artifacts/v{N}/07-handover/`
@@ -302,6 +328,39 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
 # DYNAMODB_TABLE_NAME=your-table-name
 ```
 
+### 8. `handover-manifest.json` — 핸드오버 메타데이터
+
+```json
+{
+  "language": "ko",
+  "version": "v{N}",
+  "generated_at": "<ISO-8601>",
+  "documents": [
+    { "file": "README.md", "type": "quickstart", "copied_to": "/" },
+    { "file": "ARCHITECTURE.md", "type": "architecture", "copied_to": "/docs/" },
+    { "file": "API.md", "type": "api", "copied_to": "/docs/" },
+    { "file": "AI-AGENT.md", "type": "ai-agent", "copied_to": "/docs/", "conditional": true },
+    { "file": "PRODUCTION-CHECKLIST.md", "type": "checklist", "copied_to": "/docs/" },
+    { "file": "REVISION-HISTORY.md", "type": "history", "copied_to": "/docs/", "conditional": true },
+    { "file": ".env.local.example", "type": "env", "copied_to": "/" }
+  ],
+  "stats": {
+    "total_versions": "{N}",
+    "total_frs": "{N}",
+    "total_pages": "{N}",
+    "total_api_endpoints": "{N}",
+    "total_components": "{N}",
+    "test_pass_rate": "100%",
+    "review_verdict": "PASS",
+    "security_verdict": "PASS"
+  },
+  "production_checklist_items": {
+    "required": "{N}",
+    "optional": "{N}"
+  }
+}
+```
+
 ## 생성 프로세스
 
 1. 모든 파이프라인 아티팩트 읽기
@@ -333,6 +392,15 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
     └── ...
 ```
 
+## 에러 처리
+
+| 시나리오 | 대응 |
+|----------|------|
+| state.json 파싱 실패 | 경고 출력 + versions 객체 대신 src/ 코드 분석으로 프로토타입 정보 재구성 |
+| `npm run build` 실패 (README 교체 후) | README 변경을 되돌리고 원인 보고. 빌드 실패가 README와 무관하면 경고만 출력 |
+| 핸드오버 대상 파일이 docs/에 이미 존재 | 기존 파일을 덮어쓰기 (핸드오버 패키지가 최종본) |
+| customer-brief.md 미존재 | 경고 출력 + "설계 배경" 섹션을 requirements.json에서만 추출 |
+
 ## 검증 체크리스트
 
 - [ ] README.md에 `npm install && npm run dev`로 실행 가능한 가이드가 있는가
@@ -342,6 +410,9 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
 - [ ] .env.local.example에 필요한 환경 변수가 모두 나열되었는가
 - [ ] 모든 문서가 한국어로 작성되었는가
 - [ ] `npm run build`가 여전히 성공하는가 (README 교체 후)
+- [ ] handover-manifest.json이 생성되고 모든 문서가 documents 배열에 포함되었는가
+- [ ] 조건부 문서(AI-AGENT.md, REVISION-HISTORY.md)가 해당 조건에 맞게 포함/제외되었는가
+- [ ] ARCHITECTURE.md의 Mermaid 다이어그램이 올바르게 렌더링되는가
 
 ## 완료 후
 

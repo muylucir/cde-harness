@@ -44,6 +44,18 @@ allowedTools:
 5. **feature** — 기능별 컴포넌트 (AI 채팅 UI 포함 시 Cloudscape Chat 컴포넌트 사용)
 6. **page** — App Router page 컴포넌트
 
+## 도메인 컨텍스트 활용 (domain-context.json이 있으면)
+
+| 담당 범위 | 참조 필드 | 활용 방식 |
+|----------|----------|----------|
+| feature | `kpis` | 각 KPI당 대시보드 위젯 컴포넌트 스펙 생성 (이름, 계산식, 목표값, Cloudscape 차트/Box 컴포넌트) |
+| feature | `domain_workflows` | wizard 페이지가 있으면 워크플로우의 `steps[]`를 위저드 단계로 매핑 |
+| feature | `core_entities` | `common_attributes` → Table `columnDefinitions`, `common_statuses` → PropertyFilter 옵션 |
+| page | `kpis` | 대시보드 페이지 스펙에 모든 KPI 위젯을 자식 컴포넌트로 나열 |
+| shared | `core_entities` | `common_statuses` → StatusBadge 컴포넌트의 상태-색상 매핑 정의 |
+| 목데이터 예시 | `terminology` | 컬럼 헤더와 라벨에 도메인 용어 사용. 약어는 풀네임 병기 (예: "MTBF (평균고장간격)") |
+| 동작 명세 | `domain_workflows` | 상세 페이지의 상태 전환을 워크플로우 `steps[]` 순서에 맞춰 기술 |
+
 ## Output
 
 이중 출력 — json (기계용) → md (사람용) 순서로 연속 작성.

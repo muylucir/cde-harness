@@ -66,6 +66,15 @@ src/
 └── middleware.ts              # Next.js 미들웨어 (보안 헤더, 인증)
 ```
 
+## 도메인 컨텍스트 활용 (domain-context.json이 있으면)
+
+스펙이 1차 입력이며, domain-context.json은 **시드 데이터 현실성**과 **타입 보강**에 사용한다:
+
+- **시드 데이터** (`src/data/seed.ts`): `core_entities`의 `common_attributes`/`common_statuses`에 맞는 필드와 값을 사용. `terminology`의 도메인 용어를 문자열 값에 반영. `kpis`의 `typical_target`에 맞게 상태 분포를 조정 (예: 가동률 목표 85-95% → 차량 10건 중 9건 in-operation)
+- **타입 정의** (`src/types/`): `data_model_hints.common_enums`가 있으면 enum/union 타입 정의에 활용
+- **Repository** (`src/lib/db/`): `data_model_hints.common_relationships`에 관계형 조회 메서드 추가 (예: `findByVehicleId()`)
+- **주석**: `terminology`의 도메인 용어를 JSDoc에 풀네임과 함께 사용 (예: `/** MTBF(평균고장간격)를 계산한다 */`)
+
 ## 코드 생성 규칙
 
 ### AI/Bedrock 코드는 이 에이전트의 담당이 아니다

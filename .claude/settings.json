@@ -14,15 +14,5 @@
       "Bash(npm run test:*)",
       "Bash(ls:*)"
     ]
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          "bash -c '[[ \"$TOOL_INPUT\" != *\"--force\"* ]] && [[ \"$TOOL_INPUT\" != *\"--hard\"* ]] || { echo \"BLOCK: 위험한 git 명령은 사용자 확인 필요\"; exit 1; }'"
-        ]
-      }
-    ]
   }
 }

@@ -26,8 +26,8 @@ allowedTools:
 
 ## Input
 
-- `.pipeline/artifacts/v{N}/01-requirements/requirements.json`
-- `.pipeline/artifacts/v{N}/02-architecture/architecture.json`
+- `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — FR, NFR과 함께 **`personas[]`**, **`user_stories[]`** 도 참조한다
+- `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — `metadata.primary_persona` 참조
 - `.pipeline/artifacts/v{N}/03-specs/backend-spec.json` — BE 타입/API 참조
 - `.pipeline/artifacts/v{N}/03-specs/ai-spec.json` — AI API/타입 참조 (있을 때)
 - `.pipeline/artifacts/v{N}/00-domain/domain-context.json` (있으면)
@@ -119,6 +119,19 @@ export const MOCK_{RESOURCE}: {TypeName}[] = [
 3. 에러 상태: {처리 방법}
 4. 로딩 상태: {표시할 컴포넌트}
 5. 빈 상태: {표시할 내용}
+
+### 사용자 시나리오 매핑
+| User Story | 페르소나 | 이 컴포넌트의 역할 |
+|------------|---------|-------------------|
+| US-001: {스토리 제목} | P-001 ({역할}) | {이 컴포넌트가 해당 스토리에서 수행하는 역할} |
+
+*참고: requirements.json의 `user_stories[]`와 `personas[]`에서 이 컴포넌트의 `requirements`(FR ID)에 매핑되는 항목을 참조한다.*
+
+### 페르소나 기반 UX 가이드
+architecture.json의 `metadata.primary_persona.technical_proficiency`에 따라:
+- **low**: 빈 상태에 안내 문구(EmptyState + 행동 유도 버튼) 추가, 위자드 패턴 선호, 인라인 도움말 표시
+- **medium**: 표준 Cloudscape 패턴 그대로 적용
+- **high**: 밀집 테이블 레이아웃 (compact density), 배치 작업 UI, 키보드 단축키 안내
 
 ### 접근성 요구사항
 - enableKeyboardNavigation: {boolean}

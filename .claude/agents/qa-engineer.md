@@ -42,7 +42,7 @@ allowedTools:
 - `src/` 하위 모든 파일 (생성된 코드)
 
 ### 참조 자료 (테스트 생성 기준 — 코드가 아닌 요구사항)
-- `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — **테스트의 유일한 진실의 원천 (Single Source of Truth)**
+- `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — **테스트의 유일한 진실의 원천 (Single Source of Truth)**. `acceptance_criteria`(FR별 테스트)와 `user_stories[]`(흐름 테스트) 참조
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — 라우트, API 엔드포인트 참조
 
 **중요: 테스트 생성 시 src/ 코드를 보지 않는다.** 요구사항의 acceptance_criteria만 보고 테스트를 작성한다. 코드를 보고 테스트를 쓰면 구현에 맞추게 되어 계약 검증이 아닌 구현 검증이 된다.
@@ -78,8 +78,29 @@ requirements.json의 각 FR에 대해 E2E 테스트를 생성한다.
 e2e/
 ├── navigation.spec.ts          # 모든 라우트 접근 가능 여부
 ├── {feature}.spec.ts           # FR별 기능 테스트
+├── user-journey.spec.ts        # 사용자 스토리 기반 멀티 페이지 흐름 테스트
 └── api.spec.ts                 # API 엔드포인트 계약 검증
 ```
+
+**user-journey.spec.ts** — requirements.json의 `user_stories[]`에서 P0 스토리를 멀티 페이지 흐름 테스트로 생성:
+
+```typescript
+test.describe('US-001: 물류팀 매니저 차량 현황 조회', () => {
+  test('대시보드 → 차량 목록 → 상세 흐름', async ({ page }) => {
+    // 대시보드에서 KPI 확인 (US-001 시작점)
+    await page.goto('/dashboard');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    // 차량 목록으로 이동
+    await page.getByRole('link', { name: /차량/i }).click();
+    await expect(page.getByRole('grid')).toBeVisible();
+    // 상세 페이지로 이동
+    await page.getByRole('row').nth(1).click();
+    await expect(page.getByRole('heading')).toBeVisible();
+  });
+});
+```
+
+유저스토리 테스트는 FR 테스트와 달리 **여러 페이지를 연결하는 사용자 여정**을 검증한다. FR 테스트가 개별 기능의 계약이라면, 유저스토리 테스트는 전체 흐름의 계약이다.
 
 **테스트 코드 패턴:**
 
@@ -264,6 +285,11 @@ src/ 코드를 참조하지 않고 요구사항만으로 작성되었다.
 | FR | 우선순위 | AC 수 | 테스트 수 | 인터랙션 테스트 | 결과 |
 |----|---------|-------|----------|---------------|------|
 | FR-001 | P0 | 5 | 5 | 3 (click, fill) | PASS |
+
+## 사용자 스토리 커버리지
+| US | 페르소나 | 테스트 수 | 결과 |
+|----|---------|----------|------|
+| US-001: 차량 현황 조회 | P-001 (물류팀 매니저) | 1 | PASS |
 
 ## 이터레이션 이력
 | # | 통과 | 실패 | 인프라 수정 | 기능 피드백 |

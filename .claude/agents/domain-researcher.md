@@ -72,6 +72,13 @@ allowedTools:
 - 해당 도메인에서 일반적으로 사용하는 데이터 구조
 - 예: 차량관리 → Vehicle(id, plate, type, status), Maintenance(id, vehicleId, date, type, cost)
 
+**2f. 일반적 사용자 역할**
+- "{domain} software user roles" 또는 "{domain} management stakeholders" 검색
+- 해당 도메인에서 시스템을 사용하는 전형적인 역할 파악
+- 각 역할의 기술 숙련도와 시스템 사용 빈도를 추정
+- 예: 차량관리 → Fleet Manager(daily, medium), Dispatcher(daily, high), Driver(occasional, low), Maintenance Technician(weekly, medium)
+- 이 정보는 requirements-analyst의 fallback 페르소나 추론에 사용된다
+
 ### 3단계: 분석 및 정리
 
 리서치 결과를 프로토타입에 적용 가능한 형태로 정리한다:
@@ -140,6 +147,20 @@ allowedTools:
       "priority": "nice-to-have"
     }
   ],
+  "typical_user_roles": [
+    {
+      "role": "Fleet Manager",
+      "description": "차량 배차, 정비 계획, KPI 모니터링 담당",
+      "technical_proficiency": "medium",
+      "usage_frequency": "daily"
+    },
+    {
+      "role": "Dispatcher",
+      "description": "실시간 차량 배차 및 경로 최적화 담당",
+      "technical_proficiency": "high",
+      "usage_frequency": "daily"
+    }
+  ],
   "data_model_hints": {
     "common_relationships": ["Vehicle hasMany MaintenanceRecords", "Driver hasMany Vehicles"],
     "common_enums": ["VehicleStatus", "MaintenanceType", "FuelType"]
@@ -190,7 +211,7 @@ allowedTools:
 
 | 에이전트 | 활용 방식 | 관련 스킬 |
 |----------|----------|----------|
-| requirements-analyst | `suggested_requirements`를 사용자에게 제안, 도메인 용어로 FR 작성 | `cloudscape-design` (UI 패턴 매핑) |
+| requirements-analyst | `suggested_requirements`를 사용자에게 제안, 도메인 용어로 FR 작성, `typical_user_roles`로 fallback 페르소나 추론 | `cloudscape-design` (UI 패턴 매핑) |
 | architect | `data_model_hints`로 타입 설계, `domain_workflows`로 라우트 구조 참고 | `cloudscape-design` (레이아웃 패턴) |
 | spec-writer | `kpis`로 대시보드 스펙, `terminology`로 UI 라벨 참고 | `cloudscape-design` (대시보드 패턴) |
 | code-generator-backend | `core_entities`로 시드 데이터 현실성 향상 | — |

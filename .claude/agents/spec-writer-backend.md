@@ -26,6 +26,7 @@ allowedTools:
 
 - `.pipeline/artifacts/v{N}/01-requirements/requirements.json`
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json`
+- `.pipeline/artifacts/v{N}/00-domain/domain-context.json` (있으면)
 
 피드백이 있으면:
 - `.pipeline/artifacts/v{N}/04-codegen/feedback-from-*-iter-{N}.json`

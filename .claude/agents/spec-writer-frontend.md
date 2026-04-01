@@ -30,6 +30,7 @@ allowedTools:
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json`
 - `.pipeline/artifacts/v{N}/03-specs/backend-spec.json` — BE 타입/API 참조
 - `.pipeline/artifacts/v{N}/03-specs/ai-spec.json` — AI API/타입 참조 (있을 때)
+- `.pipeline/artifacts/v{N}/00-domain/domain-context.json` (있으면)
 
 피드백이 있으면:
 - `.pipeline/artifacts/v{N}/04-codegen/feedback-from-*-iter-{N}.json`

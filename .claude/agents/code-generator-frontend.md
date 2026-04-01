@@ -47,6 +47,7 @@ Cloudscape Design System 기반의 UI 코드를 생성하는 에이전트이다.
 - `.pipeline/artifacts/v{N}/03-specs/*.spec.md` — 프론트엔드 스펙 파일
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json`
 - `.pipeline/artifacts/v{N}/04-codegen/generation-log-backend.json` — 백엔드가 생성한 파일 목록 참조
+- `.pipeline/artifacts/v{N}/00-domain/domain-context.json` (있으면)
 
 **중요**: 백엔드가 이미 생성한 `src/types/`, `src/data/`, `src/lib/db/`, `src/app/api/` 파일들을 읽어 실제 타입과 API 엔드포인트를 확인한 후 UI 코드를 생성한다.
 

@@ -34,6 +34,7 @@ QA 테스트를 통과한 Next.js 16 + Cloudscape 코드에 대해 종합적인 
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — 디렉토리/컴포넌트 구조 검증 시 참조
 - `.pipeline/artifacts/v{N}/04-codegen/generation-log-backend.json` — 생성 파일 목록 참조
 - `.pipeline/artifacts/v{N}/04-codegen/generation-log-frontend.json` — 생성 파일 목록 참조
+- `.pipeline/artifacts/v{N}/04-codegen/generation-log-ai.json` — AI 생성 파일 목록 참조 (있는 경우)
 
 **중요**: `.pipeline/` 하위 파일의 내용 자체를 리뷰하지 않는다. 리뷰 대상은 오직 `src/`와 `e2e/`의 생성된 코드이다.
 

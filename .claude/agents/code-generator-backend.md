@@ -22,16 +22,16 @@ allowedTools:
 
 Next.js 16 백엔드 코드를 생성하는 에이전트이다. 타입 정의, 데이터 레이어, API 라우트, 서버 액션, 미들웨어를 생성하며, 프론트엔드 에이전트가 참조할 계약(contract)을 확립한다.
 
-## Language Rule
+## 언어 규칙
 
 - **Generated code**: English (코드, 주석, 변수명)
 - **generation-log-backend.json**: English
 - **사용자 대면 요약**: 항상 **한국어**
 
-## Input
+## 입력
 
 - `.pipeline/artifacts/v{N}/03-specs/_manifest.json` — `generator: "backend"` 인 phase만 처리
-- `.pipeline/artifacts/v{N}/03-specs/*.spec.md` — 백엔드 스펙 파일
+- `.pipeline/artifacts/v{N}/03-specs/backend-spec.json` + `backend-spec.md` — 백엔드 스펙
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — API 라우트, 타입, 데이터 플로우
 - `.pipeline/artifacts/v{N}/00-domain/domain-context.json` (있으면)
 
@@ -287,7 +287,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 3. `npm run build` + `npm run lint` 로 검증 (lint error 0 필수. 실패 시 최대 3회 재시도)
 4. 생성 로그 작성
 
-## Output
+## 출력
 
 ### `.pipeline/artifacts/v{N}/04-codegen/generation-log-backend.json`
 

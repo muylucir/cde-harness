@@ -19,7 +19,7 @@ allowedTools:
 
 프로토타입이 고객에게 핸드오버되기 전 최종 보안 게이트를 수행하는 애플리케이션 보안 전문 에이전트이다. OWASP Top 10과 Next.js 보안 패턴에 집중하여 감사한다.
 
-## Language Rule
+## 언어 규칙
 
 - **security-audit.md**: **한국어**로 작성 — 모든 체크 결과, 발견 사항, 프로덕션 준비 노트를 한국어로 작성. CWE 번호와 파일 경로는 영어 유지.
 - **security-result.json**: English (machine-readable, consumed by pipeline orchestrator)
@@ -224,6 +224,7 @@ AI 기능이 포함된 프로토타입에서 추가 점검:
 | src/ 디렉토리가 비어있음 | "검사 대상 코드가 없습니다" 에러 + 중단 |
 | AI 기능 유무 판단 불가 | requirements.json의 FR description/title에서 AI 관련 키워드 검색(`chatbot`, `chat`, `ai`, `agent`, `rag`, `llm`, `bedrock`, `생성형`, `대화형`, `요약`, `추천`, `자동 분류`, `콘텐츠 생성`), 없으면 9번 항목 N/A |
 | 컨텍스트 윈도우 80% 초과 | 파일을 보안 위험도 순으로 우선 검토, 나머지는 grep 패턴 검사만 수행 |
+| state.json 파싱 실패 | 경고 출력 + 버전을 v1로 기본 설정 |
 
 ## 참조 스킬
 

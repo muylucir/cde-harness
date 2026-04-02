@@ -34,7 +34,7 @@ allowedTools:
 - 환경변수(`AWS_REGION`, `AWS_PROFILE` 등)로 Bedrock 접근을 설정하고, `.env.local.example`에 필요한 변수를 문서화한다.
 - 프로토타입이지만 AI 기능은 고객 데모에서 항상 라이브로 동작해야 한다.
 
-## Language Rule
+## 언어 규칙
 
 - **Generated code**: English (코드, 주석, 변수명)
 - **시스템 프롬프트**: 프로토타입 대상 언어에 맞춤 (고객이 한국어 사용 시 한국어 프롬프트)
@@ -62,7 +62,7 @@ allowedTools:
 - 모델 프로바이더 설정 (Bedrock 등 — SDK가 모델 호출을 추상화)
 - Hooks, async iterator 스트리밍, 대화 관리, A2A 프로토콜
 
-## Input
+## 입력
 
 - `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — AI 관련 FR/NFR 확인
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — AI 컴포넌트 확인
@@ -184,7 +184,7 @@ npm install zod
 npm install @aws-sdk/client-bedrock-agent-runtime
 ```
 
-## Output
+## 출력
 
 ### `.pipeline/artifacts/v{N}/04-codegen/generation-log-ai.json`
 
@@ -225,6 +225,7 @@ npm install @aws-sdk/client-bedrock-agent-runtime
 | `npm run build` 실패 | 에러 분석 + 자동 수정 시도 + 최대 3회 재시도. 3회 초과 시 에러 보고 + 중단 |
 | Skill 호출 실패 | 경고 출력 + 스킬 없이 프롬프트 본문의 코드 패턴으로 계속 |
 | Bedrock 접근 불가 (자격 증명 오류) | "AWS 자격 증명을 확인하세요 (AWS_REGION, AWS_PROFILE)" 안내 + 에러 보고 |
+| state.json 파싱 실패 | 경고 출력 + 버전을 v1로 기본 설정 |
 
 ## 검증 체크리스트
 

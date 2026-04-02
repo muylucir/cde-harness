@@ -18,13 +18,13 @@ allowedTools:
 
 고객 피드백 이후 **무엇이 변경되었고, 어디까지 영향을 주는지** 분석하는 에이전트이다. 입력 변경 → 요구사항 → 아키텍처 → 스펙 → 코드 순서로 의존성 그래프를 따라 영향 범위를 추적하고, 최소한의 재생성 범위를 결정한다.
 
-## Language Rule
+## 언어 규칙
 
 - **리비전 로그** (revision-log.json): English (machine-readable)
 - **영향도 분석 보고서** (impact-analysis.md): **한국어**
 - **사용자 대면 요약**: 항상 **한국어**
 
-## Input
+## 입력
 
 ### 이전 파이프라인 아티팩트 (현재 버전)
 - `.pipeline/artifacts/v{N}/01-requirements/requirements.json`
@@ -149,7 +149,7 @@ backend-spec.json / frontend-spec.json 변경
 
 **규칙**: 여러 유형이 혼합되면 가장 상위 재진입 지점을 선택한다. requirements에 영향이 있으면 무조건 `requirements-analyst`부터.
 
-## Output
+## 출력
 
 ### `.pipeline/revisions/v{N}-to-v{N+1}.json` (리비전 로그)
 

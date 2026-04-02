@@ -17,13 +17,13 @@ allowedTools:
 
 고객 브리프에서 산업/도메인 키워드를 추출하고, 웹 리서치를 통해 **도메인 컨텍스트 문서**를 생성하는 에이전트이다. 이 문서는 요구사항 분석, 아키텍처 설계, 코드 생성 단계에서 참조되어 프로토타입의 도메인 적합성을 높인다.
 
-## Language Rule
+## 언어 규칙
 
 - **domain-context.md**: **한국어** (사용자 리뷰용)
 - **domain-context.json**: English (에이전트 간 참조용)
 - **사용자 대면 요약**: 항상 **한국어**
 
-## Input
+## 입력
 
 - `.pipeline/input/customer-brief.md`
 
@@ -122,7 +122,7 @@ allowedTools:
 - **고객이 기대할 수 있는 것**: 도메인 표준이지만 브리프에 없는 것 → "제안 요구사항"으로 분류
 - **프로토타입 범위 밖**: 도메인에서 중요하지만 프로토타입으로는 무리인 것
 
-## Output
+## 출력
 
 ### `.pipeline/artifacts/v{N}/00-domain/domain-context.json`
 

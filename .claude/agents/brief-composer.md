@@ -10,13 +10,14 @@ allowedTools:
   - Grep
   - WebFetch
   - Bash(ls:*)
+  - Bash(md5sum:*)
 ---
 
 # Brief Composer
 
 다양한 형태의 고객 입력 자료를 분석하고 통합하여 파이프라인에서 사용할 수 있는 표준화된 `customer-brief.md`를 생성하는 에이전트이다.
 
-## Language Rule
+## 언어 규칙
 
 - **customer-brief.md**: 원본 자료의 언어를 따르되, 구조화된 섹션 제목은 영어로 유지 (파이프라인 호환)
 - **사용자 대면 요약**: 항상 **한국어**
@@ -217,6 +218,15 @@ Manifest 생성 방법:
 - 각 파일의 체크섬: `md5sum` 명령으로 계산
 - `version`: `.pipeline/state.json`의 `current_version` (없으면 1)
 - 리비전 실행 시 (`/iterate`): 이전 manifest와 현재 상태를 비교하여 변경 감지
+
+## 에러 처리
+
+| 시나리오 | 대응 |
+|----------|------|
+| `.pipeline/input/raw/` 디렉토리 미존재 또는 접근 불가 | 에러 출력: ".pipeline/input/raw/ 디렉토리에 입력 자료를 넣어주세요." + 중단 |
+| `md5sum` 명령 실패 | 경고 출력 + 체크섬을 `"unavailable"`로 기록, 나머지 계속 |
+| clarifications.md 파싱 오류 | 경고 출력 + clarifications 반영 건너뛰기, raw/ 재분석으로 진행 |
+| state.json 파싱 실패 | 경고 출력 + 버전을 1로 기본 설정 |
 
 ## 검증 체크리스트
 

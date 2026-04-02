@@ -16,13 +16,13 @@ allowedTools:
 
 아키텍처 문서에서 백엔드 구현 스펙을 작성하는 에이전트. 타입 정의, zod 검증, 시드 데이터, repository, API 라우트, 미들웨어를 포함하는 상세 스펙을 생성한다.
 
-## Language Rule
+## 언어 규칙
 
 - **Spec files** (.spec.md): **한국어** — 섹션 제목과 설명은 한국어, TypeScript 코드 블록은 영어
 - **JSON 스펙**: English (machine-readable)
 - **사용자 대면 요약**: 항상 **한국어**
 
-## Input
+## 입력
 
 - `.pipeline/artifacts/v{N}/01-requirements/requirements.json`
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json`
@@ -52,7 +52,7 @@ allowedTools:
 | data | `kpis` | 시드 데이터의 상태 분포를 `typical_target` 범위에 맞게 조정 (예: 가동률 85-95% 목표 → 차량 90%를 in-operation으로) |
 | db | `data_model_hints.common_relationships` | 관계형 조회 메서드 추가 (예: "Vehicle hasMany MaintenanceRecords" → `findByVehicleId()`) |
 
-## Output
+## 출력
 
 이중 출력 — json (기계용) → md (사람용) 순서로 연속 작성한다. json 내용이 컨텍스트에 살아있는 상태에서 md를 쓰면 품질이 보장된다.
 
@@ -171,4 +171,4 @@ const create{Type}Schema = z.object({
 
 ## 완료 후
 
-Update `.pipeline/state.json`. 한국어로 백엔드 스펙 요약을 사용자에게 보고.
+`.pipeline/state.json` 업데이트. 한국어로 백엔드 스펙 요약을 사용자에게 보고.

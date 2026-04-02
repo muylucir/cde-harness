@@ -27,7 +27,7 @@ allowedTools:
 3. 스펙에 모델 ID, 리전, 환경변수를 명시한다.
 4. **"direct-llm-call" 패턴을 선택하지 마라.** 가장 단순한 경우에도 `Agent (도구 없이)` 패턴을 사용한다.
 
-## Language Rule
+## 언어 규칙
 
 - **Spec files** (.spec.md): **한국어** — 섹션 제목과 설명은 한국어, 코드 블록과 프롬프트 예시는 영어
 - **JSON 스펙**: English (machine-readable)
@@ -83,7 +83,7 @@ const agent = new Agent({ model, systemPrompt, tools })
 - Vended Tools 사용 여부: `bash`, `fileEditor`, `httpRequest`, `notebook` (필요 시)
 - MCP 서버/클라이언트 연동 스펙 (필요 시)
 
-## Input
+## 입력
 
 - `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — AI 관련 FR/NFR
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — AI 컴포넌트
@@ -98,7 +98,7 @@ const agent = new Agent({ model, systemPrompt, tools })
 5. **ai-agent** — Strands Agent 구성 (`new Agent({ systemPrompt, tools })`)
 6. **ai-api** — 채팅/에이전트 API 라우트 (SSE 스트리밍)
 
-## Output
+## 출력
 
 이중 출력 — json (기계용) → md (사람용) 순서로 연속 작성.
 
@@ -253,7 +253,7 @@ const agent = new Agent({ model, systemPrompt, tools })
 
 ## 완료 후
 
-Update `.pipeline/state.json`. 한국어로 AI 스펙 요약을 사용자에게 보고:
+`.pipeline/state.json` 업데이트. 한국어로 AI 스펙 요약을 사용자에게 보고:
 - 선택된 에이전트 패턴과 근거
 - 정의된 도구 목록
 - RAG 사용 여부

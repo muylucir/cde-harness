@@ -18,13 +18,13 @@ allowedTools:
 
 마지막 spec-writer이므로 전체 요약(`specs-summary.md`)과 매니페스트(`_manifest.json`)도 생성한다.
 
-## Language Rule
+## 언어 규칙
 
 - **Spec files** (.spec.md): **한국어** — 섹션 제목과 설명은 한국어, TypeScript/Cloudscape 코드 블록은 영어
 - **_manifest.json**: English (machine-readable)
 - **사용자 대면 요약**: 항상 **한국어**
 
-## Input
+## 입력
 
 - `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — FR, NFR과 함께 **`personas[]`**, **`user_stories[]`** 도 참조한다
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — `metadata.primary_persona` 참조
@@ -56,7 +56,7 @@ allowedTools:
 | 목데이터 예시 | `terminology` | 컬럼 헤더와 라벨에 도메인 용어 사용. 약어는 풀네임 병기 (예: "MTBF (평균고장간격)") |
 | 동작 명세 | `domain_workflows` | 상세 페이지의 상태 전환을 워크플로우 `steps[]` 순서에 맞춰 기술 |
 
-## Output
+## 출력
 
 이중 출력 — json (기계용) → md (사람용) 순서로 연속 작성.
 
@@ -175,7 +175,7 @@ architecture.json의 `metadata.primary_persona.technical_proficiency`에 따라:
 }
 ```
 
-## Manifest (_manifest.json)
+## 매니페스트 (_manifest.json)
 
 backend-spec.json + ai-spec.json(있으면) + frontend-spec.json을 읽고 집계한다.
 
@@ -267,7 +267,7 @@ AI 기능이 없으면 `ai_specs: 0`, `has_ai: false`로 설정하고, generatio
 
 ## 완료 후
 
-Update `.pipeline/state.json`. 한국어로 전체 스펙 요약을 사용자에게 보고:
+`.pipeline/state.json` 업데이트. 한국어로 전체 스펙 요약을 사용자에게 보고:
 - 백엔드/AI/프론트엔드 스펙 수
 - FR 커버리지 현황
 - 미커버 요구사항 (있으면)

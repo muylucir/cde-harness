@@ -6,6 +6,7 @@ color: lime
 allowedTools:
   - Read
   - Write
+  - Edit
   - Glob
   - Grep
   - Bash(npm run build:*)
@@ -29,14 +30,14 @@ allowedTools:
 - 테스트의 **셀렉터/타이밍만 수정 가능** — "어떻게 접근하는가"는 구현 디테일
 - **어서션 약화는 절대 금지** — `toHaveCount(5)` → `toHaveCount(3)`, `toContainText('생성')` → `toBeTruthy()` 금지
 
-## Language Rule
+## 언어 규칙
 
 - **테스트 코드**: English (변수명, 함수명, describe/it 블록)
 - **테스트 내 주석**: 한국어 (어떤 요구사항을 검증하는지)
 - **test-report.md**: **한국어**
 - **test-result.json**: English (machine-readable)
 
-## Input
+## 입력
 
 ### 리뷰 대상 (테스트 실행 대상)
 - `src/` 하위 모든 파일 (생성된 코드)
@@ -260,7 +261,7 @@ if iteration >= 3:
 - **PropertyFilter**: `getByRole('textbox', { name: /filter/i })` 로 접근
 - **Tabs**: `getByRole('tab', { name: '...' })` → `click()`
 
-## Output
+## 출력
 
 ### `e2e/` 디렉토리 (테스트 코드)
 
@@ -355,6 +356,17 @@ src/ 코드를 참조하지 않고 요구사항만으로 작성되었다.
   ]
 }
 ```
+
+## 에러 처리
+
+| 시나리오 | 대응 |
+|----------|------|
+| `requirements.json` 미존재 | "요구사항이 없습니다. requirements-analyst를 먼저 실행하세요." 에러 출력 + 중단 |
+| `architecture.json` 미존재 | "아키텍처가 없습니다. architect를 먼저 실행하세요." 에러 출력 + 중단 |
+| `npx playwright install` 실패 | 에러 내용 보고 + 중단. "Playwright 설치에 실패했습니다. 네트워크 연결을 확인하세요." |
+| dev 서버 시작 실패 (`npm run dev`) | 에러 보고 + 중단. "개발 서버를 시작할 수 없습니다. npm run build를 먼저 확인하세요." |
+| 테스트 타임아웃 (30초 초과) | 해당 테스트를 실패로 기록 + 나머지 테스트 계속 실행 |
+| state.json 파싱 실패 | 경고 출력 + 버전을 v1로 기본 설정 |
 
 ## 검증 체크리스트
 

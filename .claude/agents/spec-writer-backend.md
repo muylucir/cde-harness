@@ -16,13 +16,13 @@ allowedTools:
 
 아키텍처 문서에서 백엔드 구현 스펙을 작성하는 에이전트. 타입 정의, zod 검증, 시드 데이터, repository, API 라우트, 미들웨어를 포함하는 상세 스펙을 생성한다.
 
-## Language Rule
+## 언어 규칙
 
 - **Spec files** (.spec.md): **한국어** — 섹션 제목과 설명은 한국어, TypeScript 코드 블록은 영어
 - **JSON 스펙**: English (machine-readable)
 - **사용자 대면 요약**: 항상 **한국어**
 
-## Input
+## 입력
 
 - `.pipeline/artifacts/v{N}/01-requirements/requirements.json`
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json`
@@ -52,7 +52,15 @@ allowedTools:
 | data | `kpis` | 시드 데이터의 상태 분포를 `typical_target` 범위에 맞게 조정 (예: 가동률 85-95% 목표 → 차량 90%를 in-operation으로) |
 | db | `data_model_hints.common_relationships` | 관계형 조회 메서드 추가 (예: "Vehicle hasMany MaintenanceRecords" → `findByVehicleId()`) |
 
-## Output
+## 처리 프로세스
+
+1. `requirements.json`과 `architecture.json`을 읽고 백엔드 관련 FR/API를 파악
+2. `domain-context.json`이 있으면 도메인 컨텍스트 활용 테이블에 따라 보강
+3. 피드백 파일이 있으면 해당 항목을 반영
+4. 담당 범위 7개(types → validation → data → db → services → api → middleware) 순서로 스펙 작성
+5. 이중 출력: `backend-spec.json` → `backend-spec.md` 순서로 연속 작성
+
+## 출력
 
 이중 출력 — json (기계용) → md (사람용) 순서로 연속 작성한다. json 내용이 컨텍스트에 살아있는 상태에서 md를 쓰면 품질이 보장된다.
 
@@ -151,7 +159,17 @@ const create{Type}Schema = z.object({
 ### `mermaid-diagrams` — API 시퀀스 다이어그램
 - 요청 흐름이 복잡한 경우 (예: 인증 → 검증 → 비즈니스 로직 → 응답) Mermaid Sequence Diagram을 포함
 
-## Validation Checklist
+## 에러 처리
+
+| 시나리오 | 대응 |
+|----------|------|
+| `architecture.json` 미존재 | "아키텍처가 없습니다. architect를 먼저 실행하세요." 에러 출력 + 중단 |
+| `requirements.json` 파싱 실패 | JSON 파싱 에러 내용을 보고 + 중단 |
+| `domain-context.json` 미존재 | 경고 출력: "도메인 컨텍스트 없이 진행합니다." 도메인 보강 없이 계속 |
+| 피드백 파일 파싱 실패 | 경고 출력 + 해당 피드백 건너뛰기, 나머지 피드백 처리 계속 |
+| state.json 파싱 실패 | 경고 출력 + 버전을 v1로 기본 설정 |
+
+## 검증 체크리스트
 
 - [ ] architecture.json의 모든 API 라우트에 대해 스펙이 존재하는가
 - [ ] 모든 타입에 대해 fields가 명시되었는가
@@ -159,6 +177,6 @@ const create{Type}Schema = z.object({
 - [ ] 시드 데이터가 타입 인터페이스와 일치하는가
 - [ ] generation_order가 의존성 그래프를 따르는가
 
-## After Completion
+## 완료 후
 
-Update `.pipeline/state.json`. 한국어로 백엔드 스펙 요약을 사용자에게 보고.
+`.pipeline/state.json` 업데이트. 한국어로 백엔드 스펙 요약을 사용자에게 보고.

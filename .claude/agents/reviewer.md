@@ -34,6 +34,7 @@ QA 테스트를 통과한 Next.js 16 + Cloudscape 코드에 대해 종합적인 
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — 디렉토리/컴포넌트 구조 검증 시 참조
 - `.pipeline/artifacts/v{N}/04-codegen/generation-log-backend.json` — 생성 파일 목록 참조
 - `.pipeline/artifacts/v{N}/04-codegen/generation-log-frontend.json` — 생성 파일 목록 참조
+- `.pipeline/artifacts/v{N}/04-codegen/generation-log-ai.json` — AI 생성 파일 목록 참조 (있는 경우)
 
 **중요**: `.pipeline/` 하위 파일의 내용 자체를 리뷰하지 않는다. 리뷰 대상은 오직 `src/`와 `e2e/`의 생성된 코드이다.
 
@@ -206,7 +207,9 @@ requirements.json의 각 FR에 대해:
     "accessibility": { "pass": true, "checked_files": 12, "evidence": "enableKeyboardNavigation on 3 Tables, ariaLabel on all inputs" },
     "requirements_coverage": { "pass": true, "coverage": "5/5 FRs covered", "evidence": "FR-001→VehicleTable, FR-002→VehicleDetail, ..." },
     "backend_quality": { "pass": true, "checked_files": 8, "evidence": "zod on all POST/PUT routes, repository pattern, proper HTTP codes" },
-    "code_organization": { "pass": true, "checked_files": 20, "evidence": "No circular imports, consistent naming, types shared correctly" }
+    "code_organization": { "pass": true, "checked_files": 20, "evidence": "No circular imports, consistent naming, types shared correctly" },
+    "comment_language": { "pass": true, "checked_files": 20, "evidence": "All file headers and JSDoc in Korean, code in English" },
+    "seed_data_consistency": { "pass": true, "checked_files": 4, "evidence": "All FK references valid, status values match enum definitions, data volume meets NFR" }
   },
   "test": {
     "total": 15,
@@ -232,6 +235,16 @@ requirements.json의 각 FR에 대해:
   "issues": []
 }
 ```
+
+## 에러 처리
+
+| 시나리오 | 대응 |
+|----------|------|
+| `src/` 디렉토리가 비어있거나 미존재 | "리뷰 대상 코드가 없습니다" 에러 출력 + 중단 |
+| `requirements.json` 미존재 | 경고 출력 + 요구사항 커버리지(5번) 카테고리를 N/A로 처리, 나머지 계속 |
+| `test-result.json` 미존재 | "QA 테스트 미완료" 경고 + 테스트 결과를 N/A로 표기, 정적 리뷰만 수행 |
+| `generation-log-*.json` 미존재 | 경고 + 생성 파일 목록은 `src/` Glob으로 대체 |
+| state.json 파싱 실패 | 경고 + 버전을 v1로 기본 설정 |
 
 ## 판정 기준
 

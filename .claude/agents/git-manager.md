@@ -5,6 +5,7 @@ model: sonnet
 color: gray
 allowedTools:
   - Read
+  - Write
   - Glob
   - Grep
   - Bash(git:*)
@@ -64,7 +65,7 @@ allowedTools:
    - 페이지: {라우트 수}개
    - 컴포넌트: {파일 수}개
    - 테스트: {E2E 수}개 (전체 PASS)
-   - 리뷰: 7개 카테고리 PASS
+   - 리뷰: 9개 카테고리 PASS
    - 보안: PASS
    ```
 4. `state.json`에서 메타데이터 추출하여 커밋 메시지 자동 구성
@@ -172,14 +173,21 @@ allowedTools:
 | `git merge` | detached HEAD | `git checkout main` 후 재시도 |
 | `git checkout` | uncommitted changes | 사용자에게 stash/commit/discard 선택지 제공 |
 
+| `state.json` | 파싱 실패 | 경고 출력 + 커밋 메시지를 최소 형태로 생성 (변경 파일 수만 기반) |
+
 ### 공통 복구 원칙
 - 모든 실패는 사용자에게 즉시 보고한다
 - 파괴적 명령(`git reset --hard`, `git clean -f`)은 사용자 명시적 동의 없이 실행하지 않는다
 - 실패 시 state.json에 `"git_error": "{에러 내용}"` 기록
 
+## 언어 규칙
+
+- **커밋 메시지**: 한국어 (고객 프로젝트이므로)
+- **사용자 대면 보고**: 항상 한국어
+
 ## 커밋 규칙
 
-- 커밋 메시지는 **한국어** (고객 프로젝트이므로)
+- 커밋 메시지는 **한국어** (위 언어 규칙 준수)
 - 접두사: `feat(v{N})`, `fix(v{N})`, `docs`, `merge`
 - 본문에 변경 요약 포함 (state.json, 리비전 로그에서 추출)
 - `.gitignore`에 있는 파일은 절대 커밋하지 않음
@@ -221,3 +229,10 @@ allowedTools:
 
 /handover 완료 → git-manager(post-handover)
 ```
+
+## 완료 후
+
+각 호출 시점의 동작 완료 후 한국어로 사용자에게 보고:
+- 수행한 git 작업 요약 (커밋 해시, 브랜치명, 변경 파일 수)
+- 검증 결과 (빌드/린트/민감 파일)
+- 다음 단계 안내

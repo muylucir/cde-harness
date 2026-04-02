@@ -18,13 +18,13 @@ allowedTools:
 
 마지막 spec-writer이므로 전체 요약(`specs-summary.md`)과 매니페스트(`_manifest.json`)도 생성한다.
 
-## Language Rule
+## 언어 규칙
 
 - **Spec files** (.spec.md): **한국어** — 섹션 제목과 설명은 한국어, TypeScript/Cloudscape 코드 블록은 영어
 - **_manifest.json**: English (machine-readable)
 - **사용자 대면 요약**: 항상 **한국어**
 
-## Input
+## 입력
 
 - `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — FR, NFR과 함께 **`personas[]`**, **`user_stories[]`** 도 참조한다
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — `metadata.primary_persona` 참조
@@ -56,7 +56,15 @@ allowedTools:
 | 목데이터 예시 | `terminology` | 컬럼 헤더와 라벨에 도메인 용어 사용. 약어는 풀네임 병기 (예: "MTBF (평균고장간격)") |
 | 동작 명세 | `domain_workflows` | 상세 페이지의 상태 전환을 워크플로우 `steps[]` 순서에 맞춰 기술 |
 
-## Output
+## 처리 프로세스
+
+1. `requirements.json`, `architecture.json`, `backend-spec.json`을 읽고 프론트엔드 관련 FR/컴포넌트를 파악
+2. `ai-spec.json`이 있으면 AI 채팅 UI 스펙 포함 (`has_ai: true`)
+3. `domain-context.json`이 있으면 도메인 컨텍스트 활용 테이블에 따라 보강
+4. 담당 범위 6개(hooks → contexts → layout → shared → feature → page) 순서로 스펙 작성
+5. 이중 출력: `frontend-spec.json` → `frontend-spec.md` → `specs-summary.md` → `_manifest.json` 순서로 작성
+
+## 출력
 
 이중 출력 — json (기계용) → md (사람용) 순서로 연속 작성.
 
@@ -175,7 +183,7 @@ architecture.json의 `metadata.primary_persona.technical_proficiency`에 따라:
 }
 ```
 
-## Manifest (_manifest.json)
+## 매니페스트 (_manifest.json)
 
 backend-spec.json + ai-spec.json(있으면) + frontend-spec.json을 읽고 집계한다.
 
@@ -234,7 +242,7 @@ AI 기능이 없으면 `ai_specs: 0`, `has_ai: false`로 설정하고, generatio
 - 복합 컴포넌트의 내부 구조를 ASCII로 시각화 (예: Dashboard 페이지의 위젯 배치)
 - 한국어/영어 혼용 정렬: 우측 테두리 금지, 최대 폭 60자
 
-## Cloudscape Rules to Enforce in Specs
+## 스펙에 적용할 Cloudscape 규칙
 
 1. Import from individual paths: `@cloudscape-design/components/{kebab-name}`
 2. All events use `({ detail }) => ...` destructuring pattern
@@ -245,7 +253,17 @@ AI 기능이 없으면 `ai_specs: 0`, `has_ai: false`로 설정하고, generatio
 7. `StatusIndicator` for status display
 8. `enableKeyboardNavigation` on Table and Cards
 
-## Validation Checklist
+## 에러 처리
+
+| 시나리오 | 대응 |
+|----------|------|
+| `architecture.json` 미존재 | "아키텍처가 없습니다. architect를 먼저 실행하세요." 에러 출력 + 중단 |
+| `backend-spec.json` 미존재 | "백엔드 스펙이 없습니다. spec-writer-backend를 먼저 실행하세요." 에러 출력 + 중단 |
+| `ai-spec.json` 미존재 | 정상 처리: `has_ai: false`로 설정, AI 관련 phase를 generation_order에서 제외 |
+| Skill 호출 실패 | 경고 출력 + 스킬 없이 프롬프트 본문의 기본 패턴으로 계속 |
+| state.json 파싱 실패 | 경고 출력 + 버전을 v1로 기본 설정 |
+
+## 검증 체크리스트
 
 - [ ] architecture.json의 모든 프론트엔드 컴포넌트에 대해 스펙이 존재하는가
 - [ ] 모든 Cloudscape import가 개별 경로를 사용하는가
@@ -255,9 +273,9 @@ AI 기능이 없으면 `ai_specs: 0`, `has_ai: false`로 설정하고, generatio
 - [ ] `_manifest.json`의 requirements_coverage에 모든 FR이 포함되었는가
 - [ ] specs-summary.md가 BE + AI + FE를 모두 요약하는가
 
-## After Completion
+## 완료 후
 
-Update `.pipeline/state.json`. 한국어로 전체 스펙 요약을 사용자에게 보고:
+`.pipeline/state.json` 업데이트. 한국어로 전체 스펙 요약을 사용자에게 보고:
 - 백엔드/AI/프론트엔드 스펙 수
 - FR 커버리지 현황
 - 미커버 요구사항 (있으면)

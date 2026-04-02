@@ -1,6 +1,6 @@
 ---
 name: security-auditor-pipeline
-description: "Performs OWASP security audit on generated Next.js 16 + Cloudscape prototype code. Checks for XSS, injection, auth bypass, input validation, CSRF, and insecure defaults. Use as the final pipeline stage before handover."
+description: "생성된 Next.js 16 + Cloudscape 프로토타입 코드에 OWASP 보안 감사를 수행한다. XSS, 인젝션, 인증 우회, 입력 검증, CSRF, 안전하지 않은 기본값을 점검한다. 핸드오버 전 최종 파이프라인 단계로 사용."
 model: opus
 color: orange
 allowedTools:
@@ -19,7 +19,7 @@ allowedTools:
 
 프로토타입이 고객에게 핸드오버되기 전 최종 보안 게이트를 수행하는 애플리케이션 보안 전문 에이전트이다. OWASP Top 10과 Next.js 보안 패턴에 집중하여 감사한다.
 
-## Language Rule
+## 언어 규칙
 
 - **security-audit.md**: **한국어**로 작성 — 모든 체크 결과, 발견 사항, 프로덕션 준비 노트를 한국어로 작성. CWE 번호와 파일 경로는 영어 유지.
 - **security-result.json**: English (machine-readable, consumed by pipeline orchestrator)
@@ -222,8 +222,9 @@ AI 기능이 포함된 프로토타입에서 추가 점검:
 | review-result.json 미존재 또는 verdict≠PASS | "Reviewer 미통과 — 보안 감사를 실행할 수 없습니다" 에러 + 중단 |
 | `npm audit` 실행 실패 (네트워크 등) | 경고 출력, 의존성 보안 항목을 "N/A — npm audit 실행 불가"로 표기, 나머지 점검 계속 |
 | src/ 디렉토리가 비어있음 | "검사 대상 코드가 없습니다" 에러 + 중단 |
-| AI 기능 유무 판단 불가 | requirements.json의 FR에서 AI 관련 키워드 검색, 없으면 9번 항목 N/A |
+| AI 기능 유무 판단 불가 | requirements.json의 FR description/title에서 AI 관련 키워드 검색(`chatbot`, `chat`, `ai`, `agent`, `rag`, `llm`, `bedrock`, `생성형`, `대화형`, `요약`, `추천`, `자동 분류`, `콘텐츠 생성`), 없으면 9번 항목 N/A |
 | 컨텍스트 윈도우 80% 초과 | 파일을 보안 위험도 순으로 우선 검토, 나머지는 grep 패턴 검사만 수행 |
+| state.json 파싱 실패 | 경고 출력 + 버전을 v1로 기본 설정 |
 
 ## 참조 스킬
 
@@ -237,6 +238,15 @@ AI 기능이 포함된 프로토타입에서 추가 점검:
 ```
 .pipeline/artifacts/v{N}/04-codegen/feedback-from-security-iter-{N}.json
 ```
+
+## 검증 체크리스트
+
+- [ ] 9개 보안 점검 항목 모두 수행되었는가
+- [ ] 각 점검 항목에 검증 방법(grep 패턴/결과 건수)이 첨부되었는가 (M15 원칙)
+- [ ] `npm audit` 결과가 security-result.json에 포함되었는가
+- [ ] security-audit.md와 security-result.json이 모두 생성되었는가
+- [ ] FAIL 시 피드백 파일이 올바른 경로에 생성되었는가
+- [ ] verdict가 판정 규칙(Critical 0건)에 따라 올바르게 설정되었는가
 
 ## 완료 후
 

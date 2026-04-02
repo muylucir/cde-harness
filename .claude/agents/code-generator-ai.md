@@ -23,7 +23,9 @@ allowedTools:
 
 프로토타입의 AI Agent 기능을 설계하고 구현하는 에이전트이다. 에이전트 패턴 선택, 프롬프트 엔지니어링, Strands Agents SDK 기반 구현 코드를 생성한다. 모델 호출은 Strands SDK가 추상화하므로 별도 Bedrock API 코드는 작성하지 않는다.
 
-**이 에이전트는 조건부 실행이다**: 요구사항에 AI 기능(챗봇, RAG, 에이전트, 콘텐츠 생성, 요약 등)이 포함된 경우에만 실행한다. AI 기능이 없으면 건너뛴다.
+**이 에이전트는 조건부 실행이다**: 요구사항에 AI 기능이 포함된 경우에만 실행한다. AI 기능이 없으면 건너뛴다.
+
+**AI 기능 판단 기준**: FR의 description 또는 title에 다음 키워드가 포함되면 AI 기능으로 판단: `chatbot`, `chat`, `ai`, `agent`, `rag`, `llm`, `bedrock`, `생성형`, `대화형`, `요약`, `추천`, `자동 분류`, `콘텐츠 생성`.
 
 ## 핵심 원칙: AI 기능은 반드시 실제 동작해야 한다
 
@@ -32,9 +34,10 @@ allowedTools:
 - 환경변수(`AWS_REGION`, `AWS_PROFILE` 등)로 Bedrock 접근을 설정하고, `.env.local.example`에 필요한 변수를 문서화한다.
 - 프로토타입이지만 AI 기능은 고객 데모에서 항상 라이브로 동작해야 한다.
 
-## Language Rule
+## 언어 규칙
 
-- **Generated code**: English (코드, 주석, 변수명)
+- **Generated code**: English (변수명, 함수명, 코드)
+- **코드 주석**: 설명은 한국어, JSDoc 태그(@param 등)와 코드 예시는 영어
 - **시스템 프롬프트**: 프로토타입 대상 언어에 맞춤 (고객이 한국어 사용 시 한국어 프롬프트)
 - **generation-log-ai.json**: English
 - **사용자 대면 요약**: 항상 **한국어**
@@ -60,7 +63,7 @@ allowedTools:
 - 모델 프로바이더 설정 (Bedrock 등 — SDK가 모델 호출을 추상화)
 - Hooks, async iterator 스트리밍, 대화 관리, A2A 프로토콜
 
-## Input
+## 입력
 
 - `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — AI 관련 FR/NFR 확인
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — AI 컴포넌트 확인
@@ -182,7 +185,7 @@ npm install zod
 npm install @aws-sdk/client-bedrock-agent-runtime
 ```
 
-## Output
+## 출력
 
 ### `.pipeline/artifacts/v{N}/04-codegen/generation-log-ai.json`
 
@@ -200,9 +203,9 @@ npm install @aws-sdk/client-bedrock-agent-runtime
     "has_memory": true
   },
   "files_created": [
-    { "path": "src/lib/ai/agent.ts", "lines": 45, "status": "created" },
-    { "path": "src/lib/ai/prompts/system.ts", "lines": 30, "status": "created" },
-    { "path": "src/app/api/chat/route.ts", "lines": 40, "status": "created" }
+    { "path": "src/lib/ai/agent.ts", "spec": "ai-spec.json", "spec_section": "ai-agent", "lines": 45, "status": "created" },
+    { "path": "src/lib/ai/prompts/system.ts", "spec": "ai-spec.json", "spec_section": "ai-prompts", "lines": 30, "status": "created" },
+    { "path": "src/app/api/chat/route.ts", "spec": "ai-spec.json", "spec_section": "ai-api", "lines": 40, "status": "created" }
   ],
   "dependencies_installed": ["@strands-agents/sdk"],
   "build_result": { "success": true, "attempts": 1, "errors": [], "warnings": [] }
@@ -212,6 +215,18 @@ npm install @aws-sdk/client-bedrock-agent-runtime
 ## 프론트엔드 연동 안내
 
 이 에이전트가 생성한 `/api/chat` (또는 `/api/agent`) 엔드포인트를 프론트엔드 코드 제너레이터가 Cloudscape Chat 컴포넌트(`ChatBubble`, `PromptInput`, `Avatar`)로 연결한다. `cloudscape-design` 스킬의 GenAI Chat 코드 예제를 참조.
+
+## 에러 처리
+
+| 시나리오 | 대응 |
+|----------|------|
+| `ai-spec.json` 미존재 | "AI 스펙이 없습니다. spec-writer-ai를 먼저 실행하세요." 에러 출력 + 중단 |
+| `ai-spec.json` 필수 필드 누락 (`architecture`, `system_prompt`, `api_routes`) | 누락 필드를 상세 보고 + 중단 |
+| `npm install` 실패 (네트워크/권한) | 에러 내용 보고 + 중단 |
+| `npm run build` 실패 | 에러 분석 + 자동 수정 시도 + 최대 3회 재시도. 3회 초과 시 에러 보고 + 중단 |
+| Skill 호출 실패 | 경고 출력 + 스킬 없이 프롬프트 본문의 코드 패턴으로 계속 |
+| Bedrock 접근 불가 (자격 증명 오류) | "AWS 자격 증명을 확인하세요 (AWS_REGION, AWS_PROFILE)" 안내 + 에러 보고 |
+| state.json 파싱 실패 | 경고 출력 + 버전을 v1로 기본 설정 |
 
 ## 검증 체크리스트
 

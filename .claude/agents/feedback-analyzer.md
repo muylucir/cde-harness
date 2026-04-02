@@ -18,13 +18,13 @@ allowedTools:
 
 고객 피드백 이후 **무엇이 변경되었고, 어디까지 영향을 주는지** 분석하는 에이전트이다. 입력 변경 → 요구사항 → 아키텍처 → 스펙 → 코드 순서로 의존성 그래프를 따라 영향 범위를 추적하고, 최소한의 재생성 범위를 결정한다.
 
-## Language Rule
+## 언어 규칙
 
 - **리비전 로그** (revision-log.json): English (machine-readable)
 - **영향도 분석 보고서** (impact-analysis.md): **한국어**
 - **사용자 대면 요약**: 항상 **한국어**
 
-## Input
+## 입력
 
 ### 이전 파이프라인 아티팩트 (현재 버전)
 - `.pipeline/artifacts/v{N}/01-requirements/requirements.json`
@@ -113,13 +113,14 @@ FR-006 신규
 
 ### 5단계: 스펙 영향 추적
 
-`_manifest.json`의 `specs` 배열에서 영향받는 스펙 파일을 찾는다:
+`_manifest.json`의 `requirements_coverage`에서 영향받는 FR에 매핑된 컴포넌트를 찾고, `generation_order`에서 해당 컴포넌트의 generator와 스펙 파일을 역추적한다:
 
 ```
-VehicleCreateForm 변경
-    → _manifest.json에서 path가 "src/app/vehicles/create/page.tsx"인 스펙 찾기
-    → vehicle-create-form.spec.md 수정 필요
-    → dependencies도 확인 (types, validation 변경 필요 시)
+FR-003 변경됨
+    → _manifest.json의 requirements_coverage에서 FR-003 매핑 찾기
+    → { "backend": ["resource-api"], "frontend": ["VehicleCreateForm"] }
+    → generation_order에서 generator별 스펙 파일 확인
+    → backend-spec.json (backend 관련), frontend-spec.json (frontend 관련) 수정 필요
 ```
 
 ### 6단계: 코드 영향 추적
@@ -127,8 +128,8 @@ VehicleCreateForm 변경
 generation-log에서 영향받는 코드 파일을 찾는다:
 
 ```
-vehicle-create-form.spec.md 변경
-    → generation-log에서 spec이 "vehicle-create-form.spec.md"인 파일 찾기
+backend-spec.json / frontend-spec.json 변경
+    → generation-log에서 해당 spec_section에 속하는 파일 찾기
     → src/app/vehicles/create/page.tsx 재생성 필요
 ```
 
@@ -148,7 +149,7 @@ vehicle-create-form.spec.md 변경
 
 **규칙**: 여러 유형이 혼합되면 가장 상위 재진입 지점을 선택한다. requirements에 영향이 있으면 무조건 `requirements-analyst`부터.
 
-## Output
+## 출력
 
 ### `.pipeline/revisions/v{N}-to-v{N+1}.json` (리비전 로그)
 
@@ -243,6 +244,16 @@ vehicle-create-form.spec.md 변경
 - 기존 코드 중 변경 불필요한 14개 파일은 보존됨
 - FR-003 수정은 타입 변경(imageUrl 추가)을 동반하므로 백엔드도 일부 재생성
 ```
+
+## 에러 처리
+
+| 시나리오 | 대응 |
+|----------|------|
+| `manifest.json` 미존재 | "이전 파이프라인 이력이 없습니다. `/pipeline`을 먼저 실행하세요." 에러 출력 + 중단 |
+| `.pipeline/input/raw/` 디렉토리가 비어있음 | "새 입력 파일이 없습니다" 보고 + 중단 |
+| `requirements.json` 파싱 실패 | 에러 내용 보고 + 중단 |
+| `architecture.json`에 `requirements_mapped` 필드 없음 | 경고 + 4단계(아키텍처 영향 추적) 건너뛰기, 코드 레벨에서 직접 추적 |
+| state.json 파싱 실패 | 경고 + 버전을 현재 `.pipeline/artifacts/` 하위 디렉토리에서 추론 |
 
 ## 검증 체크리스트
 

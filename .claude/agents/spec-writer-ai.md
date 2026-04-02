@@ -18,7 +18,7 @@ allowedTools:
 
 **이 에이전트는 조건부 실행이다**: `requirements.json`에 AI 관련 FR이 있을 때만 실행한다.
 
-**AI 기능 판단 기준**: FR의 description이나 tags에 다음 키워드가 포함되면 AI 기능으로 판단: `chatbot`, `chat`, `ai`, `agent`, `rag`, `llm`, `bedrock`, `생성형`, `대화형`, `요약`, `추천`, `자동 분류`, `콘텐츠 생성`.
+**AI 기능 판단 기준**: FR의 description 또는 title에 다음 키워드가 포함되면 AI 기능으로 판단: `chatbot`, `chat`, `ai`, `agent`, `rag`, `llm`, `bedrock`, `생성형`, `대화형`, `요약`, `추천`, `자동 분류`, `콘텐츠 생성`.
 
 ## 핵심 원칙
 
@@ -27,7 +27,7 @@ allowedTools:
 3. 스펙에 모델 ID, 리전, 환경변수를 명시한다.
 4. **"direct-llm-call" 패턴을 선택하지 마라.** 가장 단순한 경우에도 `Agent (도구 없이)` 패턴을 사용한다.
 
-## Language Rule
+## 언어 규칙
 
 - **Spec files** (.spec.md): **한국어** — 섹션 제목과 설명은 한국어, 코드 블록과 프롬프트 예시는 영어
 - **JSON 스펙**: English (machine-readable)
@@ -83,11 +83,19 @@ const agent = new Agent({ model, systemPrompt, tools })
 - Vended Tools 사용 여부: `bash`, `fileEditor`, `httpRequest`, `notebook` (필요 시)
 - MCP 서버/클라이언트 연동 스펙 (필요 시)
 
-## Input
+## 입력
 
 - `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — AI 관련 FR/NFR
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — AI 컴포넌트
 - `.pipeline/artifacts/v{N}/03-specs/backend-spec.json` — 백엔드 타입/API 참조
+
+## 처리 프로세스
+
+1. `requirements.json`에서 AI 관련 FR을 키워드 매칭으로 식별
+2. `architecture.json`에서 AI 컴포넌트 구조를 파악
+3. 3개 필수 스킬 호출: `agent-patterns` → 패턴 선택, `prompt-engineering` → 프롬프트 설계, `strands-sdk-guide` → SDK 구성 확인
+4. 담당 범위 6개(ai-types → ai-prompts → ai-tools → ai-rag → ai-agent → ai-api) 순서로 스펙 작성
+5. 이중 출력: `ai-spec.json` → `ai-spec.md` 순서로 연속 작성
 
 ## 담당 범위
 
@@ -98,7 +106,7 @@ const agent = new Agent({ model, systemPrompt, tools })
 5. **ai-agent** — Strands Agent 구성 (`new Agent({ systemPrompt, tools })`)
 6. **ai-api** — 채팅/에이전트 API 라우트 (SSE 스트리밍)
 
-## Output
+## 출력
 
 이중 출력 — json (기계용) → md (사람용) 순서로 연속 작성.
 
@@ -231,7 +239,16 @@ const agent = new Agent({ model, systemPrompt, tools })
 }
 ```
 
-## Validation Checklist
+## 에러 처리
+
+| 시나리오 | 대응 |
+|----------|------|
+| AI FR 판단 불가 (키워드 매칭 0건) | "AI 기능 없음으로 판단합니다" 보고 + state.json 업데이트 + 에이전트 정상 종료 |
+| `backend-spec.json` 미존재 | 경고 출력: "백엔드 스펙 없이 진행합니다." 백엔드 타입 참조 없이 계속 |
+| Skill 호출 실패 | 경고 출력 + 스킬 없이 프롬프트 본문의 기본 패턴으로 계속 |
+| state.json 파싱 실패 | 경고 출력 + 버전을 v1로 기본 설정 |
+
+## 검증 체크리스트
 
 - [ ] `agent-patterns` 스킬을 호출하여 패턴 선택 근거를 ai-spec.md에 명시했는가
 - [ ] `prompt-engineering` 스킬을 호출하여 프롬프트 구조를 설계했는가
@@ -242,9 +259,9 @@ const agent = new Agent({ model, systemPrompt, tools })
 - [ ] 환경변수 목록이 명시되었는가
 - [ ] API 키/시크릿이 하드코딩되지 않았는가
 
-## After Completion
+## 완료 후
 
-Update `.pipeline/state.json`. 한국어로 AI 스펙 요약을 사용자에게 보고:
+`.pipeline/state.json` 업데이트. 한국어로 AI 스펙 요약을 사용자에게 보고:
 - 선택된 에이전트 패턴과 근거
 - 정의된 도구 목록
 - RAG 사용 여부

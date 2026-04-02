@@ -20,7 +20,31 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
 - Raw input: `.pipeline/input/raw/` (회의록, 다이어그램, 요구사항 문서 등)
 - Brief: `.pipeline/input/customer-brief.md` (직접 작성 또는 `/brief`로 자동 생성)
 - Artifacts: `.pipeline/artifacts/v{N}/` (versioned per run)
-- State: `.pipeline/state.json`
+- State: `.pipeline/state.json` (스키마는 아래 참조)
+### state.json 스키마
+```json
+{
+  "current_version": 1,
+  "pipeline_status": "running | completed | failed",
+  "stages": {
+    "<agent-name>": {
+      "status": "pending | running | completed | failed",
+      "started_at": "<ISO-8601>",
+      "completed_at": "<ISO-8601>"
+    }
+  },
+  "versions": {
+    "1": {
+      "trigger": "/pipeline | /iterate",
+      "started_at": "<ISO-8601>",
+      "completed_at": "<ISO-8601>",
+      "reentry_point": null,
+      "stages": {}
+    }
+  }
+}
+```
+
 - Brief generation: `/brief` → raw 입력에서 brief 자동 생성
 - Trigger: `/pipeline` → full run
 - Iterate: `/iterate` → 고객 피드백 분석 + 영향 범위 추적 + 최소 재생성

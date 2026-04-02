@@ -6,6 +6,7 @@ color: lime
 allowedTools:
   - Read
   - Write
+  - Edit
   - Glob
   - Grep
   - Bash(npm run build:*)

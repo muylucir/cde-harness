@@ -151,7 +151,17 @@ const create{Type}Schema = z.object({
 ### `mermaid-diagrams` — API 시퀀스 다이어그램
 - 요청 흐름이 복잡한 경우 (예: 인증 → 검증 → 비즈니스 로직 → 응답) Mermaid Sequence Diagram을 포함
 
-## Validation Checklist
+## 에러 처리
+
+| 시나리오 | 대응 |
+|----------|------|
+| `architecture.json` 미존재 | "아키텍처가 없습니다. architect를 먼저 실행하세요." 에러 출력 + 중단 |
+| `requirements.json` 파싱 실패 | JSON 파싱 에러 내용을 보고 + 중단 |
+| `domain-context.json` 미존재 | 경고 출력: "도메인 컨텍스트 없이 진행합니다." 도메인 보강 없이 계속 |
+| 피드백 파일 파싱 실패 | 경고 출력 + 해당 피드백 건너뛰기, 나머지 피드백 처리 계속 |
+| state.json 파싱 실패 | 경고 출력 + 버전을 v1로 기본 설정 |
+
+## 검증 체크리스트
 
 - [ ] architecture.json의 모든 API 라우트에 대해 스펙이 존재하는가
 - [ ] 모든 타입에 대해 fields가 명시되었는가
@@ -159,6 +169,6 @@ const create{Type}Schema = z.object({
 - [ ] 시드 데이터가 타입 인터페이스와 일치하는가
 - [ ] generation_order가 의존성 그래프를 따르는가
 
-## After Completion
+## 완료 후
 
 Update `.pipeline/state.json`. 한국어로 백엔드 스펙 요약을 사용자에게 보고.

@@ -9,6 +9,7 @@ allowedTools:
   - Edit
   - Glob
   - Grep
+  - WebFetch
   - Bash(npm run build:*)
   - Bash(npm run lint:*)
   - Bash(npm install:*)
@@ -176,13 +177,14 @@ export const createResourceSchema = z.object({
 export type CreateResourceRequest = z.infer<typeof createResourceSchema>;
 ```
 
-### AWS 서비스 연동 (필요 시)
+### AWS 서비스 연동 (필요 시, AI/Bedrock 제외)
 
 ```typescript
-// src/lib/services/bedrock.ts — Bedrock Runtime 호출
 // src/lib/services/dynamodb.ts — DynamoDB 접근
+// src/lib/services/s3.ts — S3 접근
 // 프로토타입에서는 환경 변수(AWS_REGION 등)로 설정
 // .env.local에 AWS credentials 저장, 절대 하드코딩 금지
+// 참고: Bedrock/AI 관련 서비스는 code-generator-ai가 @strands-agents/sdk로 구현
 ```
 
 ### 미들웨어 — 보안 헤더
@@ -293,8 +295,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 {
   "metadata": { "created": "<ISO-8601>", "version": 1, "generator": "backend" },
   "files_created": [
-    { "path": "src/types/vehicle.ts", "spec": "vehicle-types.spec.md", "lines": 45, "status": "created" },
-    { "path": "src/app/api/vehicles/route.ts", "spec": "vehicles-api.spec.md", "lines": 30, "status": "created" }
+    { "path": "src/types/vehicle.ts", "spec": "backend-spec.json", "spec_section": "types", "lines": 45, "status": "created" },
+    { "path": "src/app/api/vehicles/route.ts", "spec": "backend-spec.json", "spec_section": "api", "lines": 30, "status": "created" }
   ],
   "dependencies_installed": ["zod"],
   "build_result": {
@@ -313,6 +315,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 - 피드백 파일에서 백엔드 관련 이슈만 수정
 - 수정 후 반드시 `npm run build` + `npm run lint` 재검증
 - 프론트엔드 코드는 절대 수정하지 않음
+
+## 에러 처리
+
+| 시나리오 | 대응 |
+|----------|------|
+| `_manifest.json` 미존재 | "스펙 매니페스트가 없습니다. spec-writer를 먼저 실행하세요." 에러 출력 + 중단 |
+| `node_modules/` 미존재 + `npm install` 실패 | 에러 내용 보고 + 중단 |
+| `npm run build` 실패 | 에러 분석 + 자동 수정 시도 + 최대 3회 재시도. 3회 초과 시 에러 보고 + 중단 |
+| `npm run lint` 에러 | 자동 수정 시도 + 최대 3회 재시도. 3회 초과 시 에러 보고 + 중단 |
+| 스펙에 정의된 타입과 zod 스키마 불일치 | 경고 출력 + 타입 정의를 우선으로 zod 스키마를 조정 |
+| state.json 파싱 실패 | 경고 출력 + 버전을 v1로 기본 설정 |
 
 ## 검증 체크리스트
 

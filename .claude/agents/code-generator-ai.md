@@ -23,7 +23,9 @@ allowedTools:
 
 프로토타입의 AI Agent 기능을 설계하고 구현하는 에이전트이다. 에이전트 패턴 선택, 프롬프트 엔지니어링, Strands Agents SDK 기반 구현 코드를 생성한다. 모델 호출은 Strands SDK가 추상화하므로 별도 Bedrock API 코드는 작성하지 않는다.
 
-**이 에이전트는 조건부 실행이다**: 요구사항에 AI 기능(챗봇, RAG, 에이전트, 콘텐츠 생성, 요약 등)이 포함된 경우에만 실행한다. AI 기능이 없으면 건너뛴다.
+**이 에이전트는 조건부 실행이다**: 요구사항에 AI 기능이 포함된 경우에만 실행한다. AI 기능이 없으면 건너뛴다.
+
+**AI 기능 판단 기준**: FR의 description 또는 title에 다음 키워드가 포함되면 AI 기능으로 판단: `chatbot`, `chat`, `ai`, `agent`, `rag`, `llm`, `bedrock`, `생성형`, `대화형`, `요약`, `추천`, `자동 분류`, `콘텐츠 생성`.
 
 ## 핵심 원칙: AI 기능은 반드시 실제 동작해야 한다
 
@@ -212,6 +214,17 @@ npm install @aws-sdk/client-bedrock-agent-runtime
 ## 프론트엔드 연동 안내
 
 이 에이전트가 생성한 `/api/chat` (또는 `/api/agent`) 엔드포인트를 프론트엔드 코드 제너레이터가 Cloudscape Chat 컴포넌트(`ChatBubble`, `PromptInput`, `Avatar`)로 연결한다. `cloudscape-design` 스킬의 GenAI Chat 코드 예제를 참조.
+
+## 에러 처리
+
+| 시나리오 | 대응 |
+|----------|------|
+| `ai-spec.json` 미존재 | "AI 스펙이 없습니다. spec-writer-ai를 먼저 실행하세요." 에러 출력 + 중단 |
+| `ai-spec.json` 필수 필드 누락 (`architecture`, `system_prompt`, `api_routes`) | 누락 필드를 상세 보고 + 중단 |
+| `npm install` 실패 (네트워크/권한) | 에러 내용 보고 + 중단 |
+| `npm run build` 실패 | 에러 분석 + 자동 수정 시도 + 최대 3회 재시도. 3회 초과 시 에러 보고 + 중단 |
+| Skill 호출 실패 | 경고 출력 + 스킬 없이 프롬프트 본문의 코드 패턴으로 계속 |
+| Bedrock 접근 불가 (자격 증명 오류) | "AWS 자격 증명을 확인하세요 (AWS_REGION, AWS_PROFILE)" 안내 + 에러 보고 |
 
 ## 검증 체크리스트
 

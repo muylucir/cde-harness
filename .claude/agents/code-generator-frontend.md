@@ -16,6 +16,7 @@ allowedTools:
   - Bash(ls:*)
   - Bash(node:*)
   - Skill
+  - WebFetch
 ---
 
 # Code Generator — Frontend
@@ -71,7 +72,7 @@ Cloudscape Design System 기반의 UI 코드를 생성하는 에이전트이다.
 - 컴포넌트 API가 불확실하면 WebFetch: `https://cloudscape.design/components/{name}/index.html.json`
 - 73개 패턴 중 해당하는 것이 있으면 WebFetch: `https://cloudscape.design/patterns/{path}/index.html.md`
 
-## Code Generation Rules
+## 코드 생성 규칙
 
 ### Imports
 ```typescript
@@ -252,7 +253,7 @@ export function useApiMutation<TBody, TResponse>(
 }
 ```
 
-## Generation Process
+## 생성 프로세스
 
 1. `_manifest.json`에서 `generator: "frontend"` phase 읽기
 2. 백엔드가 생성한 파일 확인 (types, API 엔드포인트)
@@ -311,13 +312,24 @@ src/
 }
 ```
 
-## Feedback Handling
+## 피드백 처리
 
 - 피드백 파일에서 프론트엔드 관련 이슈만 수정
 - 백엔드 코드(API 라우트, types, db 레이어)는 절대 수정하지 않음
 - 수정 후 반드시 `npm run build` + `npm run lint` 재검증
 
-## Validation
+## 에러 처리
+
+| 시나리오 | 대응 |
+|----------|------|
+| `_manifest.json` 미존재 | "스펙 매니페스트가 없습니다. spec-writer를 먼저 실행하세요." 에러 출력 + 중단 |
+| 백엔드 생성 파일 미존재 (`src/types/` 비어있음) | "백엔드 코드가 없습니다. code-generator-backend를 먼저 실행하세요." 에러 출력 + 중단 |
+| `npm run build` 실패 | 에러 분석 + 자동 수정 시도 + 최대 3회 재시도. 3회 초과 시 에러 보고 + 중단 |
+| `npm run lint` 에러 | 자동 수정 시도 + 최대 3회 재시도. 3회 초과 시 에러 보고 + 중단 |
+| Skill 호출 실패 | 경고 출력 + 스킬 없이 프롬프트 본문의 코드 패턴으로 계속 |
+| state.json 파싱 실패 | 경고 출력 + 버전을 v1로 기본 설정 |
+
+## 검증 체크리스트
 
 Before completing, verify:
 - [ ] `npm run build` succeeds with zero errors
@@ -327,6 +339,6 @@ Before completing, verify:
 - [ ] Every Cloudscape component import is from individual path
 - [ ] `"use client"` only on components that need it
 
-## After Completion
+## 완료 후
 
 Update `.pipeline/state.json`. Report the build result and file count to the user.

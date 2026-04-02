@@ -18,7 +18,7 @@ allowedTools:
 
 **이 에이전트는 조건부 실행이다**: `requirements.json`에 AI 관련 FR이 있을 때만 실행한다.
 
-**AI 기능 판단 기준**: FR의 description이나 tags에 다음 키워드가 포함되면 AI 기능으로 판단: `chatbot`, `chat`, `ai`, `agent`, `rag`, `llm`, `bedrock`, `생성형`, `대화형`, `요약`, `추천`, `자동 분류`, `콘텐츠 생성`.
+**AI 기능 판단 기준**: FR의 description 또는 title에 다음 키워드가 포함되면 AI 기능으로 판단: `chatbot`, `chat`, `ai`, `agent`, `rag`, `llm`, `bedrock`, `생성형`, `대화형`, `요약`, `추천`, `자동 분류`, `콘텐츠 생성`.
 
 ## 핵심 원칙
 
@@ -231,7 +231,16 @@ const agent = new Agent({ model, systemPrompt, tools })
 }
 ```
 
-## Validation Checklist
+## 에러 처리
+
+| 시나리오 | 대응 |
+|----------|------|
+| AI FR 판단 불가 (키워드 매칭 0건) | "AI 기능 없음으로 판단합니다" 보고 + state.json 업데이트 + 에이전트 정상 종료 |
+| `backend-spec.json` 미존재 | 경고 출력: "백엔드 스펙 없이 진행합니다." 백엔드 타입 참조 없이 계속 |
+| Skill 호출 실패 | 경고 출력 + 스킬 없이 프롬프트 본문의 기본 패턴으로 계속 |
+| state.json 파싱 실패 | 경고 출력 + 버전을 v1로 기본 설정 |
+
+## 검증 체크리스트
 
 - [ ] `agent-patterns` 스킬을 호출하여 패턴 선택 근거를 ai-spec.md에 명시했는가
 - [ ] `prompt-engineering` 스킬을 호출하여 프롬프트 구조를 설계했는가
@@ -242,7 +251,7 @@ const agent = new Agent({ model, systemPrompt, tools })
 - [ ] 환경변수 목록이 명시되었는가
 - [ ] API 키/시크릿이 하드코딩되지 않았는가
 
-## After Completion
+## 완료 후
 
 Update `.pipeline/state.json`. 한국어로 AI 스펙 요약을 사용자에게 보고:
 - 선택된 에이전트 패턴과 근거

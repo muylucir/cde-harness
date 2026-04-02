@@ -5,6 +5,7 @@ model: sonnet
 color: gray
 allowedTools:
   - Read
+  - Write
   - Glob
   - Grep
   - Bash(git:*)

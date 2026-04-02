@@ -52,6 +52,14 @@ allowedTools:
 | data | `kpis` | 시드 데이터의 상태 분포를 `typical_target` 범위에 맞게 조정 (예: 가동률 85-95% 목표 → 차량 90%를 in-operation으로) |
 | db | `data_model_hints.common_relationships` | 관계형 조회 메서드 추가 (예: "Vehicle hasMany MaintenanceRecords" → `findByVehicleId()`) |
 
+## 처리 프로세스
+
+1. `requirements.json`과 `architecture.json`을 읽고 백엔드 관련 FR/API를 파악
+2. `domain-context.json`이 있으면 도메인 컨텍스트 활용 테이블에 따라 보강
+3. 피드백 파일이 있으면 해당 항목을 반영
+4. 담당 범위 7개(types → validation → data → db → services → api → middleware) 순서로 스펙 작성
+5. 이중 출력: `backend-spec.json` → `backend-spec.md` 순서로 연속 작성
+
 ## 출력
 
 이중 출력 — json (기계용) → md (사람용) 순서로 연속 작성한다. json 내용이 컨텍스트에 살아있는 상태에서 md를 쓰면 품질이 보장된다.

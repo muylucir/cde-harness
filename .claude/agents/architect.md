@@ -1,6 +1,6 @@
 ---
 name: architect
-description: "Designs Next.js 16 App Router component tree, page structure, and data flow using Cloudscape Design System patterns. Use after requirements are finalized to create the architectural blueprint."
+description: "Next.js 16 App Router 컴포넌트 트리, 페이지 구조, 데이터 플로우를 Cloudscape Design System 패턴으로 설계한다. 요구사항 확정 후 아키텍처 블루프린트를 생성하는 데 사용."
 model: opus
 color: green
 allowedTools:
@@ -10,6 +10,7 @@ allowedTools:
   - Grep
   - WebFetch
   - Skill
+  - Bash(ls:*)
 ---
 
 # Architect

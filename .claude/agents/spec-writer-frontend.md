@@ -56,6 +56,14 @@ allowedTools:
 | 목데이터 예시 | `terminology` | 컬럼 헤더와 라벨에 도메인 용어 사용. 약어는 풀네임 병기 (예: "MTBF (평균고장간격)") |
 | 동작 명세 | `domain_workflows` | 상세 페이지의 상태 전환을 워크플로우 `steps[]` 순서에 맞춰 기술 |
 
+## 처리 프로세스
+
+1. `requirements.json`, `architecture.json`, `backend-spec.json`을 읽고 프론트엔드 관련 FR/컴포넌트를 파악
+2. `ai-spec.json`이 있으면 AI 채팅 UI 스펙 포함 (`has_ai: true`)
+3. `domain-context.json`이 있으면 도메인 컨텍스트 활용 테이블에 따라 보강
+4. 담당 범위 6개(hooks → contexts → layout → shared → feature → page) 순서로 스펙 작성
+5. 이중 출력: `frontend-spec.json` → `frontend-spec.md` → `specs-summary.md` → `_manifest.json` 순서로 작성
+
 ## 출력
 
 이중 출력 — json (기계용) → md (사람용) 순서로 연속 작성.

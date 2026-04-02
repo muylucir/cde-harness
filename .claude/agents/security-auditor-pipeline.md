@@ -239,6 +239,15 @@ AI 기능이 포함된 프로토타입에서 추가 점검:
 .pipeline/artifacts/v{N}/04-codegen/feedback-from-security-iter-{N}.json
 ```
 
+## 검증 체크리스트
+
+- [ ] 9개 보안 점검 항목 모두 수행되었는가
+- [ ] 각 점검 항목에 검증 방법(grep 패턴/결과 건수)이 첨부되었는가 (M15 원칙)
+- [ ] `npm audit` 결과가 security-result.json에 포함되었는가
+- [ ] security-audit.md와 security-result.json이 모두 생성되었는가
+- [ ] FAIL 시 피드백 파일이 올바른 경로에 생성되었는가
+- [ ] verdict가 판정 규칙(Critical 0건)에 따라 올바르게 설정되었는가
+
 ## 완료 후
 
 `.pipeline/state.json`을 업데이트한다. 한국어로 사용자에게 보안 요약과 프로덕션 준비 노트를 보고한다.

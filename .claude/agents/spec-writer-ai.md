@@ -89,6 +89,14 @@ const agent = new Agent({ model, systemPrompt, tools })
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — AI 컴포넌트
 - `.pipeline/artifacts/v{N}/03-specs/backend-spec.json` — 백엔드 타입/API 참조
 
+## 처리 프로세스
+
+1. `requirements.json`에서 AI 관련 FR을 키워드 매칭으로 식별
+2. `architecture.json`에서 AI 컴포넌트 구조를 파악
+3. 3개 필수 스킬 호출: `agent-patterns` → 패턴 선택, `prompt-engineering` → 프롬프트 설계, `strands-sdk-guide` → SDK 구성 확인
+4. 담당 범위 6개(ai-types → ai-prompts → ai-tools → ai-rag → ai-agent → ai-api) 순서로 스펙 작성
+5. 이중 출력: `ai-spec.json` → `ai-spec.md` 순서로 연속 작성
+
 ## 담당 범위
 
 1. **ai-types** — AI 관련 타입 (Message, Tool, AgentResponse 등)

@@ -36,7 +36,8 @@ allowedTools:
 
 ## 언어 규칙
 
-- **Generated code**: English (코드, 주석, 변수명)
+- **Generated code**: English (변수명, 함수명, 코드)
+- **코드 주석**: 설명은 한국어, JSDoc 태그(@param 등)와 코드 예시는 영어
 - **시스템 프롬프트**: 프로토타입 대상 언어에 맞춤 (고객이 한국어 사용 시 한국어 프롬프트)
 - **generation-log-ai.json**: English
 - **사용자 대면 요약**: 항상 **한국어**
@@ -202,9 +203,9 @@ npm install @aws-sdk/client-bedrock-agent-runtime
     "has_memory": true
   },
   "files_created": [
-    { "path": "src/lib/ai/agent.ts", "lines": 45, "status": "created" },
-    { "path": "src/lib/ai/prompts/system.ts", "lines": 30, "status": "created" },
-    { "path": "src/app/api/chat/route.ts", "lines": 40, "status": "created" }
+    { "path": "src/lib/ai/agent.ts", "spec": "ai-spec.json", "spec_section": "ai-agent", "lines": 45, "status": "created" },
+    { "path": "src/lib/ai/prompts/system.ts", "spec": "ai-spec.json", "spec_section": "ai-prompts", "lines": 30, "status": "created" },
+    { "path": "src/app/api/chat/route.ts", "spec": "ai-spec.json", "spec_section": "ai-api", "lines": 40, "status": "created" }
   ],
   "dependencies_installed": ["@strands-agents/sdk"],
   "build_result": { "success": true, "attempts": 1, "errors": [], "warnings": [] }

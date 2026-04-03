@@ -35,7 +35,7 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
   },
   "versions": {
     "1": {
-      "trigger": "/pipeline | /iterate",
+      "trigger": "/pipeline | /iterate | /reconcile",
       "started_at": "<ISO-8601>",
       "completed_at": "<ISO-8601>",
       "reentry_point": null,
@@ -48,6 +48,9 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
 - Brief generation: `/brief` → raw 입력에서 brief 자동 생성
 - Trigger: `/pipeline` → full run
 - Iterate: `/iterate` → 고객 피드백 분석 + 영향 범위 추적 + 최소 재생성
+- Reconcile: `/reconcile` → ad-hoc 코드 변경 후 아티팩트 역동기화
+  - `/reconcile` — 문서 동기화만 (경량)
+  - `/reconcile --qa` — 문서 동기화 + QA/리뷰/보안 재실행
 - Resume: `/pipeline-from {stage-name}`
 - Status: `/pipeline-status`
 
@@ -64,6 +67,18 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
 
 *code-generator-ai는 요구사항에 AI 기능이 포함된 경우에만 실행*
 *[...]* = 리뷰+테스트+수정 이터레이션 (PASS까지 반복)*
+
+### Reconcile 흐름 (코드 → 아티팩트 역동기화)
+
+```
+/reconcile → reconcile-analyzer(analyze) → APPROVAL GATE
+    → git-manager(pre-reconcile) → reconcile/v{N+1} 브랜치
+    → reconcile-analyzer(sync): 생성로그 → 스펙 → 아키텍처 → (요구사항)
+    → reconcile-report.md 생성
+    → git-manager(post-reconcile)
+
+/reconcile --qa → 위 흐름 + [qa-engineer → reviewer → security-auditor-pipeline]
+```
 
 ## Language Convention
 - 파이프라인이 생성하는 **마크다운 문서** (.md): 한국어로 작성

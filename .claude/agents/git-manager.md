@@ -26,7 +26,9 @@ allowedTools:
 | post-pipeline | `state.json`, `src/`, `e2e/`, `.pipeline/artifacts/v{N}/` | git commit |
 | pre-iterate | `state.json` (current_version) | `iterate/v{N+1}` 브랜치 |
 | post-iterate | `state.json`, revision logs, 변경 파일 | git commit |
-| merge | `iterate/v{N}` 브랜치 | `--no-ff` 머지 커밋 |
+| pre-reconcile | `state.json` (current_version) | `reconcile/v{N+1}` 브랜치 |
+| post-reconcile | `state.json`, revision logs, 갱신된 아티팩트 | git commit (아티팩트만) |
+| merge | `iterate/v{N}` 또는 `reconcile/v{N}` 브랜치 | `--no-ff` 머지 커밋 |
 | post-handover | `docs/`, `README.md`, `.env.local.example` | git commit |
 
 ## 호출 시점과 동작
@@ -107,12 +109,63 @@ allowedTools:
    - "결과 확인 후 main에 머지하려면: `/git-merge`"
    - "결과 불만족 시: `git checkout main`"
 
-### 5. `merge` — 이터레이트 브랜치를 main에 머지
+### 5. `pre-reconcile` — 리콘사일 시작 전
 
-사용자 요청 시 호출.
+`/reconcile` Phase 2에서 호출. 브랜치를 생성한다.
 
 **동작:**
-1. 현재 브랜치 확인 (`iterate/v{N}`)
+1. 워킹 트리 클린 확인 (커밋되지 않은 변경이 있으면 에러)
+2. 현재 버전 번호 확인 (`state.json`의 `current_version`)
+3. 브랜치 생성:
+   ```bash
+   git checkout -b reconcile/v{N+1}
+   ```
+4. 사용자에게 보고: "reconcile/v{N+1} 브랜치를 생성했습니다"
+
+### 6. `post-reconcile` — 리콘사일 완료 후
+
+`/reconcile` 완료 시 호출. 갱신된 아티팩트를 reconcile 브랜치에 커밋한다.
+
+**주의**: `src/` 코드 변경은 이미 사용자가 ad-hoc으로 커밋한 상태이므로, **아티팩트만 커밋**한다.
+
+**동작:**
+1. `git add` — 갱신된 아티팩트 파일 추가:
+   - `.pipeline/state.json`
+   - `.pipeline/artifacts/v{N+1}/` (갱신된 아티팩트)
+   - `.pipeline/revisions/` (리비전 로그)
+2. `.gitignore` 규칙에 맞게 불필요한 파일 제외 확인
+3. 커밋 메시지 생성:
+   ```
+   reconcile(v{N+1}): ad-hoc 코드 변경 아티팩트 동기화
+
+   변경 분류: structural | refinement
+   모드: docs-only | docs-qa
+
+   갱신 아티팩트:
+   - 생성 로그 (04-codegen/)
+   - 스펙 (03-specs/)
+   - 아키텍처 (02-architecture/)
+   - 요구사항 (01-requirements/) ← structural 시만
+
+   코드 변경: 추가 {N}개, 수정 {N}개, 삭제 {N}개
+   ```
+4. 리비전 로그(`revisions/v{N}-to-v{N+1}.json`)에서 변경 요약 추출
+5. `--qa` 모드였으면 QA/리뷰/보안 결과도 커밋 메시지에 포함:
+   ```
+   QA: PASS (테스트 {N}개)
+   리뷰: PASS (9개 카테고리)
+   보안: PASS
+   ```
+6. 다음 단계 안내:
+   - "결과 확인 후 main에 머지하려면: '머지해줘'"
+   - "결과 불만족 시: `git checkout main`"
+
+### 7. `merge` — 이터레이트/리콘사일 브랜치를 main에 머지
+
+사용자 요청 시 호출. `iterate/v{N}` 또는 `reconcile/v{N}` 브랜치를 main에 머지한다.
+
+**동작:**
+1. 현재 브랜치 확인 (`iterate/v{N}` 또는 `reconcile/v{N}`)
 2. 사전 충돌 검사:
    ```bash
    git merge --no-commit --no-ff iterate/v{N}
@@ -140,7 +193,7 @@ allowedTools:
 5. `--no-ff`로 머지 커밋을 남겨 이력 추적 가능하게
 6. 머지 후 사용자에게 보고
 
-### 6. `post-handover` — 핸드오버 완료 후
+### 8. `post-handover` — 핸드오버 완료 후
 
 `/handover` 완료 시 호출. 핸드오버 문서를 커밋한다.
 
@@ -188,7 +241,7 @@ allowedTools:
 ## 커밋 규칙
 
 - 커밋 메시지는 **한국어** (위 언어 규칙 준수)
-- 접두사: `feat(v{N})`, `fix(v{N})`, `docs`, `merge`
+- 접두사: `feat(v{N})`, `fix(v{N})`, `reconcile(v{N})`, `docs`, `merge`
 - 본문에 변경 요약 포함 (state.json, 리비전 로그에서 추출)
 - `.gitignore`에 있는 파일은 절대 커밋하지 않음
 - `node_modules/`, `.next/` 등은 당연히 제외
@@ -224,6 +277,12 @@ allowedTools:
 이터레이션 실행 ...
     ↓
 /iterate 완료 → git-manager(post-iterate)
+
+/reconcile 시작 → git-manager(pre-reconcile)
+    ↓
+아티팩트 동기화 ...
+    ↓
+/reconcile 완료 → git-manager(post-reconcile)
 
 사용자 "머지해줘" → git-manager(merge)
 

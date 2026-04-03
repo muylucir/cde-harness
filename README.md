@@ -166,6 +166,8 @@ npm run dev
 | `/pipeline` | 전체 파이프라인 실행 (승인 게이트 포함) |
 | `/pipeline auto` | 승인 게이트 없이 전체 자동 실행 (CHECKPOINT는 유지) |
 | `/iterate` | 고객 피드백 분석 → input 갱신 → requirements부터 파이프라인 재실행 |
+| `/reconcile` | ad-hoc 코드 변경 후 파이프라인 아티팩트 역동기화 (문서만) |
+| `/reconcile --qa` | 아티팩트 역동기화 + QA/리뷰/보안 재실행 |
 | `/handover` | 최종 핸드오버 패키지 생성 (이터레이션 완료 후) |
 | `/pipeline-from {stage}` | 특정 단계부터 재개 |
 | `/pipeline-status` | 현재 진행 상태 + CHECKPOINT 결과 확인 |
@@ -236,30 +238,32 @@ domain-researcher → requirements-analyst → architect
 ```
 cde-harness/
 ├── .claude/
-│   ├── agents/                     # 서브에이전트 정의 (16개)
-│   │   ├── architect.md
-│   │   ├── brief-composer.md
-│   │   ├── code-generator-ai.md
-│   │   ├── code-generator-backend.md
-│   │   ├── code-generator-frontend.md
-│   │   ├── domain-researcher.md
-│   │   ├── feedback-analyzer.md
-│   │   ├── git-manager.md
-│   │   ├── handover-packager.md
-│   │   ├── qa-engineer.md
-│   │   ├── requirements-analyst.md
-│   │   ├── reviewer.md
-│   │   ├── security-auditor-pipeline.md
-│   │   ├── spec-writer-ai.md
-│   │   ├── spec-writer-backend.md
-│   │   └── spec-writer-frontend.md
-│   ├── commands/                   # 파이프라인 커맨드 (6개)
+│   ├── agents/                     # 서브에이전트 정의 (17개)
+│   │   ├── architect.md              # 아키텍처 설계
+│   │   ├── brief-composer.md          # 브리프 자동 생성
+│   │   ├── code-generator-ai.md       # AI 코드 생성 (조건부)
+│   │   ├── code-generator-backend.md  # 백엔드 코드 생성
+│   │   ├── code-generator-frontend.md # 프론트엔드 코드 생성
+│   │   ├── domain-researcher.md       # 도메인 리서치
+│   │   ├── feedback-analyzer.md       # 피드백 영향 분석 (/iterate)
+│   │   ├── git-manager.md             # Git 작업 전담
+│   │   ├── handover-packager.md       # 핸드오버 문서 생성
+│   │   ├── qa-engineer.md             # Playwright E2E 테스트
+│   │   ├── reconcile-analyzer.md      # 코드→아티팩트 역동기화 (/reconcile)
+│   │   ├── requirements-analyst.md    # 요구사항 분석
+│   │   ├── reviewer.md                # 9카테고리 품질 리뷰
+│   │   ├── security-auditor-pipeline.md # OWASP 보안 감사
+│   │   ├── spec-writer-ai.md          # AI 스펙 작성 (조건부)
+│   │   ├── spec-writer-backend.md     # 백엔드 스펙 작성
+│   │   └── spec-writer-frontend.md    # 프론트엔드 스펙 작성
+│   ├── commands/                   # 파이프라인 커맨드 (7개)
 │   │   ├── brief.md
 │   │   ├── handover.md
 │   │   ├── iterate.md
 │   │   ├── pipeline-from.md
 │   │   ├── pipeline-status.md
-│   │   └── pipeline.md
+│   │   ├── pipeline.md
+│   │   └── reconcile.md
 │   ├── skills/                     # 참조 스킬 (6개)
 │   │   ├── agent-patterns/
 │   │   ├── ascii-diagram/
@@ -381,9 +385,15 @@ cde-harness/
   - `docs/AI-AGENT.md` (AI 있을 때), `docs/PRODUCTION-CHECKLIST.md`
   - `docs/REVISION-HISTORY.md` (리비전 있을 때), `.env.local.example`
 
+### Reconcile Analyzer — `/reconcile`에서 호출
+- **입력**: `git diff` + 기존 아티팩트 + 현재 `src/` 코드
+- **하는 일**: 코드 변경 → 생성 로그 → 스펙 → 아키텍처 → 요구사항 역방향 영향 추적 + 아티팩트 갱신
+- **2가지 모드**: `analyze` (읽기 전용 분석) / `sync` (실제 아티팩트 갱신)
+
 ### Git Manager — 파이프라인 내부 자동 호출
 - `/pipeline` 시작/완료 시 워킹 트리 확인 + 자동 커밋
 - `/iterate` 시 브랜치 생성 (`iterate/v{N}`) + 완료 후 커밋
+- `/reconcile` 시 브랜치 생성 (`reconcile/v{N}`) + 완료 후 아티팩트만 커밋
 
 ---
 
@@ -429,6 +439,62 @@ Phase 5  requirements-analyst부터 파이프라인 전체 재실행
 | `.pipeline/input/manifest.json` | 입력 파일 체크섬 — 변경 감지용 |
 | `.pipeline/revisions/v{N}-to-v{N+1}.json` | 리비전 로그 — 변경 항목 + 영향 범위 |
 | `.pipeline/revisions/v{N}-to-v{N+1}-analysis.md` | 한국어 영향도 분석 보고서 |
+
+---
+
+## 아티팩트 역동기화 워크플로우 (`/reconcile`)
+
+데모 현장에서 바이브코딩이나 빠른 버그픽스로 `src/` 코드를 직접 수정한 후, 파이프라인 아티팩트(요구사항, 아키텍처, 스펙, 생성 로그)를 코드 현재 상태에 맞게 역동기화합니다.
+
+> **`/iterate`와의 차이**: `/iterate`는 고객 피드백(입력) → 코드 (top-down). `/reconcile`은 코드 변경 → 아티팩트 (bottom-up).
+
+### 사용법
+
+```bash
+# 바이브코딩으로 src/ 코드 수정 후...
+
+# 문서만 동기화 (경량, 빠름)
+/reconcile
+
+# 문서 동기화 + QA/리뷰/보안 재검증
+/reconcile --qa
+```
+
+### 실행 흐름
+
+```
+Phase 1  git diff로 코드 변경 감지 + 역방향 영향 분석 (읽기 전용)
+    │      ← APPROVAL GATE: 변경 목록 + 영향 아티팩트 확인 후 승인
+    ▼
+Phase 2  reconcile/v{N+1} 브랜치 생성
+    │      ← CHECKPOINT: 브랜치 확인
+    ▼
+Phase 3  아티팩트 역동기화 (코드 → 스펙 → 아키텍처 → 요구사항)
+    │      ← CHECKPOINT: 각 아티팩트 JSON 유효성 확인
+    ▼
+Phase 4  state.json 갱신 + reconcile-report.md 생성
+    │      ← CHECKPOINT: state.json + 리포트 확인
+    ▼
+Phase 5  완료 (docs-only) → git commit (아티팩트만)
+
+--qa 옵션 시 추가:
+Phase 6  QA(Playwright) → Review(9카테고리) → Security(OWASP)
+```
+
+### 변경 분류
+
+| 분류 | 기준 | 요구사항 갱신 |
+|------|------|-------------|
+| `structural` | 새 페이지, 새 API, 새 데이터 모델 추가 | 새 FR 추가 |
+| `refinement` | 버그 수정, UI 조정, 리팩토링 | 요구사항 변경 없음 |
+
+### 산출물
+
+| 파일 | 용도 |
+|------|------|
+| `.pipeline/revisions/v{N}-to-v{N+1}.json` | 코드 변경 + 아티팩트 영향 범위 (리비전 로그) |
+| `.pipeline/revisions/v{N}-to-v{N+1}-analysis.md` | 한국어 영향도 분석 보고서 |
+| `.pipeline/artifacts/v{N+1}/reconcile-report.md` | 동기화 결과 요약 리포트 |
 
 ---
 
@@ -499,7 +565,7 @@ https://cloudscape.design/patterns/{path}/index.html.md
 `/pipeline-status`로 현재 상태와 CHECKPOINT 결과를 확인하고, `/pipeline-from {중단된 단계}`로 재개하세요.
 
 ### 생성된 코드를 수동으로 수정해도 되나요?
-네. 수정 후 `/pipeline-from qa-engineer`를 실행하면 QA 테스트부터 다시 검증합니다.
+네. 수정 후 `/reconcile`을 실행하면 아티팩트가 자동으로 역동기화됩니다. `/reconcile --qa`로 QA/리뷰/보안까지 재검증할 수도 있습니다. 또는 `/pipeline-from qa-engineer`로 QA 테스트부터 다시 검증할 수도 있습니다.
 
 ### 다른 고객 프로토타입을 시작하려면?
 1. 기존 `src/` 하위 생성 코드를 삭제

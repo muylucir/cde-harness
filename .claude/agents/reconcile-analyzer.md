@@ -1,7 +1,7 @@
 ---
 name: reconcile-analyzer
 description: "src/ 코드의 ad-hoc 변경을 감지하고, 기존 파이프라인 아티팩트(요구사항/아키텍처/스펙/생성로그)와 비교하여 역방향 영향 범위를 분석한다. 변경된 코드에 맞게 아티팩트를 갱신. /reconcile 커맨드에서 호출."
-model: opus
+model: sonnet
 color: rose
 allowedTools:
   - Read

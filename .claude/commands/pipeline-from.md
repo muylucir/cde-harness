@@ -20,6 +20,8 @@ Valid stage names:
 - `code-generator-frontend`
 - `reviewer`
 - `security-auditor`
+- `aws-architect`
+- `aws-deployer`
 
 ## Process
 
@@ -42,6 +44,8 @@ Valid stage names:
      | code-generator-frontend | backend generation log + `03-specs/_manifest.json` + frontend spec files |
      | reviewer | Generated code in `src/` + `04-codegen/generation-log-backend.json` + `04-codegen/generation-log-frontend.json` |
      | security-auditor | `05-review/review-result.json` with PASS verdict |
+     | aws-architect | `02-architecture/architecture.json` + `src/types/` + `src/lib/db/` |
+     | aws-deployer | `08-aws-infra/aws-architecture.json` + `src/` |
    - If missing: report which artifacts are missing and suggest running from an earlier stage
 
 4. **Resume execution**: Run the target stage and all subsequent stages

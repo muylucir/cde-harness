@@ -1,7 +1,7 @@
 ---
 name: feedback-analyzer
 description: "고객 피드백 후 입력 변경을 감지하고, 기존 아티팩트(요구사항/아키텍처/스펙/코드)와 비교하여 영향 범위를 분석한다. 최소 재진입 지점과 변경이 필요한 파일 목록을 산출. /iterate 커맨드에서 호출."
-model: opus
+model: sonnet
 color: amber
 allowedTools:
   - Read

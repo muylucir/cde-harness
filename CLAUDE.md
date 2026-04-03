@@ -15,6 +15,9 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
 - `npm run format` — Prettier format all
 - `npm run type-check` — TypeScript check
 - `npm run test:e2e` — Playwright E2E tests
+- `cd infra && npx cdk deploy` — AWS 인프라 배포 (/awsarch 후)
+- `cd infra && npx cdk destroy` — AWS 인프라 제거
+- `cd infra && npx cdk diff` — 인프라 변경 미리보기
 
 ## Pipeline
 - Raw input: `.pipeline/input/raw/` (회의록, 다이어그램, 요구사항 문서 등)
@@ -35,7 +38,7 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
   },
   "versions": {
     "1": {
-      "trigger": "/pipeline | /iterate | /reconcile",
+      "trigger": "/pipeline | /iterate | /reconcile | /awsarch",
       "started_at": "<ISO-8601>",
       "completed_at": "<ISO-8601>",
       "reentry_point": null,
@@ -51,6 +54,10 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
 - Reconcile: `/reconcile` → ad-hoc 코드 변경 후 아티팩트 역동기화
   - `/reconcile` — 문서 동기화만 (경량)
   - `/reconcile --qa` — 문서 동기화 + QA/리뷰/보안 재실행
+- AWS Infra: `/awsarch` → mock 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cognito)로 전환
+  - `/awsarch` — 인프라 설계 + CDK 배포 + 데이터 마이그레이션
+  - `/awsarch --qa` — 위 + QA/리뷰/보안 재실행
+  - `/awsarch --plan` — 인프라 설계만 (배포 없음)
 - Resume: `/pipeline-from {stage-name}`
 - Status: `/pipeline-status`
 
@@ -62,6 +69,7 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
     → code-gen-backend → (code-gen-ai) → code-gen-frontend
     → [qa-engineer(Playwright) → fix]* → reviewer ← QA가 기능 검증, reviewer가 품질 리뷰
     → security-auditor-pipeline
+    (/awsarch) → aws-architect → aws-deployer  ← 별도 실행, mock→AWS 전환 시
     (/handover) → handover-packager  ← 별도 실행, 최종 핸드오버 시만
 ```
 
@@ -78,6 +86,17 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
     → git-manager(post-reconcile)
 
 /reconcile --qa → 위 흐름 + [qa-engineer → reviewer → security-auditor-pipeline]
+```
+
+### AWS Infra 흐름 (mock → real AWS 전환)
+
+```
+/awsarch → aws-architect(설계) → APPROVAL GATE (비용 확인)
+    → aws-deployer(CDK 생성 + 배포 + 데이터 레이어 교체 + 시드 마이그레이션)
+    → 완료
+
+/awsarch --qa → 위 흐름 + [qa-engineer → reviewer → security-auditor-pipeline]
+/awsarch --plan → aws-architect(설계)만 실행 (배포 없음)
 ```
 
 ## Language Convention
@@ -98,6 +117,7 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
 9. **AI 기능은 반드시 `@strands-agents/sdk`로 구현한다.** `@aws-sdk/client-bedrock-runtime` 직접 호출은 금지. 단순 Q&A/요약이라도 `new Agent()` 패턴을 사용한다.
 10. Run `npm run build` after every code generation cycle
 11. Run `npm run test:e2e` after code generation to verify actual behavior
+12. `DATA_SOURCE` 환경변수로 듀얼 모드 지원: `memory`(기본, InMemoryStore) | `dynamodb`(DynamoDBStore). Repository 패턴의 `createStore()` 팩토리로 추상화. `/awsarch` 실행 후 활성화.
 
 ## Coding Convention
 
@@ -119,6 +139,7 @@ ESLint가 강제할 수 없는 규칙 (에이전트가 준수):
 ## Directory Convention (파이프라인이 생성)
 
 `src/`는 하네스에 포함되지 않으며, 파이프라인 실행 시 코드 제너레이터가 생성한다.
+`infra/`는 `/awsarch` 실행 시 aws-deployer가 생성한다.
 
 ```
 src/
@@ -139,6 +160,20 @@ src/
 ├── data/               # 시드 데이터 (BE가 생성)
 ├── hooks/              # API 호출 훅 (FE가 생성)
 └── middleware.ts        # 보안 헤더 (BE가 생성)
+```
+
+```
+infra/                    # CDK TypeScript (aws-deployer가 생성, /awsarch 시)
+├── bin/
+│   └── app.ts            # CDK app entry point
+├── lib/
+│   ├── main-stack.ts     # Main CloudFormation stack
+│   └── constructs/       # Reusable CDK constructs
+├── scripts/
+│   └── seed-data.ts      # DynamoDB seed migration
+├── package.json          # CDK dependencies (별도)
+├── tsconfig.json
+└── cdk.json
 ```
 
 ## Cloudscape Design System

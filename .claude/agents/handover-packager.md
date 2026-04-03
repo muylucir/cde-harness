@@ -1,7 +1,7 @@
 ---
 name: handover-packager
 description: "프로토타입 코드를 고객 개발팀에 인수인계하기 위한 핸드오버 패키지를 생성한다. 아키텍처 문서, API 문서, 환경 설정 가이드, 프로덕션 전환 체크리스트, 권장 다음 단계를 포함. 보안 점검 통과 후 최종 단계로 실행."
-model: opus
+model: sonnet
 color: emerald
 allowedTools:
   - Read
@@ -64,12 +64,19 @@ npm run dev
 - `.pipeline/artifacts/v{latest}/05-review/review-report.md` + `test-report.md`
 - `.pipeline/artifacts/v{latest}/06-security/security-audit.md` + `security-result.json`
 
+### AWS 인프라 아티팩트 (조건부 — /awsarch 실행된 경우)
+- `.pipeline/artifacts/v{latest}/08-aws-infra/aws-architecture.json` + `aws-architecture.md`
+- `.pipeline/artifacts/v{latest}/08-aws-infra/deploy-log.json`
+- `.pipeline/artifacts/v{latest}/08-aws-infra/migration-log.json`
+- `infra/` 디렉토리 (CDK 프로젝트)
+
 ### 이전 버전 아티팩트 (리비전 이력 문서화용)
 - `.pipeline/artifacts/v{1..latest-1}/01-requirements/requirements.json` — 각 버전의 요구사항 변화 추적
 - `.pipeline/artifacts/v{1..latest-1}/02-architecture/architecture.json` — 아키텍처 변화 추적
 
 ### 현재 코드 + 설정
 - 생성된 코드 전체: `src/`
+- CDK 인프라 코드: `infra/` (있으면)
 - `package.json`
 - `.pipeline/input/customer-brief.md` — 최종 통합 브리프
 
@@ -219,7 +226,62 @@ http://localhost:3000 에서 확인
 {/api/chat 또는 /api/agent 사용 방법}
 ```
 
-### 5. `PRODUCTION-CHECKLIST.md` — 프로덕션 전환 체크리스트
+### 5. `AWS-INFRASTRUCTURE.md` — AWS 인프라 가이드 (조건부 — /awsarch 실행된 경우만)
+
+`08-aws-infra/` 아티팩트가 존재하고 `deploy-log.json`에 `"success": true`인 경우에만 생성.
+
+```markdown
+# AWS 인프라 가이드
+
+## 배포된 리소스
+| 서비스 | 리소스명 | 리전 | 용도 |
+|--------|---------|------|------|
+| DynamoDB | {table-name} | {region} | {entity} 데이터 |
+{deploy-log.json.cdk_deploy.resources_created에서 추출}
+
+## 듀얼 모드
+
+이 프로토타입은 두 가지 모드로 실행할 수 있습니다:
+
+| 모드 | 명령어 | 용도 |
+|------|--------|------|
+| Mock (인메모리) | `DATA_SOURCE=memory npm run dev` | 오프라인/로컬 개발 |
+| AWS (DynamoDB) | `DATA_SOURCE=dynamodb npm run dev` | 실제 AWS 연동 테스트 |
+
+기본값은 `memory`이며, `.env.local`에 `DATA_SOURCE=dynamodb`가 설정되어 있으면 DynamoDB 모드로 동작합니다.
+
+## CDK 관리
+
+\`\`\`bash
+# 인프라 변경 미리보기
+cd infra && npx cdk diff
+
+# 인프라 배포
+cd infra && npx cdk deploy
+
+# 인프라 제거 (모든 리소스 삭제)
+cd infra && npx cdk destroy
+\`\`\`
+
+## 시드 데이터 재마이그레이션
+
+\`\`\`bash
+cd infra && npx ts-node scripts/seed-data.ts
+\`\`\`
+
+## 프로덕션 전환 시 변경사항
+
+| 항목 | 현재 (프로토타입) | 권장 (프로덕션) |
+|------|------------------|----------------|
+| BillingMode | PAY_PER_REQUEST | 트래픽 예측 가능 시 PROVISIONED |
+| RemovalPolicy | DESTROY | RETAIN |
+| Point-in-Time Recovery | 비활성화 | 활성화 |
+| 백업 | 없음 | AWS Backup 설정 |
+| Cognito MFA | 비활성화 | 활성화 |
+| 비밀번호 정책 | 완화 | 강화 |
+```
+
+### 6. `PRODUCTION-CHECKLIST.md` — 프로덕션 전환 체크리스트
 
 보안 감사 결과의 `production_notes`와 리뷰 결과를 기반으로:
 
@@ -234,6 +296,16 @@ http://localhost:3000 에서 확인
 - [ ] API 라우트에 인증 검증 추가
 
 ### 데이터 레이어
+{/awsarch가 실행된 경우 (08-aws-infra/deploy-log.json 존재):}
+- [x] 인메모리 스토어를 DynamoDB로 교체 (/awsarch 완료)
+- [x] Repository 인터페이스 동일 — createStore() 팩토리로 추상화 (/awsarch 완료)
+- [x] 시드 데이터 DynamoDB 마이그레이션 (/awsarch 완료)
+- [ ] DynamoDB 테이블 이름을 프로덕션용으로 변경
+- [ ] Point-in-Time Recovery 활성화
+- [ ] DynamoDB 백업 설정 (AWS Backup)
+- [ ] RemovalPolicy를 RETAIN으로 변경
+
+{/awsarch가 실행되지 않은 경우:}
 - [ ] 인메모리 스토어를 실제 DB로 교체 (DynamoDB 권장)
 - [ ] Repository 인터페이스는 동일 — 구현체만 교체
 - [ ] 시드 데이터를 실제 데이터 마이그레이션으로 교체
@@ -340,6 +412,7 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
     { "file": "ARCHITECTURE.md", "type": "architecture", "copied_to": "/docs/" },
     { "file": "API.md", "type": "api", "copied_to": "/docs/" },
     { "file": "AI-AGENT.md", "type": "ai-agent", "copied_to": "/docs/", "conditional": true },
+    { "file": "AWS-INFRASTRUCTURE.md", "type": "aws-infra", "copied_to": "/docs/", "conditional": true },
     { "file": "PRODUCTION-CHECKLIST.md", "type": "checklist", "copied_to": "/docs/" },
     { "file": "REVISION-HISTORY.md", "type": "history", "copied_to": "/docs/", "conditional": true },
     { "file": ".env.local.example", "type": "env", "copied_to": "/" }
@@ -370,9 +443,10 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
    b. ARCHITECTURE.md (아키텍처 문서)
    c. API.md (API 문서 — 백엔드 있을 때만)
    d. AI-AGENT.md (AI Agent 문서 — AI 기능 있을 때만)
-   e. PRODUCTION-CHECKLIST.md (프로덕션 전환 체크리스트)
-   f. REVISION-HISTORY.md (변경 이력 — 리비전 있을 때만)
-   g. .env.local.example (환경 변수 템플릿)
+   e. AWS-INFRASTRUCTURE.md (AWS 인프라 가이드 — /awsarch 실행된 경우만)
+   f. PRODUCTION-CHECKLIST.md (프로덕션 전환 체크리스트)
+   g. REVISION-HISTORY.md (변경 이력 — 리비전 있을 때만)
+   h. .env.local.example (환경 변수 템플릿)
 4. 핸드오버 패키지를 프로젝트 루트에도 복사:
    - `07-handover/README.md` → 프로젝트 루트 `README.md`
    - `07-handover/.env.local.example` → 프로젝트 루트 `.env.local.example`
@@ -386,6 +460,7 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
 │   ├── ARCHITECTURE.md
 │   ├── API.md
 │   ├── AI-AGENT.md              (있는 경우)
+│   ├── AWS-INFRASTRUCTURE.md    (있는 경우 — /awsarch 실행 시)
 │   ├── PRODUCTION-CHECKLIST.md
 │   └── REVISION-HISTORY.md      (있는 경우)
 └── src/
@@ -411,7 +486,7 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
 - [ ] 모든 문서가 한국어로 작성되었는가
 - [ ] `npm run build`가 여전히 성공하는가 (README 교체 후)
 - [ ] handover-manifest.json이 생성되고 모든 문서가 documents 배열에 포함되었는가
-- [ ] 조건부 문서(AI-AGENT.md, REVISION-HISTORY.md)가 해당 조건에 맞게 포함/제외되었는가
+- [ ] 조건부 문서(AI-AGENT.md, AWS-INFRASTRUCTURE.md, REVISION-HISTORY.md)가 해당 조건에 맞게 포함/제외되었는가
 - [ ] ARCHITECTURE.md의 Mermaid 다이어그램이 올바르게 렌더링되는가
 
 ## 완료 후

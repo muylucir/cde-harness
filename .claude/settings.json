@@ -12,7 +12,14 @@
       "Bash(npx next:*)",
       "Bash(npx playwright:*)",
       "Bash(npm run test:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npx cdk:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(aws sts:*)",
+      "Bash(aws dynamodb:*)",
+      "Bash(aws s3:*)",
+      "Bash(aws cognito-idp:*)",
+      "Bash(aws cloudformation:*)"
     ]
   }
 }

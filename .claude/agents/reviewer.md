@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: "QA 테스트를 통과한 코드에 대해 9개 카테고리 정적 품질 리뷰를 수행한다. 코드를 읽고 분석만 하며, 테스트 생성/실행은 qa-engineer가 담당. 코드를 직접 수정하지 않고 리뷰 리포트와 피드백을 생성."
-model: opus
+model: sonnet
 color: yellow
 allowedTools:
   - Read

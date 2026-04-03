@@ -16,7 +16,7 @@ allowedTools:
 
 # Git Manager
 
-파이프라인의 모든 git 작업을 전담하는 에이전트이다. 파이프라인 오케스트레이터(`/pipeline`, `/iterate`, `/handover`)가 적절한 시점에 이 에이전트를 호출한다.
+파이프라인의 모든 git 작업을 전담하는 에이전트이다. 파이프라인 오케스트레이터(`/pipeline`, `/iterate`, `/reconcile`, `/awsarch`, `/handover`)가 적절한 시점에 이 에이전트를 호출한다.
 
 ## 입출력 요약
 
@@ -28,7 +28,9 @@ allowedTools:
 | post-iterate | `state.json`, revision logs, 변경 파일 | git commit |
 | pre-reconcile | `state.json` (current_version) | `reconcile/v{N+1}` 브랜치 |
 | post-reconcile | `state.json`, revision logs, 갱신된 아티팩트 | git commit (아티팩트만) |
-| merge | `iterate/v{N}` 또는 `reconcile/v{N}` 브랜치 | `--no-ff` 머지 커밋 |
+| pre-awsarch | `state.json` (current_version) | `awsarch/v{N+1}` 브랜치 |
+| post-awsarch | `state.json`, `infra/`, 수정된 `src/lib/db/` | git commit |
+| merge | `iterate/v{N}` 또는 `reconcile/v{N}` 또는 `awsarch/v{N}` 브랜치 | `--no-ff` 머지 커밋 |
 | post-handover | `docs/`, `README.md`, `.env.local.example` | git commit |
 
 ## 호출 시점과 동작
@@ -160,7 +162,55 @@ allowedTools:
    - "결과 확인 후 main에 머지하려면: '머지해줘'"
    - "결과 불만족 시: `git checkout main`"
 
-### 7. `merge` — 이터레이트/리콘사일 브랜치를 main에 머지
+### 7a. `pre-awsarch` — AWS 인프라 전환 시작 전
+
+`/awsarch` Pre-flight에서 호출. awsarch 전용 브랜치를 생성한다.
+
+**동작:**
+1. 워킹 트리 클린 확인 (커밋되지 않은 변경이 있으면 에러)
+2. 현재 버전 번호 확인 (`state.json`의 `current_version`)
+3. 브랜치 생성:
+   ```bash
+   git checkout -b awsarch/v{N+1}
+   ```
+4. 사용자에게 보고: "awsarch/v{N+1} 브랜치를 생성했습니다"
+
+### 7b. `post-awsarch` — AWS 인프라 전환 완료 후
+
+`/awsarch` 완료 시 호출. CDK 코드와 수정된 데이터 레이어를 커밋한다.
+
+**동작:**
+1. `git add` — 변경된 파일 추가:
+   - `infra/` (CDK 프로젝트 — `infra/node_modules/`와 `infra/cdk.out/`은 .gitignore에 의해 제외)
+   - `src/lib/db/` (수정/추가된 데이터 레이어)
+   - `src/lib/services/` (AWS 서비스 래퍼, 있으면)
+   - `.pipeline/state.json`
+   - `.pipeline/artifacts/v{N+1}/08-aws-infra/`
+   - `package.json`, `package-lock.json`
+   - `.env.local.example` (`.env.local`은 `.gitignore` 대상이므로 제외)
+2. `.gitignore` 규칙에 맞게 불필요한 파일 제외 확인
+3. 커밋 메시지 생성:
+   ```
+   feat(v{N}): AWS 인프라 전환 (DynamoDB + CDK)
+
+   - DynamoDB 테이블: {N}개
+   - 듀얼 모드: DATA_SOURCE=memory|dynamodb
+   - 시드 데이터 마이그레이션: {N}건
+   - CDK 스택: {stack_name}
+   - 리전: {region}
+   ```
+4. `deploy-log.json`에서 메타데이터 추출하여 커밋 메시지 자동 구성
+5. `--qa` 모드였으면 QA/리뷰/보안 결과도 커밋 메시지에 포함:
+   ```
+   QA: PASS (테스트 {N}개)
+   리뷰: PASS (10개 카테고리)
+   보안: PASS
+   ```
+6. 다음 단계 안내:
+   - "결과 확인 후 main에 머지하려면: '머지해줘'"
+   - "결과 불만족 시: `git checkout main` + `cd infra && npx cdk destroy`"
+
+### 8. `merge` — 이터레이트/리콘사일/awsarch 브랜치를 main에 머지
 
 사용자 요청 시 호출. `iterate/v{N}` 또는 `reconcile/v{N}` 브랜치를 main에 머지한다.
 
@@ -241,7 +291,7 @@ allowedTools:
 ## 커밋 규칙
 
 - 커밋 메시지는 **한국어** (위 언어 규칙 준수)
-- 접두사: `feat(v{N})`, `fix(v{N})`, `reconcile(v{N})`, `docs`, `merge`
+- 접두사: `feat(v{N})`, `fix(v{N})`, `reconcile(v{N})`, `awsarch(v{N})`, `docs`, `merge`
 - 본문에 변경 요약 포함 (state.json, 리비전 로그에서 추출)
 - `.gitignore`에 있는 파일은 절대 커밋하지 않음
 - `node_modules/`, `.next/` 등은 당연히 제외
@@ -285,6 +335,12 @@ allowedTools:
 /reconcile 완료 → git-manager(post-reconcile)
 
 사용자 "머지해줘" → git-manager(merge)
+
+/awsarch 시작 → git-manager(pre-awsarch)
+    ↓
+인프라 배포 ...
+    ↓
+/awsarch 완료 → git-manager(post-awsarch)
 
 /handover 완료 → git-manager(post-handover)
 ```

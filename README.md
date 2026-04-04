@@ -4,7 +4,7 @@ AWS Solutions Architect가 고객 요구사항으로부터 **Next.js 16 + Clouds
 
 ## 개요
 
-이 하네스는 7단계 서브에이전트 파이프라인을 통해 고객의 비정형 요구사항을 빌드 가능한 프로토타입 코드로 변환합니다.
+이 하네스는 19개 서브에이전트 파이프라인을 통해 고객의 비정형 요구사항을 빌드 가능한 프로토타입 코드로 변환합니다.
 
 ```
 다양한 입력 자료 (회의록, 다이어그램, 요구사항 문서, 스크린샷, CSV ...)
@@ -38,6 +38,9 @@ AWS Solutions Architect가 고객 요구사항으로부터 **Next.js 16 + Clouds
     │              ← CHECKPOINT: verdict PASS 확인
     ▼
 완료 → npm run dev로 확인 → 고객 데모 → /iterate로 반복 개선
+    │
+    ▼ (mock → 실제 AWS 전환 시)
+[/awsarch] → 인프라 설계 → CDK 배포 → 데이터 레이어 교체 → 시드 마이그레이션
     │
     ▼ (최종 핸드오버 시)
 [/handover] → 아키텍처/API 문서 + 프로덕션 체크리스트 + 환경 설정 가이드
@@ -168,6 +171,9 @@ npm run dev
 | `/iterate` | 고객 피드백 분석 → input 갱신 → requirements부터 파이프라인 재실행 |
 | `/reconcile` | ad-hoc 코드 변경 후 파이프라인 아티팩트 역동기화 (문서만) |
 | `/reconcile --qa` | 아티팩트 역동기화 + QA/리뷰/보안 재실행 |
+| `/awsarch` | mock 프로토타입을 실제 AWS 리소스로 전환 (CDK 배포) |
+| `/awsarch --qa` | AWS 전환 + QA/리뷰/보안 재실행 |
+| `/awsarch --plan` | 인프라 설계만 (배포 없음, 비용 확인용) |
 | `/handover` | 최종 핸드오버 패키지 생성 (이터레이션 완료 후) |
 | `/pipeline-from {stage}` | 특정 단계부터 재개 |
 | `/pipeline-status` | 현재 진행 상태 + CHECKPOINT 결과 확인 |
@@ -238,25 +244,28 @@ domain-researcher → requirements-analyst → architect
 ```
 cde-harness/
 ├── .claude/
-│   ├── agents/                     # 서브에이전트 정의 (17개)
-│   │   ├── architect.md              # 아키텍처 설계
-│   │   ├── brief-composer.md          # 브리프 자동 생성
-│   │   ├── code-generator-ai.md       # AI 코드 생성 (조건부)
-│   │   ├── code-generator-backend.md  # 백엔드 코드 생성
-│   │   ├── code-generator-frontend.md # 프론트엔드 코드 생성
-│   │   ├── domain-researcher.md       # 도메인 리서치
-│   │   ├── feedback-analyzer.md       # 피드백 영향 분석 (/iterate)
-│   │   ├── git-manager.md             # Git 작업 전담
-│   │   ├── handover-packager.md       # 핸드오버 문서 생성
-│   │   ├── qa-engineer.md             # Playwright E2E 테스트
-│   │   ├── reconcile-analyzer.md      # 코드→아티팩트 역동기화 (/reconcile)
-│   │   ├── requirements-analyst.md    # 요구사항 분석
-│   │   ├── reviewer.md                # 9카테고리 품질 리뷰
-│   │   ├── security-auditor-pipeline.md # OWASP 보안 감사
-│   │   ├── spec-writer-ai.md          # AI 스펙 작성 (조건부)
-│   │   ├── spec-writer-backend.md     # 백엔드 스펙 작성
-│   │   └── spec-writer-frontend.md    # 프론트엔드 스펙 작성
-│   ├── commands/                   # 파이프라인 커맨드 (7개)
+│   ├── agents/                     # 서브에이전트 정의 (19개)
+│   │   ├── architect.md              # 아키텍처 설계 (opus)
+│   │   ├── aws-architect.md           # AWS 인프라 설계 (opus)
+│   │   ├── aws-deployer.md            # CDK 배포 + 데이터 마이그레이션 (opus)
+│   │   ├── brief-composer.md          # 브리프 자동 생성 (sonnet)
+│   │   ├── code-generator-ai.md       # AI 코드 생성 - 조건부 (opus)
+│   │   ├── code-generator-backend.md  # 백엔드 코드 생성 (opus)
+│   │   ├── code-generator-frontend.md # 프론트엔드 코드 생성 (opus)
+│   │   ├── domain-researcher.md       # 도메인 리서치 (sonnet)
+│   │   ├── feedback-analyzer.md       # 피드백 영향 분석 - /iterate (sonnet)
+│   │   ├── git-manager.md             # Git 작업 전담 (sonnet)
+│   │   ├── handover-packager.md       # 핸드오버 문서 생성 (sonnet)
+│   │   ├── qa-engineer.md             # Playwright E2E 테스트 (sonnet)
+│   │   ├── reconcile-analyzer.md      # 코드→아티팩트 역동기화 - /reconcile (sonnet)
+│   │   ├── requirements-analyst.md    # 요구사항 분석 (opus)
+│   │   ├── reviewer.md                # 9카테고리 품질 리뷰 (sonnet)
+│   │   ├── security-auditor-pipeline.md # OWASP 보안 감사 (sonnet)
+│   │   ├── spec-writer-ai.md          # AI 스펙 작성 - 조건부 (opus)
+│   │   ├── spec-writer-backend.md     # 백엔드 스펙 작성 (opus)
+│   │   └── spec-writer-frontend.md    # 프론트엔드 스펙 작성 (opus)
+│   ├── commands/                   # 파이프라인 커맨드 (8개)
+│   │   ├── awsarch.md
 │   │   ├── brief.md
 │   │   ├── handover.md
 │   │   ├── iterate.md
@@ -295,6 +304,7 @@ cde-harness/
 │   └── state.json                  # 파이프라인 상태 + CHECKPOINT 결과 추적
 │
 ├── src/                            # 파이프라인이 생성 (하네스에 미포함)
+├── infra/                          # /awsarch 시 CDK TypeScript 생성 (하네스에 미포함)
 ├── e2e/                            # QA 에이전트가 생성하는 Playwright 테스트
 ├── node_modules/                   # npm install 시 생성 (하네스에 미포함)
 ├── CLAUDE.md                       # 프로젝트 규칙 (에이전트가 참조)
@@ -384,6 +394,21 @@ cde-harness/
   - `README.md`, `docs/ARCHITECTURE.md`, `docs/API.md`
   - `docs/AI-AGENT.md` (AI 있을 때), `docs/PRODUCTION-CHECKLIST.md`
   - `docs/REVISION-HISTORY.md` (리비전 있을 때), `.env.local.example`
+
+### AWS 인프라 설계 (AWS Architect) — `/awsarch`에서 호출
+- **입력**: 프로토타입의 데이터 모델 + API + 요구사항
+- **출력**: `aws-architecture.json` + `aws-architecture.md`
+- **하는 일**: DynamoDB 테이블, S3 버킷, Cognito 사용자 풀 등 AWS 인프라를 설계하고, 월 예상 비용을 산출
+- **APPROVAL GATE**: 비용 확인 후 사용자 승인 대기
+
+### AWS 배포 (AWS Deployer) — `/awsarch`에서 호출
+- **입력**: `aws-architecture.json`
+- **출력**: `infra/` 디렉토리 (CDK TypeScript), 듀얼 모드 데이터 레이어
+- **하는 일**:
+  - CDK TypeScript 코드 생성 + `cdk deploy`
+  - InMemoryStore → DynamoDBStore 듀얼 모드 데이터 레이어 구현
+  - 시드 데이터를 DynamoDB로 마이그레이션
+  - `DATA_SOURCE=dynamodb` 환경변수로 전환
 
 ### Reconcile Analyzer — `/reconcile`에서 호출
 - **입력**: `git diff` + 기존 아티팩트 + 현재 `src/` 코드
@@ -498,6 +523,75 @@ Phase 6  QA(Playwright) → Review(9카테고리) → Security(OWASP)
 
 ---
 
+## AWS 인프라 전환 워크플로우 (`/awsarch`)
+
+InMemoryStore 기반 mock 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cognito 등)로 전환합니다.
+
+> **실행 시점**: `/pipeline`으로 프로토타입 완성 후, 고객 데모에서 실제 데이터 영속성이 필요할 때 실행합니다.
+
+### 사용법
+
+```bash
+# 인프라 설계 + CDK 배포 + 데이터 마이그레이션
+/awsarch
+
+# 위 + QA/리뷰/보안 재검증
+/awsarch --qa
+
+# 설계만 (비용 확인 후 배포 보류)
+/awsarch --plan
+```
+
+### 실행 흐름
+
+```
+Phase 1  프로토타입 분석 → AWS 인프라 설계 (DynamoDB, S3, Cognito 등)
+    │      ← APPROVAL GATE: 비용 + 리소스 목록 확인 후 승인
+    ▼
+Phase 2  CDK TypeScript 코드 생성 (infra/ 디렉토리)
+    │
+    ▼
+Phase 3  cdk deploy → CloudFormation 스택 배포
+    │
+    ▼
+Phase 4  데이터 레이어 교체 (InMemoryStore → DynamoDBStore)
+    │      Repository 패턴의 createStore() 팩토리가 DATA_SOURCE 환경변수로 분기
+    ▼
+Phase 5  시드 데이터 DynamoDB 마이그레이션
+    │
+    ▼
+완료 → DATA_SOURCE=dynamodb로 전환하여 npm run dev 확인
+
+--qa 옵션 시 추가:
+Phase 6  QA(Playwright) → Review(9카테고리) → Security(OWASP)
+```
+
+### 생성되는 infra/ 구조
+
+```
+infra/
+├── bin/
+│   └── app.ts            # CDK app entry point
+├── lib/
+│   ├── main-stack.ts     # Main CloudFormation stack
+│   └── constructs/       # Reusable CDK constructs
+├── scripts/
+│   └── seed-data.ts      # DynamoDB seed migration
+├── package.json          # CDK dependencies (별도)
+├── tsconfig.json
+└── cdk.json
+```
+
+### 인프라 관리 명령어
+
+```bash
+cd infra && npx cdk deploy    # 배포
+cd infra && npx cdk diff      # 변경 미리보기
+cd infra && npx cdk destroy   # 인프라 제거
+```
+
+---
+
 ## 언어 규칙
 
 | 산출물 유형 | 언어 | 이유 |
@@ -519,6 +613,21 @@ Phase 6  QA(Playwright) → Review(9카테고리) → Security(OWASP)
 | ESLint + Prettier | latest | 코드 컨벤션 |
 | Strands Agents SDK | TypeScript | AI Agent 구현 (`@strands-agents/sdk`) |
 | Playwright | latest | E2E 테스트 |
+
+### 에이전트 모델 배치
+
+설계·코드 생성·인프라 등 품질이 핵심인 에이전트는 Opus, 나머지는 Sonnet을 사용합니다.
+
+| 모델 | 에이전트 | 역할 |
+|------|----------|------|
+| **Opus** | architect, requirements-analyst | 설계 + 분석 |
+| **Opus** | spec-writer-backend, spec-writer-ai, spec-writer-frontend | 명세서 작성 |
+| **Opus** | code-generator-backend, code-generator-ai, code-generator-frontend | 코드 생성 |
+| **Opus** | aws-architect, aws-deployer | AWS 인프라 |
+| **Sonnet** | domain-researcher, brief-composer | 리서치 + 문서 조립 |
+| **Sonnet** | qa-engineer, reviewer, security-auditor-pipeline | 품질 검증 |
+| **Sonnet** | feedback-analyzer, reconcile-analyzer | 변경 영향 분석 |
+| **Sonnet** | git-manager, handover-packager | Git + 핸드오버 |
 
 ---
 
@@ -574,6 +683,12 @@ https://cloudscape.design/patterns/{path}/index.html.md
 
 ### 인증이 필요한 프로토타입은?
 고객 브리프에 인증 요구사항을 명시하면 요구사항 분석 에이전트가 NFR로 추출하고, 아키텍처에 Auth Context가 포함됩니다. 다만 실제 인증이 아닌 목업 토큰 기반입니다.
+
+### 프로토타입에 실제 DB가 필요하면?
+`/awsarch`를 실행하면 InMemoryStore → DynamoDB로 자동 전환됩니다. `--plan` 옵션으로 비용만 먼저 확인할 수 있습니다.
+
+### `/awsarch` 후 인프라를 삭제하려면?
+`cd infra && npx cdk destroy`로 CloudFormation 스택을 제거합니다. DynamoDB 테이블, S3 버킷 등이 함께 삭제됩니다.
 
 ### Cloudscape 외 라이브러리(차트 등)를 추가하려면?
 브리프에 명시하면 아키텍처 에이전트가 `recharts` 등 추가 라이브러리를 함께 설계합니다.

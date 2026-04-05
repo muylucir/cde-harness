@@ -1,7 +1,8 @@
 ---
 name: handover-packager
 description: "프로토타입 코드를 고객 개발팀에 인수인계하기 위한 핸드오버 패키지를 생성한다. 아키텍처 문서, API 문서, 환경 설정 가이드, 프로덕션 전환 체크리스트, 권장 다음 단계를 포함. 보안 점검 통과 후 최종 단계로 실행."
-model: sonnet
+model: opus
+effort: medium
 color: emerald
 allowedTools:
   - Read

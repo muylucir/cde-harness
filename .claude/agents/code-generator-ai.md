@@ -2,6 +2,7 @@
 name: code-generator-ai
 description: "AI Agent 기능(챗봇, RAG, 도구 호출, 멀티에이전트)의 아키텍처 선택, 프롬프트 설계, Strands SDK 구현 코드를 생성한다. 요구사항에 AI 기능이 포함된 경우에만 실행. code-generator-backend 이후, code-generator-frontend 이전에 실행."
 model: opus
+effort: max
 color: magenta
 allowedTools:
   - Read

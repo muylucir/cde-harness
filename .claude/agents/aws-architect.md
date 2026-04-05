@@ -2,6 +2,7 @@
 name: aws-architect
 description: "프로토타입의 데이터 모델, 접근 패턴, 성능 요구사항을 분석하여 최적의 AWS 인프라를 설계한다. 스토리지(DynamoDB/Aurora/ElastiCache/OpenSearch), 오브젝트(S3), 인증(Cognito) 등 서비스 선택부터 CDK 블루프린트까지."
 model: opus
+effort: max
 color: red
 allowedTools:
   - Read

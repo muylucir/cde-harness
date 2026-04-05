@@ -2,6 +2,7 @@
 name: aws-deployer
 description: "aws-architecture.json을 기반으로 CDK TypeScript 코드를 생성하고 배포한다. 데이터 레이어 듀얼 모드(InMemoryStore/DynamoDBStore/AuroraStore)를 구현하고, 시드 데이터를 마이그레이션한다."
 model: opus
+effort: max
 color: pink
 allowedTools:
   - Read

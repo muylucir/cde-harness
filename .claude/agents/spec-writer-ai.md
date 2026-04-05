@@ -2,6 +2,7 @@
 name: spec-writer-ai
 description: "AI Agent 구현 스펙(에이전트 패턴, 프롬프트, 도구, RAG, 스트리밍 API)을 아키텍처에서 생성한다. code-generator-ai가 파싱할 수 있는 수준의 상세 스펙을 작성. AI 기능이 있을 때만 실행."
 model: opus
+effort: high
 color: magenta
 allowedTools:
   - Read

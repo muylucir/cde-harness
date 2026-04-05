@@ -2,6 +2,7 @@
 name: code-generator-backend
 description: "Next.js 16 API Route, 데이터 레이어, AWS 서비스 연동, 미들웨어 코드를 스펙에서 생성한다. 프론트엔드가 참조할 타입과 API를 먼저 확립하는 역할. code-generator-frontend 보다 먼저 실행한다."
 model: opus
+effort: max
 color: teal
 allowedTools:
   - Read

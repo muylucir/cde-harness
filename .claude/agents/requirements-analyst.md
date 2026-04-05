@@ -2,6 +2,7 @@
 name: requirements-analyst
 description: "고객 고충 사항과 비정형 입력을 분석하여 Next.js + Cloudscape 프로토타입을 위한 구조화된 요구사항을 산출한다. 원시 요구사항, 회의록, RFP 발췌 등에서 새 프로토타입을 시작할 때 사용."
 model: opus
+effort: high
 color: blue
 allowedTools:
   - Read

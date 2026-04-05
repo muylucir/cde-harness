@@ -2,6 +2,7 @@
 name: spec-writer-backend
 description: "백엔드 구현 스펙(타입, 검증, 데이터, repository, API, 미들웨어)을 아키텍처에서 생성한다. code-generator-backend가 파싱할 수 있는 수준의 상세 스펙을 작성."
 model: opus
+effort: high
 color: purple
 allowedTools:
   - Read

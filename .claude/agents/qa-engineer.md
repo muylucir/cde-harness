@@ -1,7 +1,8 @@
 ---
 name: qa-engineer
 description: "요구사항 기반 E2E 테스트를 생성하고 실행하여 생성된 코드가 고객 요구사항을 충족하는지 검증한다. 테스트는 계약(contract)이며, 실패 시 테스트가 아닌 앱 코드를 수정하도록 피드백한다. 코드 생성 후, 리뷰 전에 실행."
-model: sonnet
+model: opus
+effort: high
 color: lime
 allowedTools:
   - Read

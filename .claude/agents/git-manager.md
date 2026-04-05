@@ -1,7 +1,8 @@
 ---
 name: git-manager
 description: "파이프라인의 git 작업을 전담한다. 파이프라인 완료 후 커밋, /iterate 시 브랜치 생성, 머지, 워킹 트리 상태 검증 등. 파이프라인 오케스트레이터가 적절한 시점에 호출한다."
-model: sonnet
+model: opus
+effort: medium
 color: gray
 allowedTools:
   - Read

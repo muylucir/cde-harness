@@ -1,7 +1,8 @@
 ---
 name: brief-composer
 description: "다양한 형태의 고객 입력(회의록, 아키텍처 다이어그램, 요구사항 정의서, 이메일, 스크린샷 등)을 분석하여 파이프라인용 customer-brief.md를 자동 생성한다. /brief 커맨드로 실행."
-model: sonnet
+model: opus
+effort: medium
 color: indigo
 allowedTools:
   - Read

@@ -2,6 +2,7 @@
 name: code-generator-frontend
 description: "Cloudscape UI 컴포넌트, 페이지, 레이아웃, 클라이언트 상태를 스펙에서 생성한다. 백엔드 에이전트가 생성한 타입과 API를 참조하여 UI를 구축하는 역할. code-generator-backend 이후에 실행한다."
 model: opus
+effort: max
 color: cyan
 allowedTools:
   - Read

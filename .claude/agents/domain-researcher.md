@@ -1,7 +1,8 @@
 ---
 name: domain-researcher
 description: "고객 브리프의 산업/도메인을 분석하여 업계 표준 워크플로우, 용어, KPI, 유사 제품 패턴, 규제 요건을 리서치한다. 요구사항 분석 전에 실행하여 도메인 컨텍스트를 풍부하게 한다."
-model: sonnet
+model: opus
+effort: medium
 color: sky
 allowedTools:
   - Read

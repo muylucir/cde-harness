@@ -1,7 +1,8 @@
 ---
 name: security-auditor-pipeline
 description: "생성된 Next.js 16 + Cloudscape 프로토타입 코드에 OWASP 보안 감사를 수행한다. XSS, 인젝션, 인증 우회, 입력 검증, CSRF, 안전하지 않은 기본값을 점검한다. 핸드오버 전 최종 파이프라인 단계로 사용."
-model: sonnet
+model: opus
+effort: high
 color: orange
 allowedTools:
   - Read

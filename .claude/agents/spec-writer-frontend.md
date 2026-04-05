@@ -2,6 +2,7 @@
 name: spec-writer-frontend
 description: "프론트엔드 구현 스펙(Cloudscape 컴포넌트, 훅, 페이지, 레이아웃)을 아키텍처에서 생성한다. code-generator-frontend가 파싱할 수 있는 수준의 상세 스펙을 작성. 전체 specs-summary.md와 _manifest.json도 생성."
 model: opus
+effort: high
 color: purple
 allowedTools:
   - Read

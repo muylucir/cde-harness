@@ -76,9 +76,11 @@ import TopNavigation from "@cloudscape-design/components/top-navigation";
 import BreadcrumbGroup from "@cloudscape-design/components/breadcrumb-group";
 
 // TopNavigation goes OUTSIDE AppLayout, at the very top
+// MUST be sticky — 스크롤해도 항상 상단 고정
 <>
-  <TopNavigation
-    identity={{ href: "/", title: "My Service" }}
+  <div style={{ position: "sticky", top: 0, zIndex: 1002 }}>
+    <TopNavigation
+      identity={{ href: "/", title: "My Service" }}
     utilities={[
       { type: "button", iconName: "notification", ariaLabel: "Notifications", badge: true },
       { type: "menu-dropdown", text: "User", items: [
@@ -87,6 +89,7 @@ import BreadcrumbGroup from "@cloudscape-design/components/breadcrumb-group";
       ]}
     ]}
   />
+  </div>
   <AppLayout
     navigation={
       <SideNavigation
@@ -529,7 +532,7 @@ import Button from "@cloudscape-design/components/button";
 - Use `variant` props to control visual hierarchy (e.g., Button variant: "primary", "normal", "link")
 - Use `StatusIndicator` for status display (types: "success", "error", "warning", "info", "pending", "loading", "stopped")
 - Always use `useCollection` hook from `@cloudscape-design/collection-hooks` for Table and Cards — never write manual filtering/sorting/pagination logic
-- `TopNavigation` goes OUTSIDE `AppLayout`, not inside it
+- `TopNavigation` goes OUTSIDE `AppLayout`, not inside it — wrapped in `<div style={{ position: "sticky", top: 0, zIndex: 1002 }}>` for scroll-fixed behavior
 - `SideNavigation` goes in `AppLayout`'s `navigation` slot
 - `BreadcrumbGroup` goes in `AppLayout`'s `breadcrumbs` slot
 

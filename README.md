@@ -244,26 +244,26 @@ domain-researcher → requirements-analyst → architect
 ```
 cde-harness/
 ├── .claude/
-│   ├── agents/                     # 서브에이전트 정의 (19개)
-│   │   ├── architect.md              # 아키텍처 설계 (opus)
-│   │   ├── aws-architect.md           # AWS 인프라 설계 (opus)
-│   │   ├── aws-deployer.md            # CDK 배포 + 데이터 마이그레이션 (opus)
-│   │   ├── brief-composer.md          # 브리프 자동 생성 (sonnet)
-│   │   ├── code-generator-ai.md       # AI 코드 생성 - 조건부 (opus)
-│   │   ├── code-generator-backend.md  # 백엔드 코드 생성 (opus)
-│   │   ├── code-generator-frontend.md # 프론트엔드 코드 생성 (opus)
-│   │   ├── domain-researcher.md       # 도메인 리서치 (sonnet)
-│   │   ├── feedback-analyzer.md       # 피드백 영향 분석 - /iterate (sonnet)
-│   │   ├── git-manager.md             # Git 작업 전담 (sonnet)
-│   │   ├── handover-packager.md       # 핸드오버 문서 생성 (sonnet)
-│   │   ├── qa-engineer.md             # Playwright E2E 테스트 (sonnet)
-│   │   ├── reconcile-analyzer.md      # 코드→아티팩트 역동기화 - /reconcile (sonnet)
-│   │   ├── requirements-analyst.md    # 요구사항 분석 (opus)
-│   │   ├── reviewer.md                # 9카테고리 품질 리뷰 (sonnet)
-│   │   ├── security-auditor-pipeline.md # OWASP 보안 감사 (sonnet)
-│   │   ├── spec-writer-ai.md          # AI 스펙 작성 - 조건부 (opus)
-│   │   ├── spec-writer-backend.md     # 백엔드 스펙 작성 (opus)
-│   │   └── spec-writer-frontend.md    # 프론트엔드 스펙 작성 (opus)
+│   ├── agents/                     # 서브에이전트 정의 (19개, 전원 Opus)
+│   │   ├── architect.md              # 아키텍처 설계 (effort: max)
+│   │   ├── aws-architect.md           # AWS 인프라 설계 (effort: max)
+│   │   ├── aws-deployer.md            # CDK 배포 + 데이터 마이그레이션 (effort: max)
+│   │   ├── brief-composer.md          # 브리프 자동 생성 (effort: medium)
+│   │   ├── code-generator-ai.md       # AI 코드 생성 - 조건부 (effort: max)
+│   │   ├── code-generator-backend.md  # 백엔드 코드 생성 (effort: max)
+│   │   ├── code-generator-frontend.md # 프론트엔드 코드 생성 (effort: max)
+│   │   ├── domain-researcher.md       # 도메인 리서치 (effort: medium)
+│   │   ├── feedback-analyzer.md       # 피드백 영향 분석 - /iterate (effort: high)
+│   │   ├── git-manager.md             # Git 작업 전담 (effort: medium)
+│   │   ├── handover-packager.md       # 핸드오버 문서 생성 (effort: medium)
+│   │   ├── qa-engineer.md             # Playwright E2E 테스트 (effort: high)
+│   │   ├── reconcile-analyzer.md      # 코드→아티팩트 역동기화 - /reconcile (effort: high)
+│   │   ├── requirements-analyst.md    # 요구사항 분석 (effort: high)
+│   │   ├── reviewer.md                # 9카테고리 품질 리뷰 (effort: high)
+│   │   ├── security-auditor-pipeline.md # OWASP 보안 감사 (effort: high)
+│   │   ├── spec-writer-ai.md          # AI 스펙 작성 - 조건부 (effort: high)
+│   │   ├── spec-writer-backend.md     # 백엔드 스펙 작성 (effort: high)
+│   │   └── spec-writer-frontend.md    # 프론트엔드 스펙 작성 (effort: high)
 │   ├── commands/                   # 파이프라인 커맨드 (8개)
 │   │   ├── awsarch.md
 │   │   ├── brief.md
@@ -273,9 +273,11 @@ cde-harness/
 │   │   ├── pipeline-status.md
 │   │   ├── pipeline.md
 │   │   └── reconcile.md
-│   ├── skills/                     # 참조 스킬 (6개)
+│   ├── skills/                     # 참조 스킬 (8개)
 │   │   ├── agent-patterns/
 │   │   ├── ascii-diagram/
+│   │   ├── aws-cdk-patterns/
+│   │   ├── aws-infra-patterns/
 │   │   ├── cloudscape-design/
 │   │   ├── mermaid-diagrams/
 │   │   ├── prompt-engineering/
@@ -350,7 +352,7 @@ cde-harness/
 
 | 에이전트 | 스킬 | 산출물 |
 |----------|------|--------|
-| `spec-writer-backend` | `mermaid-diagrams` | `backend-spec.json/md` |
+| `spec-writer-backend` | `mermaid-diagrams`, `aws-infra-patterns` | `backend-spec.json/md` |
 | `spec-writer-ai` (조건부) | `agent-patterns`, `prompt-engineering`, `strands-sdk-guide` | `ai-spec.json/md` |
 | `spec-writer-frontend` | `cloudscape-design`, `ascii-diagram` | `frontend-spec.json/md`, `specs-summary.md`, `_manifest.json` |
 
@@ -616,36 +618,37 @@ cd infra && npx cdk destroy   # 인프라 제거
 
 ### 에이전트 모델 배치
 
-설계·코드 생성·인프라 등 품질이 핵심인 에이전트는 Opus, 나머지는 Sonnet을 사용합니다.
+19개 에이전트 전원 **Opus**를 사용하며, **effort** 등급(max/high/medium)으로 품질-속도 트레이드오프를 조절합니다.
 
-| 모델 | 에이전트 | 역할 |
-|------|----------|------|
-| **Opus** | architect, requirements-analyst | 설계 + 분석 |
-| **Opus** | spec-writer-backend, spec-writer-ai, spec-writer-frontend | 명세서 작성 |
-| **Opus** | code-generator-backend, code-generator-ai, code-generator-frontend | 코드 생성 |
-| **Opus** | aws-architect, aws-deployer | AWS 인프라 |
-| **Sonnet** | domain-researcher, brief-composer | 리서치 + 문서 조립 |
-| **Sonnet** | qa-engineer, reviewer, security-auditor-pipeline | 품질 검증 |
-| **Sonnet** | feedback-analyzer, reconcile-analyzer | 변경 영향 분석 |
-| **Sonnet** | git-manager, handover-packager | Git + 핸드오버 |
+| effort | 에이전트 | 역할 |
+|--------|----------|------|
+| **max** | architect, aws-architect, aws-deployer | 설계 + 인프라 |
+| **max** | code-generator-backend, code-generator-ai, code-generator-frontend | 코드 생성 |
+| **high** | requirements-analyst | 요구사항 분석 |
+| **high** | spec-writer-backend, spec-writer-ai, spec-writer-frontend | 명세서 작성 |
+| **high** | qa-engineer, reviewer, security-auditor-pipeline | 품질 검증 |
+| **high** | feedback-analyzer, reconcile-analyzer | 변경 영향 분석 |
+| **medium** | domain-researcher, brief-composer | 리서치 + 문서 조립 |
+| **medium** | git-manager, handover-packager | Git + 핸드오버 |
 
 ---
 
-## Cloudscape Design System 스킬
+## 참조 스킬 (8개)
 
-정적 템플릿 대신 `cloudscape-design` 스킬을 사용합니다. 이 스킬은 파이프라인의 아키텍트, 명세서 작성, 코드 생성, 리뷰 단계에서 자동으로 참조됩니다.
+에이전트가 필요한 시점에 자동으로 참조하는 도메인 지식 라이브러리입니다. Progressive disclosure 구조(SKILL.md → references/)로 컨텍스트를 효율적으로 사용합니다.
 
-### 스킬이 제공하는 것
+| 스킬 | 참조 에이전트 | 제공 내용 |
+|------|-------------|----------|
+| `cloudscape-design` | architect, spec-writer-frontend, code-gen-frontend, reviewer | 101개 컴포넌트 카탈로그, 73개 UI 패턴, 코드 예제 5개, 디자인 토큰 |
+| `agent-patterns` | spec-writer-ai, code-gen-ai | AI 에이전트 설계 패턴 3계층 택소노미, 18개 패턴 레퍼런스 |
+| `prompt-engineering` | spec-writer-ai, code-gen-ai | XML 구조화, Structured Output, Tool Use, Extended Thinking |
+| `strands-sdk-guide` | spec-writer-ai, code-gen-ai | Strands SDK TypeScript 구현 가이드, 도구/MCP/멀티에이전트 |
+| `aws-infra-patterns` | aws-architect | 스토리지 선택 의사결정, IAM 정책 템플릿, 비용 추정 공식 |
+| `aws-cdk-patterns` | aws-deployer | CDK construct 코드, 데이터 레이어 듀얼 모드, 시드 마이그레이션 |
+| `mermaid-diagrams` | spec-writer-backend | Mermaid Flowchart/Sequence 문법, 패턴별 예제 |
+| `ascii-diagram` | spec-writer-frontend | 한글/영어 혼합 ASCII 다이어그램, 2칸/1칸 폭 계산 |
 
-| 카테고리 | 내용 | 규모 |
-|----------|------|------|
-| 컴포넌트 카탈로그 | 모든 Cloudscape 컴포넌트 목록 + 설명 | 101개 (13개 카테고리) |
-| UI 패턴 | 페이지/UX 패턴 레퍼런스 | 73개 (11개 카테고리) |
-| 코드 예제 | Table+useCollection, GenAI Chat, Dashboard, Form, Modal | 5개 전체 구현 |
-| 컴포넌트 선택 가이드 | 용도별 의사결정 트리 | 5가지 카테고리 |
-| 디자인 파운데이션 | 색상, 타이포그래피, 간격, 밀도 | 디자인 토큰 전체 |
-
-### 라이브 문서 접근
+### Cloudscape 라이브 문서 접근
 
 스킬로 부족할 때 에이전트가 자동으로 최신 API를 조회합니다:
 

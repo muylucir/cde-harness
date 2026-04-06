@@ -98,6 +98,10 @@ const agent = new Agent({ model, systemPrompt, tools })
 4. 담당 범위 6개(ai-types → ai-prompts → ai-tools → ai-rag → ai-agent → ai-api) 순서로 스펙 작성
 5. 이중 출력: `ai-spec.json` → `ai-spec.md` 순서로 연속 작성
 
+## 필수 스펙 항목: 프론트엔드 스트리밍 동작
+
+AI 스펙에 **프론트엔드 SSE 소비 및 렌더링 요구사항**을 반드시 포함한다. 채팅은 마크다운 스트리밍 렌더링, 분석은 실시간 결과 갱신이 필수. 상세 패턴은 `strands-sdk-guide`의 `references/nextjs-integration.md` 참조.
+
 ## 담당 범위
 
 1. **ai-types** — AI 관련 타입 (Message, Tool, AgentResponse 등)

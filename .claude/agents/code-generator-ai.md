@@ -143,6 +143,8 @@ export const agent = new Agent({
 });
 ```
 
+**SSE 응답 필수 규칙: raw 이벤트 전송 금지.** `agent.stream()`에서 `textDelta`만 추출하여 `{type:'text',content:'...'}`  구조화된 이벤트로 전송한다. `invoke()` → `NextResponse.json()` 패턴 금지. 상세는 `strands-sdk-guide`의 `references/nextjs-integration.md` 참조.
+
 **스트리밍 API — async iterator 사용:**
 ```typescript
 // src/app/api/chat/route.ts

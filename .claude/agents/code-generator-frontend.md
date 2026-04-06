@@ -66,6 +66,10 @@ Cloudscape Design System 기반의 UI 코드를 생성하는 에이전트이다.
 - **StatusBadge**: `core_entities`의 `common_statuses` → `StatusIndicator` type 매핑 (예: in-operation→success, under-maintenance→warning)
 - **상태 전환**: `domain_workflows`의 `steps[]`를 상세 페이지 액션 버튼과 Wizard 단계에 반영
 
+## AI 스트리밍 렌더링 필수 규칙
+
+AI 기능이 있으면 `cloudscape-design` 스킬의 `references/ai-streaming.md`를 반드시 참조한다. 채팅은 `react-markdown`으로 마크다운 스트리밍 렌더링, 분석은 `useAIStreaming` 훅으로 실시간 결과 갱신. raw 텍스트 직접 렌더링 및 새로고침 필요 패턴 금지.
+
 ## Cloudscape Design System Reference
 
 **반드시 `cloudscape-design` 스킬을 Skill 도구로 호출**하여 올바른 컴포넌트 사용법과 코드 패턴을 참조한다.

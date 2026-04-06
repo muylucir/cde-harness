@@ -546,3 +546,4 @@ import Button from "@cloudscape-design/components/button";
 - **Complete component catalog**: See [references/components.md](references/components.md) for all 100+ components organized by category
 - **All patterns**: See [references/patterns.md](references/patterns.md) for all 73 patterns (CRUD, dashboard, GenAI, navigation, etc.)
 - **Design foundations**: See [references/foundations.md](references/foundations.md) for colors, typography, spacing, design tokens
+- **AI 스트리밍 렌더링**: See [references/ai-streaming.md](references/ai-streaming.md) for SSE 소비 훅(useAIStreaming), Markdown 스트리밍 렌더링(react-markdown), AI 분석/채팅 실시간 갱신 패턴

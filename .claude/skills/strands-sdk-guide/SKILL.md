@@ -92,6 +92,7 @@ npx tsx src/agent.ts
 - **[모델 프로바이더](references/model-providers.md)**: Bedrock, OpenAI, Google, Vercel, Custom 프로바이더
 - **[멀티 에이전트 패턴](references/multi-agent.md)**: Agents as Tools, A2A 프로토콜
 - **[고급 기능](references/advanced.md)**: Hooks, 스트리밍, 대화 관리
+- **[Next.js SSE 통합](references/nextjs-integration.md)**: App Router API Route에서 agent.stream() → SSE 변환, textDelta 추출, AI 분석/채팅 실시간 전달 패턴
 - **[배포 & 프로덕션](references/deployment.md)**: AgentCore, Express + Docker, 프로덕션 베스트 프랙티스
 
 ## 베스트 프랙티스 요약

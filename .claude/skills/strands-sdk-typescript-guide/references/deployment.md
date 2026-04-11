@@ -265,9 +265,17 @@ try {
 4. VPC 내 배포로 네트워크 격리
 5. 명시적 도구 목록 사용
 
+### 로깅 및 관측성
+
+AgentCore Runtime은 CloudWatch를 통한 내장 관측성을 제공한다:
+
+```bash
+# 최근 로그 조회
+aws logs tail /aws/bedrock/agentcore/<RUNTIME_ID> --follow
+```
+
 ## 참고 자료
 
 - [AgentCore Runtime 문서](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html)
 - [TypeScript 배포 가이드](https://strandsagents.com/docs/user-guide/deploy/deploy_to_bedrock_agentcore/typescript/)
-- [Docker 배포 가이드](https://strandsagents.com/docs/user-guide/deploy/deploy_to_docker/typescript/)
 - [프로덕션 운영 가이드](https://strandsagents.com/docs/user-guide/deploy/operating-agents-in-production/)

@@ -259,6 +259,23 @@ const freshAgent = new Agent()
 const agent = new Agent({ printer: false })
 ```
 
+## Structured Output (간편 사용)
+
+Zod 스키마로 타입 안전한 응답을 추출한다. 상세 내용은 [state-and-sessions.md](state-and-sessions.md#structured-output) 참조.
+
+```typescript
+import z from 'zod'
+
+const PersonSchema = z.object({
+  name: z.string().describe('Name of the person'),
+  age: z.number().describe('Age of the person'),
+})
+
+const agent = new Agent({ structuredOutputSchema: PersonSchema })
+const result = await agent.invoke('John Smith is 30 years old')
+console.log(result.structuredOutput) // { name: 'John Smith', age: 30 }
+```
+
 ## 트러블슈팅
 
 ### "on-demand throughput isn't supported" 에러

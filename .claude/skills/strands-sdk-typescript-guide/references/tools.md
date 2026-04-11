@@ -301,10 +301,39 @@ const transport = new StdioServerTransport()
 await server.connect(transport)
 ```
 
+## ToolContext — 에이전트 상태 접근
+
+도구 콜백의 두 번째 파라미터로 `ToolContext`를 받으면 에이전트의 상태(appState)에 접근할 수 있다.
+이를 통해 도구 간 정보를 공유하거나, 실행 중 에이전트 상태를 업데이트한다.
+
+```typescript
+import { Agent, tool, ToolContext } from '@strands-agents/sdk'
+import z from 'zod'
+
+const trackAction = tool({
+  name: 'track_action',
+  description: 'Track a user action in agent state',
+  inputSchema: z.object({
+    action: z.string().describe('The action to track'),
+  }),
+  callback: (input, context?: ToolContext) => {
+    if (!context) throw new Error('Context is required')
+
+    const count = (context.agent.appState.get('action_count') as number) || 0
+    context.agent.appState.set('action_count', count + 1)
+    context.agent.appState.set('last_action', input.action)
+
+    return `Action '${input.action}' recorded. Total: ${count + 1}`
+  },
+})
+```
+
+상세 내용은 [state-and-sessions.md](state-and-sessions.md#도구에서-state-사용-toolcontext) 참조.
+
 ## 베스트 프랙티스
 
 1. **명확한 설명**: `.describe()`로 각 파라미터를 명확히 기술하여 LLM이 올바른 도구를 선택하도록 한다
 2. **타입 안전성**: Zod 스키마를 활용하면 입력 자동 검증과 타입 추론 가능
 3. **에러 처리**: callback 내에서 예외를 처리하고 의미 있는 에러 메시지를 반환한다
-4. **상태 관리**: 상태가 필요한 경우 클래스 기반 도구를 사용한다
+4. **상태 관리**: 상태가 필요한 경우 클래스 기반 도구 또는 ToolContext를 사용한다
 5. **비동기**: I/O 바운드 작업은 async callback으로 구현한다

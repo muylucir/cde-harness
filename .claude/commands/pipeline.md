@@ -13,62 +13,46 @@ Execute the complete prototype generation pipeline from customer brief to handov
 3. **APPROVAL GATE에서 반드시 멈춰라** — 사용자가 응답할 때까지 다음 Stage로 진행하지 않는다 (auto 모드 제외).
 4. **CHECKPOINT를 통과해야 다음 Stage로 간다** — 각 Stage 끝의 검증 조건을 확인한 후에만 다음 Stage로 넘어간다. **auto 모드에서도 CHECKPOINT는 항상 실행한다.**
 
-## CHECKPOINT 기록 규칙
+## CHECKPOINT 실행 규칙 (코드 기반)
 
-각 CHECKPOINT 실행 결과를 `.pipeline/state.json`의 `stages` 배열에 기록한다.
+**모든 CHECKPOINT는 `.pipeline/scripts/checkpoint.mjs` 스크립트로 실행한다.** LLM이 직접 state.json을 수정하지 않는다.
 
-**통과 시:**
-```json
-{
-  "stage": "domain-researcher",
-  "status": "completed",
-  "duration_ms": 45000,
-  "checkpoint": {
-    "passed": true,
-    "items": [
-      { "check": "00-domain/domain-context.json exists", "passed": true },
-      { "check": "00-domain/domain-context.md exists", "passed": true }
-    ],
-    "retries": 0
-  }
-}
+### 스테이지 시작 시
+에이전트를 launch하기 **직전에** 반드시 `start` 명령을 실행하여 시작 타임스탬프를 기록한다:
+```bash
+node .pipeline/scripts/checkpoint.mjs start <stage-name>
 ```
 
-**실패 → 재시도 → 통과 시:**
-```json
-{
-  "stage": "domain-researcher",
-  "status": "completed",
-  "duration_ms": 90000,
-  "checkpoint": {
-    "passed": true,
-    "items": [
-      { "check": "00-domain/domain-context.json exists", "passed": true },
-      { "check": "00-domain/domain-context.md exists", "passed": true }
-    ],
-    "retries": 1
-  }
-}
+### 체크포인트 검증 시
+에이전트 완료 후 체크포인트 조건을 코드로 검증한다. 스크립트가 **검증 + 완료 타임스탬프 + duration 계산**을 모두 처리한다:
+```bash
+node .pipeline/scripts/checkpoint.mjs check <stage-name> \
+  "file:<path>" \
+  "json:<path>" \
+  "json-key:<path>:<key>" \
+  "no-match:<glob>:<pattern>" \
+  "cmd:<command>"
 ```
 
-**최대 재시도 초과 시:**
-```json
-{
-  "stage": "domain-researcher",
-  "status": "checkpoint-failed",
-  "checkpoint": {
-    "passed": false,
-    "items": [
-      { "check": "00-domain/domain-context.json exists", "passed": true },
-      { "check": "00-domain/domain-context.md exists", "passed": false }
-    ],
-    "retries": 1
-  }
-}
-```
+### 지원하는 체크 타입
+| 타입 | 형식 | 설명 |
+|------|------|------|
+| `file` | `file:<path>` | 파일 존재 확인 |
+| `json` | `json:<path>` | JSON 파일 유효성 확인 |
+| `json-key` | `json-key:<path>:<key>` | JSON 파일에 특정 키 존재 확인 |
+| `no-match` | `no-match:<glob>:<pattern>` | grep 매칭이 없으면 통과 |
+| `cmd` | `cmd:<command>` | 셸 명령 exit 0이면 통과 |
 
-- `status: "checkpoint-failed"` 시 서킷 브레이커가 작동한다.
-- `/pipeline-status`에서 실패한 항목을 즉시 확인할 수 있다.
+### 결과 처리
+- 스크립트가 exit 0이면 PASSED, exit 1이면 FAILED
+- `__CHECKPOINT_RESULT__` 뒤의 JSON을 파싱하면 상세 결과를 확인할 수 있다
+- `status: "checkpoint-failed"` 시 서킷 브레이커가 작동한다
+- `/pipeline-status`에서 실패한 항목을 즉시 확인할 수 있다
+
+### 상태 확인
+```bash
+node .pipeline/scripts/checkpoint.mjs status
+```
 
 ## Auto Mode
 
@@ -189,95 +173,163 @@ Stage 7   핸드오버 패키지
 ```
 
 ### Stage 1: Domain Research
+
+```bash
+node .pipeline/scripts/checkpoint.mjs start domain-researcher
+```
 - Launch the `domain-researcher` agent
 - Input: `.pipeline/input/customer-brief.md`
 - Output: `.pipeline/artifacts/v{N}/00-domain/domain-context.json` + `domain-context.md`
 - 웹 리서치로 도메인 워크플로우, KPI, 용어, 유사 제품 패턴, 규제 요건 수집
 - **APPROVAL GATE** (auto 모드 시 건너뜀): 제안 요구사항을 사용자에게 제시. 추가할 것이 있으면 customer-brief.md에 반영.
 
-**CHECKPOINT (Stage 1)**: 다음 파일이 존재하는지 확인한다. 누락 시 `domain-researcher`를 재실행한다 (최대 1회).
-- [ ] `00-domain/domain-context.json`
-- [ ] `00-domain/domain-context.md`
+**CHECKPOINT (Stage 1)**: 누락 시 `domain-researcher`를 재실행한다 (최대 1회).
+```bash
+node .pipeline/scripts/checkpoint.mjs check domain-researcher \
+  "file:.pipeline/artifacts/v{N}/00-domain/domain-context.json" \
+  "file:.pipeline/artifacts/v{N}/00-domain/domain-context.md"
+```
 
 ### Stage 2: Requirements Analysis
+
+```bash
+node .pipeline/scripts/checkpoint.mjs start requirements-analyst
+```
 - Launch the `requirements-analyst` agent
 - Input: `.pipeline/input/customer-brief.md` + `.pipeline/artifacts/v{N}/00-domain/domain-context.json`
 - Output: `.pipeline/artifacts/v{N}/01-requirements/`
 - **APPROVAL GATE** (auto 모드 시 건너뜀): Present requirements summary to user. Wait for approval before proceeding.
 - If user requests changes: re-run stage 1 with feedback
 
-**CHECKPOINT (Stage 2)**: 다음 파일이 존재하는지 확인한다. 누락 시 `requirements-analyst`를 재실행한다 (최대 1회).
-- [ ] `01-requirements/requirements.json`
-- [ ] `01-requirements/requirements.md`
+**CHECKPOINT (Stage 2)**: 누락 시 `requirements-analyst`를 재실행한다 (최대 1회).
+```bash
+node .pipeline/scripts/checkpoint.mjs check requirements-analyst \
+  "json:.pipeline/artifacts/v{N}/01-requirements/requirements.json" \
+  "file:.pipeline/artifacts/v{N}/01-requirements/requirements.md"
+```
 
 ### Stage 3: Architecture Design
+
+```bash
+node .pipeline/scripts/checkpoint.mjs start architect
+```
 - Launch the `architect` agent
 - Input: `01-requirements/requirements.json`
 - Output: `.pipeline/artifacts/v{N}/02-architecture/`
 - **APPROVAL GATE** (auto 모드 시 건너뜀): Present component tree and data flow. Wait for approval.
 
-**CHECKPOINT (Stage 3)**: 다음 파일이 존재하는지 확인한다. 누락 시 `architect`를 재실행한다 (최대 1회).
-- [ ] `02-architecture/architecture.json`
-- [ ] `02-architecture/architecture.md`
+**CHECKPOINT (Stage 3)**: 누락 시 `architect`를 재실행한다 (최대 1회).
+```bash
+node .pipeline/scripts/checkpoint.mjs check architect \
+  "json:.pipeline/artifacts/v{N}/02-architecture/architecture.json" \
+  "file:.pipeline/artifacts/v{N}/02-architecture/architecture.md"
+```
 
 ### Stage 4: Specification (BE → AI → FE 3개 에이전트 순차 호출)
 
 컨텍스트 오염 방지를 위해 각각 전용 에이전트로 분리. 각 에이전트가 도메인에 맞는 스킬만 로드한다.
 
 **4-1. 백엔드 스펙**
+```bash
+node .pipeline/scripts/checkpoint.mjs start spec-writer-backend
+```
 - Launch the `spec-writer-backend` agent
 - Input: `01-requirements/requirements.json` + `02-architecture/architecture.json`
 - Output: `backend-spec.json` + `backend-spec.md`
 
+```bash
+node .pipeline/scripts/checkpoint.mjs check spec-writer-backend \
+  "file:.pipeline/artifacts/v{N}/03-specs/backend-spec.md" \
+  "json:.pipeline/artifacts/v{N}/03-specs/backend-spec.json"
+```
+
 **4-2. AI 스펙 (조건부)**
 - `requirements.json`에 AI 관련 FR이 없으면 건너뜀
+
+```bash
+node .pipeline/scripts/checkpoint.mjs start spec-writer-ai
+```
 - Launch the `spec-writer-ai` agent
 - Input: 위와 동일 + `backend-spec.json` (BE 타입/API 참조)
 - Output: `ai-spec.json` + `ai-spec.md`
 - 참조 스킬: `agent-patterns`, `prompt-engineering`, `strands-sdk-guide`
 
+```bash
+node .pipeline/scripts/checkpoint.mjs check spec-writer-ai \
+  "file:.pipeline/artifacts/v{N}/03-specs/ai-spec.md" \
+  "json:.pipeline/artifacts/v{N}/03-specs/ai-spec.json"
+```
+
 **4-3. 프론트엔드 스펙**
+```bash
+node .pipeline/scripts/checkpoint.mjs start spec-writer-frontend
+```
 - Launch the `spec-writer-frontend` agent
 - Input: 위와 동일 + `backend-spec.json` + `ai-spec.json` (있을 때)
 - Output: `frontend-spec.json` + `frontend-spec.md` + `specs-summary.md` + `_manifest.json`
 - 참조 스킬: `cloudscape-design`, `ascii-diagram`
 
-**CHECKPOINT (Stage 4)**: 다음 파일이 존재하는지 확인한다. 누락 시 `spec-writer`를 재실행한다 (최대 1회).
-- [ ] `03-specs/backend-spec.md` (사람이 리뷰할 수 있는 한국어 마크다운)
-- [ ] `03-specs/backend-spec.json` (코드 제너레이터용 기계 리더블)
-- [ ] `03-specs/ai-spec.json` + `ai-spec.md` (AI FR이 있을 때만)
-- [ ] `03-specs/frontend-spec.md`
-- [ ] `03-specs/frontend-spec.json`
-- [ ] `03-specs/_manifest.json`에 `requirements_coverage`가 포함되어 있는가
+**CHECKPOINT (Stage 4)**: 누락 시 해당 `spec-writer`를 재실행한다 (최대 1회).
+```bash
+node .pipeline/scripts/checkpoint.mjs check spec-writer-frontend \
+  "file:.pipeline/artifacts/v{N}/03-specs/frontend-spec.md" \
+  "json:.pipeline/artifacts/v{N}/03-specs/frontend-spec.json" \
+  "json-key:.pipeline/artifacts/v{N}/03-specs/_manifest.json:requirements_coverage"
+```
 
 ### Stage 5: Code Generation (순차)
 
 순서대로 코드를 생성한다. 각 단계의 산출물이 다음 단계의 입력이 된다.
 
 **5a. Backend**
+```bash
+node .pipeline/scripts/checkpoint.mjs start code-gen-backend
+```
 - Launch `code-generator-backend`
 - Output: `src/types/`, `src/lib/`, `src/app/api/`, `src/data/`, `src/middleware.ts`
-- `npm run build` + `npm run lint` 통과 필수 (lint error 0)
+
+```bash
+node .pipeline/scripts/checkpoint.mjs check code-gen-backend \
+  "cmd:npm run build" \
+  "cmd:npm run lint"
+```
 
 **5b. AI Agent (조건부)**
 - requirements.json에 AI 관련 FR이 없으면 건너뜀
+
+```bash
+node .pipeline/scripts/checkpoint.mjs start code-gen-ai
+```
 - Launch `code-generator-ai`
 - Output: `src/lib/ai/`, `src/app/api/chat/`
-- `npm run build` + `npm run lint` 통과 필수
+
+```bash
+node .pipeline/scripts/checkpoint.mjs check code-gen-ai \
+  "cmd:npm run build" \
+  "cmd:npm run lint"
+```
 
 **5c. Frontend**
+```bash
+node .pipeline/scripts/checkpoint.mjs start code-gen-frontend
+```
 - Launch `code-generator-frontend`
 - 백엔드가 생성한 `src/types/`와 API 엔드포인트를 참조
 - Output: `src/components/`, `src/hooks/`, `src/contexts/`, `src/app/` pages
-- `npm run build` + `npm run lint` 통과 필수 (lint error 0)
 
-**CHECKPOINT (Stage 5)**: 다음 조건을 확인한다. 실패 시 해당 코드 제너레이터에 피드백 → 재생성 (최대 2회).
-- [ ] `npm run build` 성공
-- [ ] `npm run lint` 에러 0
-- [ ] `grep -r 'fetch(' src/components/ src/app/ --include='*.tsx'` 에서 raw fetch 미발견
+**CHECKPOINT (Stage 5)**: 실패 시 해당 코드 제너레이터에 피드백 → 재생성 (최대 2회).
+```bash
+node .pipeline/scripts/checkpoint.mjs check code-gen-frontend \
+  "cmd:npm run build" \
+  "cmd:npm run lint" \
+  "no-match:src/components/ src/app/ --include='*.tsx':fetch("
+```
 
 ### Stage 6a: QA (기능 검증 — 먼저 동작하게 만든다)
 
+```bash
+node .pipeline/scripts/checkpoint.mjs start qa-engineer
+```
 Launch `qa-engineer` agent.
 
 동작하지 않는 코드를 리뷰하는 건 의미가 없다. **먼저 빌드 + E2E 테스트가 통과하는 코드**를 확보한다.
@@ -325,9 +377,12 @@ E2E 테스트가 검증하는 것:
 
 Output: `05-review/test-result.json`
 
-**CHECKPOINT (Stage 6a)**: 다음 조건을 확인한다. 실패 시 수정 후 재테스트 (최대 3회).
-- [ ] `npm run build` 성공
-- [ ] `05-review/test-result.json`이 존재하는가
+**CHECKPOINT (Stage 6a)**: 실패 시 수정 후 재테스트 (최대 3회).
+```bash
+node .pipeline/scripts/checkpoint.mjs check qa-engineer \
+  "cmd:npm run build" \
+  "json:.pipeline/artifacts/v{N}/05-review/test-result.json"
+```
 
 **5a-3. 수정 (테스트 실패 시)**
 
@@ -338,9 +393,10 @@ Output: `05-review/test-result.json`
 
 ### Stage 6b: Review (품질 검증 — QA 통과한 코드를 리뷰한다)
 
+```bash
+node .pipeline/scripts/checkpoint.mjs start reviewer
+```
 Launch `reviewer` agent. QA가 통과시킨 코드에 대해 **정적 품질 리뷰만** 수행한다 (테스트 생성/실행은 하지 않음).
-
-- Launch `reviewer` agent
 - 리뷰 카테고리 (**9개** — 모두 리포트에 명시적으로 출력해야 함):
   1. Cloudscape Compliance (개별 임포트, useCollection, TopNav 위치, 이벤트 패턴)
   2. Next.js 16 Conventions (App Router, "use client", Server Components)
@@ -358,10 +414,13 @@ Output:
 
 > **참고**: `test-report.md`와 `test-result.json`은 Stage 6a(qa-engineer)가 생성한다. reviewer는 이를 참조만 한다.
 
-**CHECKPOINT (Stage 6b)**: 다음 조건을 확인한다. 누락 시 `reviewer`를 재실행한다 (최대 1회).
-- [ ] `05-review/review-report.md`에 9개 카테고리가 모두 명시적 섹션으로 존재하는가
-- [ ] `05-review/review-result.json`에 `iterations` 배열이 있고 각 이터레이션의 실패/수정 내역이 기록되었는가
-- [ ] `05-review/test-report.md`(qa-engineer 생성)에 P0 FR별 인터랙션 테스트(click/fill) 존재 여부가 명시되었는가
+**CHECKPOINT (Stage 6b)**: 누락 시 `reviewer`를 재실행한다 (최대 1회).
+```bash
+node .pipeline/scripts/checkpoint.mjs check reviewer \
+  "file:.pipeline/artifacts/v{N}/05-review/review-report.md" \
+  "json-key:.pipeline/artifacts/v{N}/05-review/review-result.json:iterations" \
+  "file:.pipeline/artifacts/v{N}/05-review/test-report.md"
+```
 
 **리뷰 PASS 시**: Stage 7으로 진행
 **리뷰 FAIL 시**:
@@ -370,6 +429,10 @@ Output:
   - 최대 2회 리뷰 이터레이션
 
 ### Stage 7: Security Audit
+
+```bash
+node .pipeline/scripts/checkpoint.mjs start security-auditor
+```
 - Launch the `security-auditor-pipeline` agent
 - Input: `src/` + `05-review/review-result.json` + `01-requirements/requirements.json`
 - Output: `.pipeline/artifacts/v{N}/06-security/`
@@ -378,9 +441,12 @@ Output:
   - 수정 후 Stage 6 품질 루프 재실행 (max 1회)
 - If **PASS**: proceed to Completion
 
-**CHECKPOINT (Stage 7)**: 다음 조건을 확인한다.
-- [ ] `06-security/security-report.md`가 존재하는가
-- [ ] `06-security/security-result.json`에 `verdict: "PASS"`인가
+**CHECKPOINT (Stage 7)**:
+```bash
+node .pipeline/scripts/checkpoint.mjs check security-auditor \
+  "file:.pipeline/artifacts/v{N}/06-security/security-report.md" \
+  "json-key:.pipeline/artifacts/v{N}/06-security/security-result.json:verdict"
+```
 
 ## Completion
 

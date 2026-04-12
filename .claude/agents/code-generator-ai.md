@@ -57,7 +57,7 @@ allowedTools:
 - Tool Use Prompting (도구 설명, 파라미터 정의)
 - Extended Thinking 활용 (복잡한 추론이 필요한 경우)
 
-### `strands-sdk-guide` — Strands Agents SDK TypeScript 구현
+### `strands-sdk-typescript-guide` — Strands Agents SDK TypeScript 구현
 - `@strands-agents/sdk` 패키지로 에이전트 코드 작성
 - `tool()` 함수 + Zod 스키마로 커스텀 도구 정의
 - MCP 서버/클라이언트 연동 (stdio, Streamable HTTP)

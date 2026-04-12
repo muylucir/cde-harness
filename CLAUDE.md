@@ -123,10 +123,12 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
 
 ESLint가 강제하는 규칙 (eslint.config.mjs 참조):
 - 네이밍: `@typescript-eslint/naming-convention` (PascalCase 타입, camelCase 변수, UPPER_CASE 상수)
-- JSDoc: `eslint-plugin-jsdoc` (export 함수/클래스에 필수)
+- JSDoc: `eslint-plugin-jsdoc` (export 함수/클래스에 **error** 레벨 필수, 한국어 설명)
 - Import 순서: `eslint-plugin-import` (builtin → external → internal, 순환 금지)
-- JSDoc: `eslint-plugin-jsdoc` (export 함수/클래스에 필수, 한국어 설명)
-- 타입: `no-explicit-any` (any 금지)
+- 타입: `no-explicit-any` (any 금지), `ban-ts-comment` (@ts-ignore/@ts-nocheck 금지)
+- 타입 임포트: `consistent-type-imports` (`import type { Foo }` 강제)
+- Cloudscape: `no-restricted-imports` (`@cloudscape-design/components` 배럴 임포트 금지 → 개별 경로 강제)
+- 콘솔: `no-console` error (warn/error만 허용)
 
 ESLint가 강제할 수 없는 규칙 (에이전트가 준수):
 - **파일명**: 컴포넌트 PascalCase.tsx, 유틸/훅 camelCase.ts, API 라우트 kebab-case 디렉토리
@@ -134,6 +136,7 @@ ESLint가 강제할 수 없는 규칙 (에이전트가 준수):
 - **주석 범위**: 파일 헤더(필수) + export JSDoc(필수) + 인라인(의도 불명확 시만)
 - **barrel export (index.ts) 금지**
 - **파일 당 1개 export default**
+- **`"use client"` 최소화**: 이벤트 핸들러나 hooks 사용 컴포넌트에만 적용
 - **기술 용어**: PASS/FAIL, FR-001, P0 등은 한국어 문장 내에서도 영어 유지
 
 ## Directory Convention (파이프라인이 생성)

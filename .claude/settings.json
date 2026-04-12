@@ -19,7 +19,8 @@
       "Bash(aws dynamodb:*)",
       "Bash(aws s3:*)",
       "Bash(aws cognito-idp:*)",
-      "Bash(aws cloudformation:*)"
+      "Bash(aws cloudformation:*)",
+      "Bash(node .pipeline/scripts/checkpoint.mjs:*)"
     ]
   }
 }

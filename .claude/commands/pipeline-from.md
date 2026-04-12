@@ -50,7 +50,7 @@ Valid stage names:
 
 4. **Resume execution**: Run the target stage and all subsequent stages
    - Follow the same feedback loops and approval gates as `/pipeline`
-   - Update `state.json` at each step
+   - **모든 CHECKPOINT는 `.pipeline/scripts/checkpoint.mjs`로 실행한다** (`/pipeline`과 동일한 `start` + `check` 패턴)
 
 5. **Completion**: Same as `/pipeline` completion flow
 

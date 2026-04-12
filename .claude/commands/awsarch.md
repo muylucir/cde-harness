@@ -13,29 +13,16 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
 3. **APPROVAL GATE에서 반드시 멈춰라** — 사용자가 응답할 때까지 다음 Phase로 진행하지 않는다.
 4. **CHECKPOINT를 통과해야 다음 Phase로 간다** — 각 Phase 끝의 검증 조건을 확인한 후에만 다음 Phase로 넘어간다.
 
-## CHECKPOINT 기록 규칙
+## CHECKPOINT 실행 규칙 (코드 기반)
 
-각 CHECKPOINT 실행 결과를 `.pipeline/state.json`의 `stages` 배열에 기록한다. 형식은 `/pipeline`의 CHECKPOINT 기록 규칙과 동일하다.
+**모든 CHECKPOINT는 `.pipeline/scripts/checkpoint.mjs` 스크립트로 실행한다.** LLM이 직접 state.json을 수정하지 않는다.
 
-**통과 시:**
-```json
-{
-  "stage": "aws-architect",
-  "status": "completed",
-  "duration_ms": 60000,
-  "checkpoint": {
-    "passed": true,
-    "items": [
-      { "check": "08-aws-infra/aws-architecture.json exists", "passed": true },
-      { "check": "08-aws-infra/aws-architecture.md exists", "passed": true }
-    ],
-    "retries": 0
-  }
-}
-```
+- 에이전트 launch 직전: `node .pipeline/scripts/checkpoint.mjs start <stage-name>`
+- 에이전트 완료 후: `node .pipeline/scripts/checkpoint.mjs check <stage-name> <checks...>`
+- 스크립트가 검증 + 타임스탬프 + duration 계산을 모두 처리한다.
+- exit 0 = PASSED, exit 1 = FAILED (서킷 브레이커 판단).
 
-**실패 → 재시도 시**: `retries`를 증가시킨다.
-**최대 재시도 초과 시**: `"status": "checkpoint-failed"`로 기록, 서킷 브레이커 작동.
+사용법 상세는 `/pipeline`의 "CHECKPOINT 실행 규칙" 참조.
 
 ## Mode
 

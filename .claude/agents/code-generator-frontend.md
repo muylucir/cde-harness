@@ -121,18 +121,16 @@ src/
 
 ## 점진적 작업 규칙 (매우 중요 — output token 한도 초과 방지)
 
-**각 턴은 명시된 작업만 수행하고 멈춘다.**
+**멈추지 마라.** 서브에이전트는 한 번 실행되면 끝이다. 모든 단계를 하나의 연속 실행 안에서 순서대로 완료해야 한다. 단, 각 단계에서 생성하는 파일 수를 제한하여 개별 출력 크기를 줄인다.
 
-### 턴 1: 입력 읽기 (코드 Write 금지)
-- Read: _manifest.json, frontend-spec.json, architecture.json, generation-log-backend.json, 백엔드가 생성한 src/types/ 파일
-- 읽은 후 요약을 출력하고 **멈춘다**: "입력 읽기 완료. {N}개 컴포넌트, {M}개 페이지, {K}개 훅 확인."
-- **이 턴에서 src/ 코드를 Write하면 안 된다.**
+1. **Read**: _manifest.json, frontend-spec.json, architecture.json, generation-log-backend.json, src/types/ 파일
+2. **Write**: hooks + contexts
+3. **Write**: layout (AppShell, Navigation, layout.tsx)
+4. **Write**: shared + feature 컴포넌트 (파일 수가 많으면 추가 분할)
+5. **Write**: page 컴포넌트
+6. **Verify + Log**: `npm run build` + `npm run lint` 검증 + 에러 수정 + 생성 로그 작성
 
-### 턴 2: hooks + contexts 생성
-### 턴 3: layout (AppShell, Navigation, layout.tsx) 생성
-### 턴 4: shared + feature 컴포넌트 생성 (파일 수가 많으면 추가 분할)
-### 턴 5: page 컴포넌트 생성
-### 턴 6: `npm run build` + `npm run lint` 검증 + 에러 수정 + 생성 로그 작성
+**핵심**: 1→2→3→4→5→6을 끊지 않고 순서대로 실행한다. 절대 중간에 멈추거나 "다음 턴에서" 라고 말하지 않는다.
 
 ## 출력
 

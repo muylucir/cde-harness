@@ -114,18 +114,16 @@ src/
 
 ### 점진적 작업 규칙 (매우 중요 — output token 한도 초과 방지)
 
-**각 턴은 명시된 작업만 수행하고 멈춘다.**
+**멈추지 마라.** 서브에이전트는 한 번 실행되면 끝이다. 모든 단계를 하나의 연속 실행 안에서 순서대로 완료해야 한다. 단, 각 단계에서 생성하는 파일 수를 제한하여 개별 출력 크기를 줄인다.
 
-#### 턴 1: 입력 읽기 (코드 Write 금지)
-- Read: ai-spec.json, _manifest.json, generation-log-backend.json
-- 읽은 후 요약을 출력하고 **멈춘다**: "입력 읽기 완료. 패턴: {패턴명}, 도구: {N}개, 스트리밍: {있음/없음}."
-- **이 턴에서 src/ 코드를 Write하면 안 된다.**
+1. **Read**: ai-spec.json, _manifest.json, generation-log-backend.json
+2. **Write**: types + prompts 파일
+3. **Write**: tools 파일
+4. **Write**: rag (있으면) + agent.ts
+5. **Write**: API route handlers
+6. **Verify + Log**: `npm run build` + `npm run lint` 검증 + 에러 수정 + 생성 로그 작성
 
-#### 턴 2: types + prompts 파일 생성
-#### 턴 3: tools 파일 생성
-#### 턴 4: rag (있으면) + agent.ts 생성
-#### 턴 5: API route handlers 생성
-#### 턴 6: `npm run build` + `npm run lint` 검증 + 에러 수정 + 생성 로그 작성
+**핵심**: 1→2→3→4→5→6을 끊지 않고 순서대로 실행한다. 절대 중간에 멈추거나 "다음 턴에서" 라고 말하지 않는다.
 
 ### 구현 시 필수 참조 사항
 

@@ -84,16 +84,14 @@ allowedTools:
 
 ## 점진적 작업 규칙 (매우 중요 — output token 한도 초과 방지)
 
-**각 턴은 명시된 작업만 수행하고 멈춘다.**
+**멈추지 마라.** 서브에이전트는 한 번 실행되면 끝이다. 모든 단계를 하나의 연속 실행 안에서 순서대로 완료해야 한다. 단, 각 단계에서 Write/Edit 호출은 1회로 제한하여 개별 출력 크기를 줄인다.
 
-### 턴 1: 입력 파일 읽기 (Write/Edit 금지)
-- `.pipeline/input/raw/` 의 모든 파일을 Read
-- 각 소스에서 추출한 정보를 내부적으로 정리
-- 읽은 후 요약을 출력하고 **멈춘다**: "입력 {N}개 파일 분석 완료. 페인 포인트 {M}건, 요구사항 {K}건 추출."
-- **이 턴에서 Write/Edit를 호출하면 안 된다.**
+1. **Read**: `.pipeline/input/raw/` 의 모든 파일 + clarifications.md 확인
+2. **Write**: `customer-brief.md`
+3. **Write**: `source-analysis.md`
+4. **Write**: `manifest.json` + (필요 시) `clarifications.md`
 
-### 턴 2: customer-brief.md 작성
-### 턴 3: source-analysis.md + manifest.json 작성 + (필요 시) clarifications.md 작성
+**핵심**: 1→2→3→4를 끊지 않고 순서대로 실행한다. 절대 중간에 멈추거나 "다음 턴에서" 라고 말하지 않는다.
 
 ## 출력
 

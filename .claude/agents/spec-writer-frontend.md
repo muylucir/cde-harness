@@ -62,37 +62,16 @@ allowedTools:
 
 ## 점진적 작업 규칙 (매우 중요 — output token 한도 초과 방지)
 
-**한 번의 응답에서 하나의 Write/Edit만 실행한다.** 각 턴은 명시된 종료 조건에서 반드시 멈춘다.
+**멈추지 마라.** 서브에이전트는 한 번 실행되면 끝이다. 모든 단계를 하나의 연속 실행 안에서 순서대로 완료해야 한다. 단, 각 단계에서 Write/Edit 호출은 1회로 제한하여 개별 출력 크기를 줄인다.
 
-### 턴 1: 입력 읽기 (Write/Edit 금지)
-- Read: requirements.json, architecture.json, backend-spec.json, ai-spec.json (있으면), domain-context.json (있으면)
-- 읽은 후 아래 형식으로 요약을 출력하고 **멈춘다**:
-  ```
-  입력 읽기 완료.
-  - 프론트엔드 관련 FR: {N}건
-  - 페이지: {N}개
-  - 컴포넌트: {N}개
-  - AI 채팅 UI: {있음/없음}
-  - 도메인 컨텍스트: {있음/없음}
-  다음 턴에서 frontend-spec.json 전반부를 작성합니다.
-  ```
-- **이 턴에서 Write/Edit를 호출하면 안 된다.**
+1. **Read**: requirements.json, architecture.json, backend-spec.json, ai-spec.json (있으면), domain-context.json (있으면)
+2. **Write**: `frontend-spec.json` — `generator`, `hooks[]`, `contexts[]`, `generation_order` 포함
+3. **Edit**: `frontend-spec.json` — `specs[]` (layout, shared, feature, page 컴포넌트) 추가
+4. **Write**: `frontend-spec.md` — hooks, contexts, layout, shared 섹션
+5. **Edit**: `frontend-spec.md` — feature, page 섹션 추가
+6. **Write**: `specs-summary.md` + `_manifest.json`
 
-### 턴 2: frontend-spec.json 전반부
-- Write: `frontend-spec.json` — `generator`, `hooks[]`, `contexts[]`, `generation_order` 포함
-
-### 턴 3: frontend-spec.json 후반부
-- Edit: `frontend-spec.json` — `specs[]` (layout, shared, feature, page 컴포넌트) 추가
-
-### 턴 4: frontend-spec.md 전반부
-- Write: `frontend-spec.md` — hooks, contexts, layout, shared 섹션
-
-### 턴 5: frontend-spec.md 후반부
-- Edit: `frontend-spec.md` — feature, page 섹션 추가
-
-### 턴 6: 요약 + 매니페스트
-- Write: `specs-summary.md` (BE+AI+FE 전체 요약)
-- Write: `_manifest.json` (FR 커버리지 + 생성 순서)
+**핵심**: 1→2→3→4→5→6을 끊지 않고 순서대로 실행한다. 절대 중간에 멈추거나 "다음 턴에서" 라고 말하지 않는다.
 
 ## 처리 프로세스
 

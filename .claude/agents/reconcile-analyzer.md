@@ -11,6 +11,7 @@ allowedTools:
   - Glob
   - Grep
   - Bash(ls:*)
+  - Bash(mkdir:*)
   - Bash(git diff:*)
   - Bash(git log:*)
   - Bash(git show:*)

@@ -7,9 +7,11 @@ color: amber
 allowedTools:
   - Read
   - Write
+  - Edit
   - Glob
   - Grep
   - Bash(ls:*)
+  - Bash(mkdir:*)
   - Bash(diff:*)
   - Bash(md5sum:*)
   - Bash(wc:*)

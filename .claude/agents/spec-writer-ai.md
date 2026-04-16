@@ -7,11 +7,13 @@ color: magenta
 allowedTools:
   - Read
   - Write
+  - Edit
   - Glob
   - Grep
   - WebFetch
   - Skill
   - Bash(ls:*)
+  - Bash(mkdir:*)
 ---
 
 # Spec Writer — AI
@@ -64,13 +66,17 @@ allowedTools:
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — AI 컴포넌트
 - `.pipeline/artifacts/v{N}/03-specs/backend-spec.json` — 백엔드 타입/API 참조
 
-## 점진적 작업 규칙 (중요)
+## 점진적 작업 규칙 (매우 중요 — output token 한도 초과 방지)
 
-**한 번의 응답에서 JSON과 MD를 모두 작성하지 않는다.** 나눠서 작업한다:
+**한 번의 응답에서 하나의 Write만 실행한다.** 대형 JSON/MD 파일도 분할한다:
 
-1. **턴 1**: 입력 파일 읽기 + 3개 스킬 호출 (agent-patterns, prompt-engineering, strands-sdk-typescript-guide)
-2. **턴 2**: `ai-spec.json` 작성
-3. **턴 3**: `ai-spec.md` 작성
+1. **턴 1**: 입력 파일 읽기 + 3개 스킬 참조
+2. **턴 2**: `ai-spec.json` — architecture + system_prompt + tools 섹션 Write
+3. **턴 3**: `ai-spec.json` — rag + api_routes + types 섹션 Edit로 추가
+4. **턴 4**: `ai-spec.md` — 전반부 Write (아키텍처 + 프롬프트)
+5. **턴 5**: `ai-spec.md` — 후반부 Edit로 추가 (도구 + RAG + API)
+
+**핵심**: Write로 파일 뼈대를 만들고, 나머지는 Edit로 섹션을 추가한다.
 
 ## 처리 프로세스
 

@@ -7,10 +7,12 @@ color: blue
 allowedTools:
   - Read
   - Write
+  - Edit
   - Glob
   - Grep
   - WebFetch
   - Bash(ls:*)
+  - Bash(mkdir:*)
   - Skill
 ---
 

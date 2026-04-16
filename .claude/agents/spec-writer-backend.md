@@ -7,11 +7,13 @@ color: purple
 allowedTools:
   - Read
   - Write
+  - Edit
   - Glob
   - Grep
   - WebFetch
   - Skill
   - Bash(ls:*)
+  - Bash(mkdir:*)
 ---
 
 # Spec Writer — Backend
@@ -54,13 +56,17 @@ allowedTools:
 | data | `kpis` | 시드 데이터의 상태 분포를 `typical_target` 범위에 맞게 조정 (예: 가동률 85-95% 목표 → 차량 90%를 in-operation으로) |
 | db | `data_model_hints.common_relationships` | 관계형 조회 메서드 추가 (예: "Vehicle hasMany MaintenanceRecords" → `findByVehicleId()`) |
 
-## 점진적 작업 규칙 (중요)
+## 점진적 작업 규칙 (매우 중요 — output token 한도 초과 방지)
 
-**한 번의 응답에서 JSON과 MD를 모두 작성하지 않는다.** 나눠서 작업한다:
+**한 번의 응답에서 하나의 Write만 실행한다.** 대형 JSON/MD 파일도 분할한다:
 
 1. **턴 1**: 입력 파일 읽기 (requirements.json, architecture.json, domain-context.json, 피드백)
-2. **턴 2**: `backend-spec.json` 작성
-3. **턴 3**: `backend-spec.md` 작성
+2. **턴 2**: `backend-spec.json` — types + validation + data 섹션만 Write
+3. **턴 3**: `backend-spec.json` — db + services + api + middleware 섹션을 Edit로 추가
+4. **턴 4**: `backend-spec.md` — 전반부 작성 (types ~ data)
+5. **턴 5**: `backend-spec.md` — 후반부 작성 (db ~ middleware) Edit로 추가
+
+**핵심**: Write로 파일 뼈대를 만들고, 나머지는 Edit로 섹션을 추가한다. 한 턴에 모든 내용을 쓰면 output token 한도에 걸려 멈춘다.
 
 ## 처리 프로세스
 

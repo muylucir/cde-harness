@@ -7,11 +7,13 @@ color: green
 allowedTools:
   - Read
   - Write
+  - Edit
   - Glob
   - Grep
   - WebFetch
   - Skill
   - Bash(ls:*)
+  - Bash(mkdir:*)
 ---
 
 # Architect

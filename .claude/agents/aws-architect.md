@@ -7,9 +7,11 @@ color: red
 allowedTools:
   - Read
   - Write
+  - Edit
   - Glob
   - Grep
   - Bash(ls:*)
+  - Bash(mkdir:*)
   - Bash(aws:*)
   - WebFetch
   - Skill

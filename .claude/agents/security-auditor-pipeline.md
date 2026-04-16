@@ -7,11 +7,13 @@ color: orange
 allowedTools:
   - Read
   - Write
+  - Edit
   - Glob
   - Grep
   - Bash(npm audit:*)
   - Bash(npx:*)
   - Bash(ls:*)
+  - Bash(mkdir:*)
   - WebFetch
   - Skill
 ---

@@ -7,9 +7,11 @@ color: emerald
 allowedTools:
   - Read
   - Write
+  - Edit
   - Glob
   - Grep
   - Bash(ls:*)
+  - Bash(mkdir:*)
   - Bash(wc:*)
   - Bash(npm run build:*)
   - Skill

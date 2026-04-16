@@ -7,11 +7,13 @@ color: purple
 allowedTools:
   - Read
   - Write
+  - Edit
   - Glob
   - Grep
   - WebFetch
   - Skill
   - Bash(ls:*)
+  - Bash(mkdir:*)
 ---
 
 # Spec Writer — Frontend
@@ -58,16 +60,18 @@ allowedTools:
 | 목데이터 예시 | `terminology` | 컬럼 헤더와 라벨에 도메인 용어 사용. 약어는 풀네임 병기 (예: "MTBF (평균고장간격)") |
 | 동작 명세 | `domain_workflows` | 상세 페이지의 상태 전환을 워크플로우 `steps[]` 순서에 맞춰 기술 |
 
-## 점진적 작업 규칙 (중요)
+## 점진적 작업 규칙 (매우 중요 — output token 한도 초과 방지)
 
-**한 번의 응답에서 모든 출력 파일을 작성하지 않는다.** 입력 아티팩트 읽기 + JSON + MD + 요약 + 매니페스트를 합치면 출력 토큰 한도를 초과한다. 나눠서 작업한다:
+**한 번의 응답에서 하나의 Write만 실행한다.** 대형 JSON/MD 파일도 분할한다:
 
 1. **턴 1**: 입력 파일 읽기 (requirements.json, architecture.json, backend-spec.json, ai-spec.json, domain-context.json)
-2. **턴 2**: `frontend-spec.json` 작성
-3. **턴 3**: `frontend-spec.md` 작성
-4. **턴 4**: `specs-summary.md` + `_manifest.json` 작성
+2. **턴 2**: `frontend-spec.json` — hooks + contexts + layout 섹션 Write
+3. **턴 3**: `frontend-spec.json` — shared + feature + page 섹션 Edit로 추가
+4. **턴 4**: `frontend-spec.md` — 전반부 Write
+5. **턴 5**: `frontend-spec.md` — 후반부 Edit로 추가
+6. **턴 6**: `specs-summary.md` + `_manifest.json` 작성
 
-각 턴에서 Write 도구로 파일을 쓴 뒤, 다음 턴으로 넘어간다.
+**핵심**: Write로 파일 뼈대를 만들고, 나머지는 Edit로 섹션을 추가한다.
 
 ## 처리 프로세스
 

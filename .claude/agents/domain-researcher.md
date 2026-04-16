@@ -7,11 +7,13 @@ color: sky
 allowedTools:
   - Read
   - Write
+  - Edit
   - Glob
   - Grep
   - WebFetch
   - WebSearch
   - Bash(ls:*)
+  - Bash(mkdir:*)
 ---
 
 # Domain Researcher

@@ -87,17 +87,21 @@ src/
 4. **zod로 모든 POST/PUT 요청 검증**
 5. **코딩 규칙은 CLAUDE.md 참조** — TypeScript, 주석, 네이밍 컨벤션 등
 
-## 점진적 작업 규칙 (중요)
+## 점진적 작업 규칙 (매우 중요 — output token 한도 초과 방지)
 
-**한 번의 응답에서 모든 파일을 생성하지 않는다.** 출력 토큰 한도를 초과하지 않도록 다음 순서로 나눠서 작업한다:
+**각 턴은 명시된 작업만 수행하고 멈춘다.**
 
-1. **턴 1**: types + validation 파일 생성
-2. **턴 2**: data (시드) + db (store, repository) 파일 생성
-3. **턴 3**: api route handlers 생성
-4. **턴 4**: middleware + `npm run build` + `npm run lint` 검증
-5. **턴 5**: 빌드 에러 수정 (있으면) + 생성 로그 작성
+### 턴 1: 입력 읽기 + 부트스트랩 (코드 Write 금지)
+- Read: _manifest.json, backend-spec.json, architecture.json, domain-context.json (있으면)
+- `node_modules/` 없으면 `npm install`, `src/` 없으면 최소 구조 생성
+- 읽은 후 요약을 출력하고 **멈춘다**: "입력 읽기 완료. {N}개 타입, {M}개 API 라우트 확인."
+- **이 턴에서 src/ 코드를 Write하면 안 된다.**
 
-각 턴에서 Write 도구로 파일을 쓴 뒤, 다음 턴으로 넘어간다.
+### 턴 2: types + validation 파일 생성
+### 턴 3: data (시드) + db (store, repository) 파일 생성
+### 턴 4: api route handlers 생성
+### 턴 5: middleware + `npm run build` + `npm run lint` 검증
+### 턴 6: 빌드 에러 수정 (있으면) + 생성 로그 작성
 
 ## 생성 프로세스
 

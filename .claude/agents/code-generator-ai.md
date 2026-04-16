@@ -112,15 +112,20 @@ src/
 2. **ai-spec.json의 결정을 따른다** — 패턴, 도구, API 라우트를 자의적으로 변경하지 않는다.
 3. **3개 스킬을 참조하여 구현한다** — `agent-patterns`, `prompt-engineering`, `strands-sdk-guide`
 
-### 점진적 작업 규칙 (중요)
+### 점진적 작업 규칙 (매우 중요 — output token 한도 초과 방지)
 
-**한 번의 응답에서 모든 파일을 생성하지 않는다.** `ai-spec.json`의 `generation_order`를 따르되, 출력 토큰 한도를 초과하지 않도록 나눠서 작업한다:
+**각 턴은 명시된 작업만 수행하고 멈춘다.**
 
-1. **턴 1**: types + prompts 파일 생성
-2. **턴 2**: tools 파일 생성
-3. **턴 3**: rag (있으면) + agent.ts 생성
-4. **턴 4**: API route handlers 생성
-5. **턴 5**: `npm run build` + `npm run lint` 검증 + 에러 수정 + 생성 로그 작성
+#### 턴 1: 입력 읽기 (코드 Write 금지)
+- Read: ai-spec.json, _manifest.json, generation-log-backend.json
+- 읽은 후 요약을 출력하고 **멈춘다**: "입력 읽기 완료. 패턴: {패턴명}, 도구: {N}개, 스트리밍: {있음/없음}."
+- **이 턴에서 src/ 코드를 Write하면 안 된다.**
+
+#### 턴 2: types + prompts 파일 생성
+#### 턴 3: tools 파일 생성
+#### 턴 4: rag (있으면) + agent.ts 생성
+#### 턴 5: API route handlers 생성
+#### 턴 6: `npm run build` + `npm run lint` 검증 + 에러 수정 + 생성 로그 작성
 
 ### 구현 시 필수 참조 사항
 

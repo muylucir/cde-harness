@@ -82,13 +82,18 @@ allowedTools:
 
 ### 4단계: Brief 생성
 
-## 점진적 작업 규칙 (중요)
+## 점진적 작업 규칙 (매우 중요 — output token 한도 초과 방지)
 
-**한 번의 응답에서 모든 출력 파일을 작성하지 않는다.** 입력 파일이 여러 개일 때 읽기+분석+출력을 합치면 출력 토큰 한도를 초과한다. 나눠서 작업한다:
+**각 턴은 명시된 작업만 수행하고 멈춘다.**
 
-1. **턴 1**: 입력 파일 전체 읽기 + 소스별 분석
-2. **턴 2**: `customer-brief.md` 작성
-3. **턴 3**: `source-analysis.md` + `manifest.json` 작성 + (필요 시) `clarifications.md` 작성
+### 턴 1: 입력 파일 읽기 (Write/Edit 금지)
+- `.pipeline/input/raw/` 의 모든 파일을 Read
+- 각 소스에서 추출한 정보를 내부적으로 정리
+- 읽은 후 요약을 출력하고 **멈춘다**: "입력 {N}개 파일 분석 완료. 페인 포인트 {M}건, 요구사항 {K}건 추출."
+- **이 턴에서 Write/Edit를 호출하면 안 된다.**
+
+### 턴 2: customer-brief.md 작성
+### 턴 3: source-analysis.md + manifest.json 작성 + (필요 시) clarifications.md 작성
 
 ## 출력
 

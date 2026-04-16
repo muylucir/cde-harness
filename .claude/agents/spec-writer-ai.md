@@ -68,15 +68,32 @@ allowedTools:
 
 ## 점진적 작업 규칙 (매우 중요 — output token 한도 초과 방지)
 
-**한 번의 응답에서 하나의 Write만 실행한다.** 대형 JSON/MD 파일도 분할한다:
+**한 번의 응답에서 하나의 Write/Edit만 실행한다.** 각 턴은 명시된 종료 조건에서 반드시 멈춘다.
 
-1. **턴 1**: 입력 파일 읽기 + 3개 스킬 참조
-2. **턴 2**: `ai-spec.json` — architecture + system_prompt + tools 섹션 Write
-3. **턴 3**: `ai-spec.json` — rag + api_routes + types 섹션 Edit로 추가
-4. **턴 4**: `ai-spec.md` — 전반부 Write (아키텍처 + 프롬프트)
-5. **턴 5**: `ai-spec.md` — 후반부 Edit로 추가 (도구 + RAG + API)
+### 턴 1: 입력 읽기 + 스킬 참조 (Write/Edit 금지)
+- Read: requirements.json, architecture.json, backend-spec.json
+- 3개 스킬 참조: `agent-patterns`, `prompt-engineering`, `strands-sdk-typescript-guide`
+- 읽은 후 아래 형식으로 요약을 출력하고 **멈춘다**:
+  ```
+  입력 읽기 완료.
+  - AI 관련 FR: {N}건
+  - 선택 패턴: {패턴명}
+  - 자동화 수준: {agentic/ai-assisted}
+  다음 턴에서 ai-spec.json 전반부를 작성합니다.
+  ```
+- **이 턴에서 Write/Edit를 호출하면 안 된다.**
 
-**핵심**: Write로 파일 뼈대를 만들고, 나머지는 Edit로 섹션을 추가한다.
+### 턴 2: ai-spec.json 전반부
+- Write: `ai-spec.json` — `generator`, `architecture`, `system_prompt`, `tools[]` 포함
+
+### 턴 3: ai-spec.json 후반부
+- Edit: `ai-spec.json` — `rag`, `api_routes[]`, `types[]`, `env_vars[]`, `dependencies[]`, `generation_order` 추가
+
+### 턴 4: ai-spec.md 전반부
+- Write: `ai-spec.md` — 에이전트 아키텍처, 모델 설정, 시스템 프롬프트 전문
+
+### 턴 5: ai-spec.md 후반부
+- Edit: `ai-spec.md` — 커스텀 도구, RAG, API 라우트, 환경변수 섹션 추가
 
 ## 처리 프로세스
 

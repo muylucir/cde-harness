@@ -62,16 +62,37 @@ allowedTools:
 
 ## 점진적 작업 규칙 (매우 중요 — output token 한도 초과 방지)
 
-**한 번의 응답에서 하나의 Write만 실행한다.** 대형 JSON/MD 파일도 분할한다:
+**한 번의 응답에서 하나의 Write/Edit만 실행한다.** 각 턴은 명시된 종료 조건에서 반드시 멈춘다.
 
-1. **턴 1**: 입력 파일 읽기 (requirements.json, architecture.json, backend-spec.json, ai-spec.json, domain-context.json)
-2. **턴 2**: `frontend-spec.json` — hooks + contexts + layout 섹션 Write
-3. **턴 3**: `frontend-spec.json` — shared + feature + page 섹션 Edit로 추가
-4. **턴 4**: `frontend-spec.md` — 전반부 Write
-5. **턴 5**: `frontend-spec.md` — 후반부 Edit로 추가
-6. **턴 6**: `specs-summary.md` + `_manifest.json` 작성
+### 턴 1: 입력 읽기 (Write/Edit 금지)
+- Read: requirements.json, architecture.json, backend-spec.json, ai-spec.json (있으면), domain-context.json (있으면)
+- 읽은 후 아래 형식으로 요약을 출력하고 **멈춘다**:
+  ```
+  입력 읽기 완료.
+  - 프론트엔드 관련 FR: {N}건
+  - 페이지: {N}개
+  - 컴포넌트: {N}개
+  - AI 채팅 UI: {있음/없음}
+  - 도메인 컨텍스트: {있음/없음}
+  다음 턴에서 frontend-spec.json 전반부를 작성합니다.
+  ```
+- **이 턴에서 Write/Edit를 호출하면 안 된다.**
 
-**핵심**: Write로 파일 뼈대를 만들고, 나머지는 Edit로 섹션을 추가한다.
+### 턴 2: frontend-spec.json 전반부
+- Write: `frontend-spec.json` — `generator`, `hooks[]`, `contexts[]`, `generation_order` 포함
+
+### 턴 3: frontend-spec.json 후반부
+- Edit: `frontend-spec.json` — `specs[]` (layout, shared, feature, page 컴포넌트) 추가
+
+### 턴 4: frontend-spec.md 전반부
+- Write: `frontend-spec.md` — hooks, contexts, layout, shared 섹션
+
+### 턴 5: frontend-spec.md 후반부
+- Edit: `frontend-spec.md` — feature, page 섹션 추가
+
+### 턴 6: 요약 + 매니페스트
+- Write: `specs-summary.md` (BE+AI+FE 전체 요약)
+- Write: `_manifest.json` (FR 커버리지 + 생성 순서)
 
 ## 처리 프로세스
 

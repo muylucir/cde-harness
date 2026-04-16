@@ -58,15 +58,33 @@ allowedTools:
 
 ## 점진적 작업 규칙 (매우 중요 — output token 한도 초과 방지)
 
-**한 번의 응답에서 하나의 Write만 실행한다.** 대형 JSON/MD 파일도 분할한다:
+**한 번의 응답에서 하나의 Write/Edit만 실행한다.** 각 턴은 명시된 종료 조건에서 반드시 멈춘다.
 
-1. **턴 1**: 입력 파일 읽기 (requirements.json, architecture.json, domain-context.json, 피드백)
-2. **턴 2**: `backend-spec.json` — types + validation + data 섹션만 Write
-3. **턴 3**: `backend-spec.json` — db + services + api + middleware 섹션을 Edit로 추가
-4. **턴 4**: `backend-spec.md` — 전반부 작성 (types ~ data)
-5. **턴 5**: `backend-spec.md` — 후반부 작성 (db ~ middleware) Edit로 추가
+### 턴 1: 입력 읽기 (Write/Edit 금지)
+- Read: requirements.json, architecture.json, domain-context.json (있으면), 피드백 (있으면)
+- 읽은 후 아래 형식으로 요약을 출력하고 **멈춘다**:
+  ```
+  입력 읽기 완료.
+  - FR: {N}건 (백엔드 관련: {M}건)
+  - API 라우트: {N}개
+  - 타입/엔티티: {N}개
+  - 도메인 컨텍스트: {있음/없음}
+  다음 턴에서 backend-spec.json 전반부를 작성합니다.
+  ```
+- **이 턴에서 Write/Edit를 호출하면 안 된다.**
 
-**핵심**: Write로 파일 뼈대를 만들고, 나머지는 Edit로 섹션을 추가한다. 한 턴에 모든 내용을 쓰면 output token 한도에 걸려 멈춘다.
+### 턴 2: backend-spec.json 전반부
+- Write: `backend-spec.json` — `generator`, `types[]`, `validation`, `seed_data[]`, `generation_order` 포함
+- **이 턴에서 md 파일을 쓰면 안 된다.**
+
+### 턴 3: backend-spec.json 후반부
+- Edit: `backend-spec.json` — `specs[]` (api-route, db, services, middleware 정의) 추가
+
+### 턴 4: backend-spec.md 전반부
+- Write: `backend-spec.md` — 타입, 검증, 시드 데이터 섹션
+
+### 턴 5: backend-spec.md 후반부
+- Edit: `backend-spec.md` — API 라우트, Repository, 미들웨어 섹션 추가
 
 ## 처리 프로세스
 

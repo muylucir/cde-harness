@@ -119,17 +119,20 @@ src/
 - **읽기 (GET)**: SWR 사용 — `useState`/`useEffect`/`fetch` 조합 금지. 훅은 `use{Resource}` 형식으로 `src/hooks/`에 작성.
 - **변경 (POST/PUT/DELETE)**: `useApiMutation` 공통 훅 사용 — 제네릭 `<TBody, TResponse>` 기반, `execute()` 콜백 반환.
 
-## 점진적 작업 규칙 (중요)
+## 점진적 작업 규칙 (매우 중요 — output token 한도 초과 방지)
 
-**한 번의 응답에서 모든 파일을 생성하지 않는다.** 출력 토큰 한도를 초과하지 않도록 나눠서 작업한다:
+**각 턴은 명시된 작업만 수행하고 멈춘다.**
 
-1. **턴 1**: `_manifest.json`에서 `generator: "frontend"` phase 읽기 + hooks + contexts 생성
-2. **턴 2**: layout (AppShell, Navigation, layout.tsx) 생성
-3. **턴 3**: shared + feature 컴포넌트 생성 (파일 수가 많으면 추가 분할)
-4. **턴 4**: page 컴포넌트 생성
-5. **턴 5**: `npm run build` + `npm run lint` 검증 + 에러 수정 + 생성 로그 작성
+### 턴 1: 입력 읽기 (코드 Write 금지)
+- Read: _manifest.json, frontend-spec.json, architecture.json, generation-log-backend.json, 백엔드가 생성한 src/types/ 파일
+- 읽은 후 요약을 출력하고 **멈춘다**: "입력 읽기 완료. {N}개 컴포넌트, {M}개 페이지, {K}개 훅 확인."
+- **이 턴에서 src/ 코드를 Write하면 안 된다.**
 
-각 턴에서 Write/Edit 도구로 파일을 쓴 뒤, 다음 턴으로 넘어간다.
+### 턴 2: hooks + contexts 생성
+### 턴 3: layout (AppShell, Navigation, layout.tsx) 생성
+### 턴 4: shared + feature 컴포넌트 생성 (파일 수가 많으면 추가 분할)
+### 턴 5: page 컴포넌트 생성
+### 턴 6: `npm run build` + `npm run lint` 검증 + 에러 수정 + 생성 로그 작성
 
 ## 출력
 

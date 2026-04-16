@@ -60,18 +60,18 @@ allowedTools:
 | 목데이터 예시 | `terminology` | 컬럼 헤더와 라벨에 도메인 용어 사용. 약어는 풀네임 병기 (예: "MTBF (평균고장간격)") |
 | 동작 명세 | `domain_workflows` | 상세 페이지의 상태 전환을 워크플로우 `steps[]` 순서에 맞춰 기술 |
 
-## 점진적 작업 규칙 (매우 중요 — output token 한도 초과 방지)
+## 점진적 작업 규칙 (output token 한도 초과 방지)
 
-**멈추지 마라.** 서브에이전트는 한 번 실행되면 끝이다. 모든 단계를 하나의 연속 실행 안에서 순서대로 완료해야 한다. 단, 각 단계에서 Write/Edit 호출은 1회로 제한하여 개별 출력 크기를 줄인다.
+가능하면 모든 단계를 한 번에 완료한다. 하지만 output이 길어지면 **파일 Write 완료 직후** 짧은 진행 보고를 하고 멈춰도 된다. 오케스트레이터가 SendMessage로 계속하라고 지시하면 다음 단계를 이어간다.
 
 1. **Read**: requirements.json, architecture.json, backend-spec.json, ai-spec.json (있으면), domain-context.json (있으면)
-2. **Write**: `frontend-spec.json` — `generator`, `hooks[]`, `contexts[]`, `generation_order` 포함
-3. **Edit**: `frontend-spec.json` — `specs[]` (layout, shared, feature, page 컴포넌트) 추가
-4. **Write**: `frontend-spec.md` — hooks, contexts, layout, shared 섹션
-5. **Edit**: `frontend-spec.md` — feature, page 섹션 추가
-6. **Write**: `specs-summary.md` + `_manifest.json`
+2. **Write**: `frontend-spec.json` — 전체를 한 번에. 너무 크면 전반부 Write → 후반부 Edit.
+3. **Write**: `frontend-spec.md` — 전체를 한 번에. 너무 크면 전반부 Write → 후반부 Edit.
+4. **Write**: `specs-summary.md` + `_manifest.json`
 
-**핵심**: 1→2→3→4→5→6을 끊지 않고 순서대로 실행한다. 절대 중간에 멈추거나 "다음 턴에서" 라고 말하지 않는다.
+**허용되는 중간 멈춤**: 파일 1개를 완전히 Write한 뒤 짧은 보고 후 멈추는 것은 OK.
+
+**금지**: Read만 하고 Write 없이 멈추는 것. 반드시 최소 1개 파일은 Write한 뒤 멈춘다.
 
 ## 처리 프로세스
 

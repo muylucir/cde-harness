@@ -45,6 +45,15 @@ Execute the complete prototype generation pipeline from customer brief to handov
 - CLV 스코어링 RFM 모델 명세를 포함하세요
 ```
 
+## 서브에이전트 불완전 종료 처리
+
+서브에이전트가 output token 한도에 걸려 파일을 일부만 생성하고 멈출 수 있다. 이 경우:
+1. CHECKPOINT에서 실패를 감지한다 (파일 미존재)
+2. **SendMessage로 해당 에이전트를 재개한다**: "나머지 파일을 이어서 작성해주세요."
+3. 최대 2회 재개. 그래도 완료 안 되면 서킷 브레이커.
+
+**새 Agent를 Launch하지 말고 SendMessage로 기존 에이전트를 이어붙인다.** 새 Agent는 이전 컨텍스트를 모르므로 처음부터 다시 시작한다.
+
 ## CHECKPOINT 실행 규칙 (코드 기반)
 
 **모든 CHECKPOINT는 `.pipeline/scripts/checkpoint.mjs` 스크립트로 실행한다.** LLM이 직접 state.json을 수정하지 않는다.

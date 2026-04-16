@@ -119,9 +119,9 @@ src/
 - **읽기 (GET)**: SWR 사용 — `useState`/`useEffect`/`fetch` 조합 금지. 훅은 `use{Resource}` 형식으로 `src/hooks/`에 작성.
 - **변경 (POST/PUT/DELETE)**: `useApiMutation` 공통 훅 사용 — 제네릭 `<TBody, TResponse>` 기반, `execute()` 콜백 반환.
 
-## 점진적 작업 규칙 (매우 중요 — output token 한도 초과 방지)
+## 점진적 작업 규칙 (output token 한도 초과 방지)
 
-**멈추지 마라.** 서브에이전트는 한 번 실행되면 끝이다. 모든 단계를 하나의 연속 실행 안에서 순서대로 완료해야 한다. 단, 각 단계에서 생성하는 파일 수를 제한하여 개별 출력 크기를 줄인다.
+가능하면 모든 단계를 한 번에 완료한다. 하지만 output이 길어지면 **파일 그룹 Write 완료 직후** 짧은 진행 보고를 하고 멈춰도 된다. 오케스트레이터가 SendMessage로 계속하라고 지시하면 다음 단계를 이어간다.
 
 1. **Read**: _manifest.json, frontend-spec.json, architecture.json, generation-log-backend.json, src/types/ 파일
 2. **Write**: hooks + contexts
@@ -130,7 +130,9 @@ src/
 5. **Write**: page 컴포넌트
 6. **Verify + Log**: `npm run build` + `npm run lint` 검증 + 에러 수정 + 생성 로그 작성
 
-**핵심**: 1→2→3→4→5→6을 끊지 않고 순서대로 실행한다. 절대 중간에 멈추거나 "다음 턴에서" 라고 말하지 않는다.
+**허용되는 중간 멈춤**: 단계 2~5에서 파일 그룹을 Write한 뒤 짧은 보고 후 멈추는 것은 OK.
+
+**금지**: Read만 하고 코드 Write 없이 멈추는 것. 반드시 최소 1개 파일 그룹은 Write한 뒤 멈춘다.
 
 ## 출력
 

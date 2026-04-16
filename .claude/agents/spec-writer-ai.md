@@ -66,17 +66,17 @@ allowedTools:
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — AI 컴포넌트
 - `.pipeline/artifacts/v{N}/03-specs/backend-spec.json` — 백엔드 타입/API 참조
 
-## 점진적 작업 규칙 (매우 중요 — output token 한도 초과 방지)
+## 점진적 작업 규칙 (output token 한도 초과 방지)
 
-**멈추지 마라.** 서브에이전트는 한 번 실행되면 끝이다. 모든 단계를 하나의 연속 실행 안에서 순서대로 완료해야 한다. 단, 각 단계에서 Write/Edit 호출은 1회로 제한하여 개별 출력 크기를 줄인다.
+가능하면 모든 단계를 한 번에 완료한다. 하지만 output이 길어지면 **파일 Write 완료 직후** 짧은 진행 보고를 하고 멈춰도 된다. 오케스트레이터가 SendMessage로 계속하라고 지시하면 다음 단계를 이어간다.
 
 1. **Read**: requirements.json, architecture.json, backend-spec.json + 3개 스킬 참조
-2. **Write**: `ai-spec.json` — `generator`, `architecture`, `system_prompt`, `tools[]` 포함
-3. **Edit**: `ai-spec.json` — `rag`, `api_routes[]`, `types[]`, `env_vars[]`, `dependencies[]`, `generation_order` 추가
-4. **Write**: `ai-spec.md` — 에이전트 아키텍처, 모델 설정, 시스템 프롬프트 전문
-5. **Edit**: `ai-spec.md` — 커스텀 도구, RAG, API 라우트, 환경변수 섹션 추가
+2. **Write**: `ai-spec.json` — 전체 JSON을 한 번에 쓴다. 너무 크면 전반부 Write → 후반부 Edit로 분할.
+3. **Write**: `ai-spec.md` — 전체를 한 번에 쓴다. 너무 크면 전반부 Write → 후반부 Edit로 분할.
 
-**핵심**: 1→2→3→4→5를 끊지 않고 순서대로 실행한다. 절대 중간에 멈추거나 "다음 턴에서" 라고 말하지 않는다.
+**허용되는 중간 멈춤**: 파일 1개를 완전히 Write한 뒤 짧은 보고 후 멈추는 것은 OK.
+
+**금지**: Read만 하고 Write 없이 멈추는 것. 반드시 최소 1개 파일은 Write한 뒤 멈춘다.
 
 ## 처리 프로세스
 

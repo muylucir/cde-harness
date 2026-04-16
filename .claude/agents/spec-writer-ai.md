@@ -11,6 +11,7 @@ allowedTools:
   - Grep
   - WebFetch
   - Skill
+  - Bash(ls:*)
 ---
 
 # Spec Writer — AI

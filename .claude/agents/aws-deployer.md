@@ -24,7 +24,9 @@ allowedTools:
   - Bash(aws sts:*)
   - Bash(aws cloudformation:*)
   - Bash(ls:*)
+  - Bash(mkdir:*)
   - Bash(node:*)
+  - Bash(cd infra && npm install:*)
   - Skill
   - mcp__aws-knowledge-mcp-server__aws___search_documentation
 ---

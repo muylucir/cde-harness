@@ -17,6 +17,7 @@ allowedTools:
   - Bash(npx playwright:*)
   - Bash(npx tsc:*)
   - Bash(ls:*)
+  - Bash(mkdir:*)
 ---
 
 # QA Engineer

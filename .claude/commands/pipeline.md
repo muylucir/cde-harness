@@ -13,6 +13,38 @@ Execute the complete prototype generation pipeline from customer brief to handov
 3. **APPROVAL GATE에서 반드시 멈춰라** — 사용자가 응답할 때까지 다음 Stage로 진행하지 않는다 (auto 모드 제외).
 4. **CHECKPOINT를 통과해야 다음 Stage로 간다** — 각 Stage 끝의 검증 조건을 확인한 후에만 다음 Stage로 넘어간다. **auto 모드에서도 CHECKPOINT는 항상 실행한다.**
 
+## 서브에이전트 프롬프트 규칙 (중요)
+
+서브에이전트를 Launch할 때 프롬프트를 **간결하게** 보낸다. 다음을 지킨다:
+
+1. **입력 파일 경로만 전달하라** — 파일 내용을 요약하거나 통계(FR 28건, 엔티티 26개 등)를 넣지 마라. 서브에이전트가 직접 Read로 읽는다.
+2. **CLAUDE.md 규칙을 복사하지 마라** — 서브에이전트에게 자동 로드된다.
+3. **에이전트 정의(.md)에 있는 내용을 반복하지 마라** — 담당 범위, 출력 포맷, 코딩 규칙 등은 이미 에이전트 프롬프트에 정의되어 있다.
+4. **프로젝트 특화 요구사항을 풀어쓰지 마라** — requirements.json이나 architecture.json에 이미 있는 내용이다.
+
+**좋은 프롬프트 예시:**
+```
+백엔드 구현 스펙을 작성해주세요.
+
+입력:
+- .pipeline/artifacts/v1/01-requirements/requirements.json
+- .pipeline/artifacts/v1/02-architecture/architecture.json
+- .pipeline/artifacts/v1/00-domain/domain-context.json (있으면)
+
+출력:
+- .pipeline/artifacts/v1/03-specs/backend-spec.json
+- .pipeline/artifacts/v1/03-specs/backend-spec.md
+```
+
+**나쁜 프롬프트 예시 (금지):**
+```
+백엔드 구현 스펙을 작성해주세요.
+- FR 28건, NFR 6건, 엔티티 26개, enum 12개가 있습니다
+- no any, no @ts-ignore 규칙을 지켜야 합니다
+- Entity Resolution 로직 3가지 알고리즘 명세를 포함하세요
+- CLV 스코어링 RFM 모델 명세를 포함하세요
+```
+
 ## CHECKPOINT 실행 규칙 (코드 기반)
 
 **모든 CHECKPOINT는 `.pipeline/scripts/checkpoint.mjs` 스크립트로 실행한다.** LLM이 직접 state.json을 수정하지 않는다.

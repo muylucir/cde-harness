@@ -16,6 +16,7 @@ allowedTools:
   - Bash(npm install:*)
   - Bash(npx tsc:*)
   - Bash(ls:*)
+  - Bash(mkdir:*)
   - Bash(node:*)
 ---
 

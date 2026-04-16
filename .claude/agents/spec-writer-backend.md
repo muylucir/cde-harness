@@ -53,13 +53,19 @@ allowedTools:
 | data | `kpis` | 시드 데이터의 상태 분포를 `typical_target` 범위에 맞게 조정 (예: 가동률 85-95% 목표 → 차량 90%를 in-operation으로) |
 | db | `data_model_hints.common_relationships` | 관계형 조회 메서드 추가 (예: "Vehicle hasMany MaintenanceRecords" → `findByVehicleId()`) |
 
+## 점진적 작업 규칙 (중요)
+
+**한 번의 응답에서 JSON과 MD를 모두 작성하지 않는다.** 나눠서 작업한다:
+
+1. **턴 1**: 입력 파일 읽기 (requirements.json, architecture.json, domain-context.json, 피드백)
+2. **턴 2**: `backend-spec.json` 작성
+3. **턴 3**: `backend-spec.md` 작성
+
 ## 처리 프로세스
 
-1. `requirements.json`과 `architecture.json`을 읽고 백엔드 관련 FR/API를 파악
-2. `domain-context.json`이 있으면 도메인 컨텍스트 활용 테이블에 따라 보강
-3. 피드백 파일이 있으면 해당 항목을 반영
-4. 담당 범위 7개(types → validation → data → db → services → api → middleware) 순서로 스펙 작성
-5. 이중 출력: `backend-spec.json` → `backend-spec.md` 순서로 연속 작성
+1. 입력 파일에서 백엔드 관련 FR/API를 파악 + 도메인 보강 + 피드백 반영
+2. 담당 범위 7개(types → validation → data → db → services → api → middleware) 순서로 스펙 작성
+3. 이중 출력: json → md 순서
 
 ## 출력
 
@@ -76,84 +82,11 @@ allowedTools:
 
 ## 백엔드 스펙 마크다운 포맷 (backend-spec.md)
 
-리소스/API별로 다음을 포함:
-
-```markdown
-# 백엔드 스펙
-
-## {ResourceName} API
-
-### 메타데이터
-- **파일 경로**: src/app/api/{resource}/route.ts
-- **타입**: api-route
-- **요구사항**: FR-001
-
-### 엔드포인트
-| Method | Path | 설명 | Request Body | Response |
-|--------|------|------|-------------|----------|
-| GET | /api/{resource} | 목록 조회 | - | {Type}[] |
-| POST | /api/{resource} | 신규 생성 | Create{Type}Request | {Type} |
-
-### 요청 검증 (zod)
-\`\`\`typescript
-const create{Type}Schema = z.object({
-  // 필드별 검증 규칙
-});
-\`\`\`
-
-### Repository 인터페이스
-\`\`\`typescript
-// 인메모리 스토어 기반, DynamoDB 교체 가능하도록 추상화
-\`\`\`
-
-### 시드 데이터
-\`\`\`typescript
-// 5~10개 현실적인 목데이터
-\`\`\`
-
-### 에러 처리
-- 400: 유효성 검증 실패
-- 404: 리소스 미발견
-- 500: 서버 오류
-```
+리소스/API별로 다음 섹션 포함: 메타데이터 (파일 경로, 타입, 요구사항), 엔드포인트 테이블 (Method, Path, 설명, Request Body, Response), 요청 검증 (zod 스키마), Repository 인터페이스, 시드 데이터 (5~10개), 에러 처리 (400/404/500).
 
 ## 백엔드 스펙 JSON 포맷 (backend-spec.json)
 
-```json
-{
-  "generator": "backend",
-  "specs": [
-    {
-      "component": "ResourceAPI",
-      "file_path": "src/app/api/resources/route.ts",
-      "type": "api-route",
-      "requirements": ["FR-001"],
-      "endpoints": [
-        { "method": "GET", "path": "/api/resources", "response_type": "Resource[]" },
-        { "method": "POST", "path": "/api/resources", "request_schema": "CreateResourceRequest", "response_type": "Resource" }
-      ],
-      "validation_schema": "createResourceSchema",
-      "dependencies": ["src/types/resource.ts", "src/lib/db/resource.repository.ts"],
-      "imports": ["zod", "next/server"]
-    }
-  ],
-  "types": [
-    {
-      "name": "Resource",
-      "file_path": "src/types/resource.ts",
-      "fields": { "id": "string", "name": "string", "status": "ResourceStatus" }
-    }
-  ],
-  "seed_data": [
-    {
-      "file_path": "src/data/resources.ts",
-      "type": "Resource",
-      "count": 10
-    }
-  ],
-  "generation_order": ["types", "validation", "data", "db", "services", "api", "middleware"]
-}
-```
+`generator: "backend"`, `specs[]` (component, file_path, type, requirements, endpoints[], validation_schema, dependencies, imports), `types[]` (name, file_path, fields), `seed_data[]` (file_path, type, count), `generation_order`.
 
 ## 참조 스킬
 

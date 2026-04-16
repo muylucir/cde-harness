@@ -116,6 +116,15 @@ allowedTools:
 
 > 최대 횟수 도달 시 최소 깊이 미충족 카테고리는 domain-context.md에 "리서치 불충분" 경고를 표기한다.
 
+## 점진적 작업 규칙 (중요)
+
+**한 번의 응답에서 리서치와 출력을 모두 완료하지 않는다.** 웹 검색 결과 + JSON + MD를 합치면 출력 토큰 한도를 초과한다. 나눠서 작업한다:
+
+1. **턴 1**: 브리프 읽기 + 도메인 키워드 추출 + 웹 리서치 수행 (카테고리 2a~2c)
+2. **턴 2**: 웹 리서치 계속 (카테고리 2d~2f) + 포화 판정
+3. **턴 3**: `domain-context.json` 작성
+4. **턴 4**: `domain-context.md` 작성
+
 ### 3단계: 분석 및 정리
 
 리서치 결과를 프로토타입에 적용 가능한 형태로 정리한다:
@@ -127,132 +136,27 @@ allowedTools:
 
 ### `.pipeline/artifacts/v{N}/00-domain/domain-context.json`
 
-**소스 URL 의무화 (M13)**: 각 출처에 반드시 URL을 포함한다. 예: `{ "name": "Google SRE Book", "url": "https://sre.google/sre-book/..." }`. URL을 찾을 수 없는 경우 `"url": null`로 명시.
+**소스 URL 의무화**: 각 출처에 반드시 URL 포함 (없으면 `"url": null`).
 
-```json
-{
-  "metadata": {
-    "industry": "Logistics / Supply Chain",
-    "subdomain": "Fleet Management",
-    "researched_at": "<ISO-8601>",
-    "sources": [
-      { "name": "Google SRE Book", "url": "https://sre.google/sre-book/..." },
-      { "name": "Industry whitepaper (offline)", "url": null }
-    ]
-  },
-  "core_entities": [
-    {
-      "name": "Vehicle",
-      "description": "관리 대상 차량",
-      "common_attributes": ["id", "plateNumber", "type", "status", "assignedDriver", "mileage"],
-      "common_statuses": ["in-operation", "under-maintenance", "idle", "decommissioned"]
-    }
-  ],
-  "domain_workflows": [
-    {
-      "name": "Vehicle Lifecycle",
-      "steps": ["registration", "assignment", "operation", "maintenance", "decommission"],
-      "description": "차량 등록부터 폐차까지의 전체 생애주기"
-    }
-  ],
-  "kpis": [
-    {
-      "name": "Fleet Utilization Rate",
-      "formula": "운행중 차량 / 전체 차량 × 100",
-      "typical_target": "85-95%",
-      "relevance": "대시보드에 핵심 KPI로 표시"
-    }
-  ],
-  "competitor_features": [
-    {
-      "feature": "Maintenance alerts",
-      "prevalence": "대부분의 차량관리 소프트웨어에 포함",
-      "in_brief": false,
-      "suggestion": "정비 예정일 임박 시 알림 배지 표시"
-    }
-  ],
-  "terminology": {
-    "MTBF": "Mean Time Between Failures — 평균고장간격",
-    "PM": "Preventive Maintenance — 예방 정비",
-    "TCO": "Total Cost of Ownership — 총소유비용"
-  },
-  "regulations": [],
-  "suggested_requirements": [
-    {
-      "title": "차량 가동률 KPI 표시",
-      "reason": "업계 표준 KPI — 대시보드에 표시하면 고객에게 도메인 이해도를 보여줌",
-      "priority": "nice-to-have"
-    }
-  ],
-  "typical_user_roles": [
-    {
-      "role": "Fleet Manager",
-      "description": "차량 배차, 정비 계획, KPI 모니터링 담당",
-      "technical_proficiency": "medium",
-      "usage_frequency": "daily"
-    },
-    {
-      "role": "Dispatcher",
-      "description": "실시간 차량 배차 및 경로 최적화 담당",
-      "technical_proficiency": "high",
-      "usage_frequency": "daily"
-    }
-  ],
-  "data_model_hints": {
-    "common_relationships": ["Vehicle hasMany MaintenanceRecords", "Driver hasMany Vehicles"],
-    "common_enums": ["VehicleStatus", "MaintenanceType", "FuelType"]
-  }
-}
-```
+구조:
+- `metadata`: industry, subdomain, researched_at, `sources[]` (name, url)
+- `core_entities[]`: name, description, common_attributes[], common_statuses[]
+- `domain_workflows[]`: name, steps[], description
+- `kpis[]`: name, formula, typical_target, relevance
+- `competitor_features[]`: feature, prevalence, in_brief, suggestion
+- `terminology`: 용어 → 설명 (key-value)
+- `regulations[]`
+- `suggested_requirements[]`: title, reason, priority
+- `typical_user_roles[]`: role, description, technical_proficiency, usage_frequency
+- `data_model_hints`: common_relationships[], common_enums[]
 
 ### `.pipeline/artifacts/v{N}/00-domain/domain-context.md`
 
-한국어 보고서:
-
-```markdown
-# 도메인 리서치: {Industry} — {Subdomain}
-
-## 산업 개요
-{해당 산업과 서브도메인에 대한 간략한 설명}
-
-## 핵심 엔티티 & 데이터 모델
-{관리 대상, 주요 속성, 상태값, 관계}
-
-## 업계 표준 워크플로우
-{해당 도메인의 일반적인 업무 흐름}
-
-## 핵심 KPI
-| KPI | 계산 방식 | 일반적 목표 | 프로토타입 적용 |
-|-----|----------|-----------|---------------|
-
-## 유사 제품 공통 기능
-| 기능 | 고객 브리프에 있는가 | 제안 |
-|------|-------------------|------|
-
-## 도메인 용어
-| 용어 | 설명 |
-|------|------|
-
-## 규제/컴플라이언스
-{해당 사항이 있으면 기술, 없으면 "해당 없음"}
-
-## 제안 요구사항
-고객이 명시하지 않았지만 도메인 표준으로 볼 때 포함하면 좋은 기능:
-{목록 — 각각 이유와 우선순위 포함}
-
-## 프로토타입 참고사항
-{데이터 모델 힌트, 목데이터 작성 시 참고할 도메인 특화 정보}
-```
+한국어 보고서. 섹션: 산업 개요, 핵심 엔티티 & 데이터 모델, 업계 표준 워크플로우, 핵심 KPI (테이블), 유사 제품 공통 기능 (테이블), 도메인 용어 (테이블), 규제/컴플라이언스, 제안 요구사항, 프로토타입 참고사항.
 
 ## 후속 에이전트에서의 활용
 
-| 에이전트 | 활용 방식 | 관련 스킬 |
-|----------|----------|----------|
-| requirements-analyst | `suggested_requirements`를 사용자에게 제안, 도메인 용어로 FR 작성, `typical_user_roles`로 fallback 페르소나 추론 | `cloudscape-design` (UI 패턴 매핑) |
-| architect | `data_model_hints`로 타입 설계, `domain_workflows`로 라우트 구조 참고 | `cloudscape-design` (레이아웃 패턴) |
-| spec-writer | `kpis`로 대시보드 스펙, `terminology`로 UI 라벨 참고 | `cloudscape-design` (대시보드 패턴) |
-| code-generator-backend | `core_entities`로 시드 데이터 현실성 향상 | — |
-| code-generator-frontend | `kpis`로 대시보드 위젯, `terminology`로 테이블 칼럼명 | `cloudscape-design` (컴포넌트 선택) |
+각 후속 에이전트의 프롬프트에 domain-context.json 활용 방법이 정의되어 있다. 이 에이전트는 후속 에이전트가 참조할 수 있는 고품질 도메인 데이터를 생성하는 것에만 집중한다.
 
 ## 검증 체크리스트
 

@@ -77,85 +77,16 @@ AI 기능이 있으면 `cloudscape-design` 스킬의 `references/ai-streaming.md
 - 컴포넌트 API가 불확실하면 WebFetch: `https://cloudscape.design/components/{name}/index.html.json`
 - 73개 패턴 중 해당하는 것이 있으면 WebFetch: `https://cloudscape.design/patterns/{path}/index.html.md`
 
-## 코드 생성 규칙
+## 핵심 규칙
 
-### Imports
-```typescript
-// CORRECT: Individual component imports
-import Table from '@cloudscape-design/components/table';
-import Header from '@cloudscape-design/components/header';
-import SpaceBetween from '@cloudscape-design/components/space-between';
-
-// WRONG: Barrel imports
-import { Table, Header } from '@cloudscape-design/components';
-```
-
-### Client vs Server Components
-```typescript
-// Only add "use client" when the component has:
-// - Event handlers (onClick, onChange, onSelectionChange)
-// - React hooks (useState, useEffect, useCollection)
-// - Browser APIs
-
-'use client';  // At the very top of the file, before imports
-```
-
-**Cloudscape 예외**: Cloudscape 컴포넌트는 내부적으로 React 훅을 사용하므로 클라이언트 컨텍스트가 필요하다. 이벤트/훅이 없는 순수 래퍼 컴포넌트도 Cloudscape를 사용하면 `"use client"` 포함이 안전하다. 이것은 Server Components 기본 규칙의 예외.
-
-### Events
-```typescript
-// CORRECT: Destructure detail from event
-onSelectionChange={({ detail }) => setSelected(detail.selectedItems)}
-onSortingChange={({ detail }) => setSorting(detail)}
-
-// WRONG: Access event.detail
-onSelectionChange={(event) => setSelected(event.detail.selectedItems)}
-```
-
-**onFollow 예외**: onFollow에서 SPA 네비게이션을 위해 preventDefault가 필요한 경우가 유일한 `(event) =>` 예외:
-```typescript
-onFollow={(event) => { event.preventDefault(); router.push(event.detail.href); }}
-```
-
-### useCollection
-```typescript
-import { useCollection } from '@cloudscape-design/collection-hooks';
-
-const { items, collectionProps, filterProps, paginationProps } = useCollection(allItems, {
-  filtering: { empty: <EmptyState />, noMatch: <NoMatchState /> },
-  pagination: { pageSize: 20 },
-  sorting: { defaultState: { sortingColumn: columnDefinitions[0] } },
-  selection: {},
-});
-```
-
-### Layout
-```typescript
-// TopNavigation MUST be outside AppLayout
-// Root layout structure:
-<>
-  <TopNavigation identity={...} utilities={...} />
-  <AppLayout
-    navigation={<SideNavigation />}
-    breadcrumbs={<BreadcrumbGroup />}
-    content={children}
-  />
-</>
-```
-
-### TypeScript
-- **No `any` types** — use proper interfaces
-- **No `@ts-ignore`** — fix the type error instead
-- **Strict mode compatible** — handle null/undefined properly
-- Export interfaces from `src/types/` files
-- Name interfaces with PascalCase, no `I` prefix
-
-### Hook Exports
-- 훅 파일은 named export만 사용. default export 금지.
-- Import는 `import { useXxx } from '@/hooks/useXxx'` 형식.
-
-### Mutation 패턴
-모든 POST/PUT/DELETE 호출은 반드시 `useApiMutation` 커스텀 훅을 통해야 한다. 컴포넌트에서 raw `fetch()` 금지 — 에러 처리와 알림 시스템을 우회한다.
+1. **Cloudscape 개별 임포트** — 배럴 임포트 금지 (CLAUDE.md 참조)
+2. **`"use client"` 최소화** — 이벤트/훅 있는 컴포넌트 + Cloudscape 컴포넌트 사용 시
+3. **이벤트**: `({ detail }) => ...` 구조 분해 (onFollow의 preventDefault만 예외)
+4. **모든 Table/Cards에 `useCollection`** 필수
+5. **TopNavigation은 AppLayout 밖에** 배치
+6. **훅은 named export만**, default export 금지
+7. **Mutation은 `useApiMutation` 훅** — 컴포넌트에서 raw `fetch()` 금지
+8. **코딩 규칙은 CLAUDE.md 참조**, 상세 패턴은 `cloudscape-design` 스킬 참조
 
 ## 담당 범위
 
@@ -184,138 +115,26 @@ src/
 
 ## API 호출 패턴
 
-SWR을 기본 데이터 페칭 전략으로 사용한다. `useState`/`useEffect`/`fetch` 조합은 금지.
+- **읽기 (GET)**: SWR 사용 — `useState`/`useEffect`/`fetch` 조합 금지. 훅은 `use{Resource}` 형식으로 `src/hooks/`에 작성.
+- **변경 (POST/PUT/DELETE)**: `useApiMutation` 공통 훅 사용 — 제네릭 `<TBody, TResponse>` 기반, `execute()` 콜백 반환.
 
-### 읽기 (GET) — SWR
+## 점진적 작업 규칙 (중요)
 
-```typescript
-// src/hooks/use{Resource}.ts
-'use client';
-import useSWR from 'swr';
-import type { Resource } from '@/types/resource';
+**한 번의 응답에서 모든 파일을 생성하지 않는다.** 출력 토큰 한도를 초과하지 않도록 나눠서 작업한다:
 
-/** JSON fetcher — SWR 전역 설정 또는 훅에서 사용 */
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+1. **턴 1**: `_manifest.json`에서 `generator: "frontend"` phase 읽기 + hooks + contexts 생성
+2. **턴 2**: layout (AppShell, Navigation, layout.tsx) 생성
+3. **턴 3**: shared + feature 컴포넌트 생성 (파일 수가 많으면 추가 분할)
+4. **턴 4**: page 컴포넌트 생성
+5. **턴 5**: `npm run build` + `npm run lint` 검증 + 에러 수정 + 생성 로그 작성
 
-/** 리소스 목록을 조회한다. */
-export function useResources() {
-  const { data, error, isLoading, mutate } = useSWR<Resource[]>('/api/resources', fetcher);
-  return { items: data ?? [], loading: isLoading, error, refresh: mutate };
-}
-
-/** 단일 리소스를 조회한다. */
-export function useResource(id: string | null) {
-  const { data, error, isLoading } = useSWR<Resource>(
-    id ? `/api/resources/${id}` : null,
-    fetcher,
-  );
-  return { item: data, loading: isLoading, error };
-}
-```
-
-### 변경 (POST/PUT/DELETE) — useApiMutation
-
-```typescript
-// src/hooks/useApiMutation.ts
-'use client';
-import { useCallback, useState } from 'react';
-
-interface MutationState<T> {
-  data: T | null;
-  error: Error | null;
-  loading: boolean;
-}
-
-/** POST/PUT/DELETE 호출용 공통 mutation 훅 */
-export function useApiMutation<TBody, TResponse>(
-  url: string,
-  method: 'POST' | 'PUT' | 'DELETE' = 'POST',
-) {
-  const [state, setState] = useState<MutationState<TResponse>>({
-    data: null, error: null, loading: false,
-  });
-
-  const execute = useCallback(async (body?: TBody) => {
-    setState({ data: null, error: null, loading: true });
-    try {
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: body ? JSON.stringify(body) : undefined,
-      });
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const data = (await res.json()) as TResponse;
-      setState({ data, error: null, loading: false });
-      return data;
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setState({ data: null, error, loading: false });
-      throw error;
-    }
-  }, [url, method]);
-
-  return { ...state, execute };
-}
-```
-
-## 생성 프로세스
-
-1. `_manifest.json`에서 `generator: "frontend"` phase 읽기
-2. 백엔드가 생성한 파일 확인 (types, API 엔드포인트)
-3. `_manifest.json`의 `generation_order` 순서대로 생성:
-   a. **hooks** — API 호출 커스텀 훅
-   b. **contexts** — React Context providers
-   c. **layout** — `src/app/layout.tsx` 덮어쓰기 (CloudscapeProviders + AppShell 래핑), AppShell, Navigation
-   d. **shared** — 재사용 컴포넌트
-   e. **feature** — 기능별 컴포넌트
-   f. **page** — App Router 페이지 (`src/app/page.tsx` 포함)
-4. `npm run build` + `npm run lint` 로 검증 (lint error 0 필수. 실패 시 최대 3회 재시도)
-5. 생성 로그 작성
+각 턴에서 Write/Edit 도구로 파일을 쓴 뒤, 다음 턴으로 넘어간다.
 
 ## 출력
 
-### Generated code in `src/`
-
-All files as specified in the specs, following the directory convention:
-```
-src/
-├── app/
-│   ├── layout.tsx          # Root layout with TopNav + AppLayout
-│   ├── page.tsx            # Home page
-│   └── {feature}/
-│       └── page.tsx        # Feature pages
-├── components/
-│   ├── layout/
-│   │   ├── AppShell.tsx    # TopNav + AppLayout wrapper
-│   │   ├── Navigation.tsx  # SideNavigation
-│   │   └── Breadcrumbs.tsx # BreadcrumbGroup
-│   ├── {feature}/
-│   │   └── {Component}.tsx # Feature components
-│   └── common/
-│       └── {Shared}.tsx    # Shared components
-├── types/
-│   └── {entity}.ts         # Type definitions
-├── lib/
-│   ├── mock-data.ts        # Mock data
-│   └── utils.ts            # Utilities
-├── hooks/
-│   └── use{Hook}.ts        # Custom hooks
-└── contexts/
-    └── {Name}Context.tsx   # Context providers
-```
-
 ### `.pipeline/artifacts/v{N}/04-codegen/generation-log-frontend.json`
 
-```json
-{
-  "metadata": { "created": "<ISO-8601>", "version": 1, "generator": "frontend" },
-  "files_created": [
-    { "path": "src/components/resources/ResourceTable.tsx", "spec": "frontend-spec.json", "spec_section": "feature", "lines": 85, "status": "created" }
-  ],
-  "build_result": { "success": true, "attempts": 1, "errors": [], "warnings": [] },
-  "lint_result": { "success": true, "errors": [], "warnings": [] }
-}
-```
+`metadata`, `files_created[]` (path, spec, spec_section, lines, status), `build_result`, `lint_result` 구조.
 
 ## 피드백 처리
 

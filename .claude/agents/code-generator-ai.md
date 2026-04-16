@@ -111,109 +111,28 @@ src/
 2. **ai-spec.json의 결정을 따른다** — 패턴, 도구, API 라우트를 자의적으로 변경하지 않는다.
 3. **3개 스킬을 참조하여 구현한다** — `agent-patterns`, `prompt-engineering`, `strands-sdk-guide`
 
-### 구현 순서
+### 점진적 작업 규칙 (중요)
 
-`ai-spec.json`의 `generation_order`를 따른다:
+**한 번의 응답에서 모든 파일을 생성하지 않는다.** `ai-spec.json`의 `generation_order`를 따르되, 출력 토큰 한도를 초과하지 않도록 나눠서 작업한다:
 
-1. `ai-spec.json`의 `types`를 읽고 → `src/types/ai.ts` 생성
-2. `ai-spec.json`의 `system_prompt`를 읽고 → `src/lib/ai/prompts/` 생성
-3. `ai-spec.json`의 `tools`를 읽고 → `src/lib/ai/tools/` 생성 (tool() + Zod 스키마)
-4. `ai-spec.json`의 `rag`을 읽고 → `src/lib/ai/rag/` 생성 (enabled일 때만)
-5. `ai-spec.json`의 `architecture`를 읽고 → `src/lib/ai/agent.ts` 생성 (Agent 정의)
-6. `ai-spec.json`의 `api_routes`를 읽고 → `src/app/api/chat/route.ts` 등 생성
+1. **턴 1**: types + prompts 파일 생성
+2. **턴 2**: tools 파일 생성
+3. **턴 3**: rag (있으면) + agent.ts 생성
+4. **턴 4**: API route handlers 생성
+5. **턴 5**: `npm run build` + `npm run lint` 검증 + 에러 수정 + 생성 로그 작성
 
-### 구현 시 필수 참조 사항 (strands-sdk-guide 스킬 기반)
+### 구현 시 필수 참조 사항
 
-**Agent 생성 — BedrockModel 프로바이더 사용:**
-```typescript
-// src/lib/ai/agent.ts
-import { Agent, BedrockModel } from '@strands-agents/sdk';
-import { SYSTEM_PROMPT } from './prompts/system';
-
-const model = new BedrockModel({
-  modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0', // ai-spec.json에서 읽기
-  region: process.env.AWS_REGION ?? 'us-east-1',
-});
-
-export const agent = new Agent({
-  model,
-  systemPrompt: SYSTEM_PROMPT,
-  tools: [...],     // ai-spec.json의 tools에서 읽기
-  printer: false,   // 서버 환경에서 콘솔 출력 비활성화
-});
-```
-
-**SSE 응답 필수 규칙: raw 이벤트 전송 금지.** `agent.stream()`에서 `textDelta`만 추출하여 `{type:'text',content:'...'}`  구조화된 이벤트로 전송한다. `invoke()` → `NextResponse.json()` 패턴 금지. 상세는 `strands-sdk-guide`의 `references/nextjs-integration.md` 참조.
-
-**스트리밍 API — async iterator 사용:**
-```typescript
-// src/app/api/chat/route.ts
-import { agent } from '@/lib/ai/agent';
-
-export async function POST(request: NextRequest) {
-  const { prompt } = await request.json();
-
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      for await (const event of agent.stream(prompt)) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
-      }
-      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-      controller.close();
-    },
-  });
-
-  return new Response(stream, {
-    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
-  });
-}
-```
-
-**비스트리밍 호출 — invoke 사용:**
-```typescript
-const result = await agent.invoke(prompt);
-```
-
-## 의존성 설치
-
-```bash
-# Strands Agents SDK TypeScript (필수) — BedrockModel 내장
-npm install @strands-agents/sdk
-
-# Zod (도구 inputSchema 정의)
-npm install zod
-
-# RAG에서 Bedrock Knowledge Base 사용 시
-npm install @aws-sdk/client-bedrock-agent-runtime
-```
+- **Agent 생성**: `BedrockModel` 프로바이더 + `printer: false` — 상세는 `strands-sdk-typescript-guide` 스킬 참조
+- **SSE 스트리밍**: `agent.stream()` async iterator → `textDelta`만 추출 → 구조화 이벤트 전송. `invoke()` → `NextResponse.json()` 금지. 상세는 `strands-sdk-typescript-guide`의 `references/nextjs-integration.md` 참조
+- **비스트리밍**: `agent.invoke(prompt)` 사용
+- **의존성**: `@strands-agents/sdk` (필수), `zod` (도구 스키마), RAG 시 `@aws-sdk/client-bedrock-agent-runtime`
 
 ## 출력
 
 ### `.pipeline/artifacts/v{N}/04-codegen/generation-log-ai.json`
 
-```json
-{
-  "metadata": { "created": "<ISO-8601>", "version": 1, "generator": "ai" },
-  "ai_architecture": {
-    "pattern": "react-agent",
-    "model": "us.anthropic.claude-sonnet-4-6-v1",
-    "sdk": "@strands-agents/sdk",
-    "strands_pattern": "single-agent",
-    "tools": ["searchDocuments", "getWeather"],
-    "has_rag": false,
-    "has_streaming": true,
-    "has_memory": true
-  },
-  "files_created": [
-    { "path": "src/lib/ai/agent.ts", "spec": "ai-spec.json", "spec_section": "ai-agent", "lines": 45, "status": "created" },
-    { "path": "src/lib/ai/prompts/system.ts", "spec": "ai-spec.json", "spec_section": "ai-prompts", "lines": 30, "status": "created" },
-    { "path": "src/app/api/chat/route.ts", "spec": "ai-spec.json", "spec_section": "ai-api", "lines": 40, "status": "created" }
-  ],
-  "dependencies_installed": ["@strands-agents/sdk"],
-  "build_result": { "success": true, "attempts": 1, "errors": [], "warnings": [] }
-}
-```
+`metadata`, `ai_architecture` (pattern, model, sdk, strands_pattern, tools, has_rag, has_streaming, has_memory), `files_created[]`, `dependencies_installed[]`, `build_result` 구조.
 
 ## 프론트엔드 연동 안내
 

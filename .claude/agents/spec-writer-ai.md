@@ -51,38 +51,11 @@ allowedTools:
 
 ### `prompt-engineering` — 프롬프트 설계
 
-**자동화 수준에 따라 프롬프트 구조가 달라진다** (스킬의 "자동화 수준별 프롬프트 설계" 참조):
-- AI-Assisted: 짧고 명확, Structured Output 필수
-- Agentic: 길고 상세, Tool Use Prompting + Guardrails 포함
+자동화 수준에 따라 프롬프트 구조가 달라진다 (스킬 참조). XML 태그 5개 섹션: `<role>`, `<context>`, `<tools>`, `<instructions>`, `<constraints>`.
 
-**XML 태그 5개 섹션을 모두 사용한다:**
-```xml
-<role>역할 정의</role>
-<context>도메인 지식, 시스템 정보</context>
-<tools>사용 가능한 도구와 사용 시점</tools>
-<instructions>작업, 판단 기준, 출력 형식</instructions>
-<constraints>금지 사항, 제약 조건</constraints>
-```
+### `strands-sdk-typescript-guide` — Strands Agents SDK TypeScript 구현 스펙
 
-### `strands-sdk-guide` — Strands Agents SDK TypeScript 구현 스펙
-
-**모델 프로바이더 설정을 스펙에 포함한다:**
-```typescript
-// BedrockModel 인스턴스로 모델 설정
-import { Agent, BedrockModel } from '@strands-agents/sdk'
-const model = new BedrockModel({
-  modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
-  region: 'us-east-1',
-})
-const agent = new Agent({ model, systemPrompt, tools })
-```
-
-**스펙에 반드시 포함할 항목:**
-- `tool()` 함수 + Zod `inputSchema` + `callback`으로 커스텀 도구 정의
-- 호출 방식 명시: `agent.invoke()` (비스트리밍) vs `agent.stream()` (async iterator 스트리밍)
-- 서버 환경: `printer: false` 설정
-- Vended Tools 사용 여부: `bash`, `fileEditor`, `httpRequest`, `notebook` (필요 시)
-- MCP 서버/클라이언트 연동 스펙 (필요 시)
+스펙에 포함할 항목: BedrockModel 프로바이더 설정, tool()+Zod 도구 정의, invoke/stream 호출 방식, `printer: false`, Vended Tools/MCP 연동 여부. 상세 코드 패턴은 스킬 참조.
 
 ## 입력
 
@@ -90,13 +63,21 @@ const agent = new Agent({ model, systemPrompt, tools })
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — AI 컴포넌트
 - `.pipeline/artifacts/v{N}/03-specs/backend-spec.json` — 백엔드 타입/API 참조
 
+## 점진적 작업 규칙 (중요)
+
+**한 번의 응답에서 JSON과 MD를 모두 작성하지 않는다.** 나눠서 작업한다:
+
+1. **턴 1**: 입력 파일 읽기 + 3개 스킬 호출 (agent-patterns, prompt-engineering, strands-sdk-typescript-guide)
+2. **턴 2**: `ai-spec.json` 작성
+3. **턴 3**: `ai-spec.md` 작성
+
 ## 처리 프로세스
 
 1. `requirements.json`에서 AI 관련 FR을 키워드 매칭으로 식별
 2. `architecture.json`에서 AI 컴포넌트 구조를 파악
-3. 3개 필수 스킬 호출: `agent-patterns` → 패턴 선택, `prompt-engineering` → 프롬프트 설계, `strands-sdk-guide` → SDK 구성 확인
+3. 3개 필수 스킬 참조: `agent-patterns`, `prompt-engineering`, `strands-sdk-typescript-guide`
 4. 담당 범위 6개(ai-types → ai-prompts → ai-tools → ai-rag → ai-agent → ai-api) 순서로 스펙 작성
-5. 이중 출력: `ai-spec.json` → `ai-spec.md` 순서로 연속 작성
+5. 이중 출력: json → md 순서
 
 ## 필수 스펙 항목: 프론트엔드 스트리밍 동작
 
@@ -126,123 +107,11 @@ AI 스펙에 **프론트엔드 SSE 소비 및 렌더링 요구사항**을 반드
 
 ## AI 스펙 마크다운 포맷 (ai-spec.md)
 
-```markdown
-# AI Agent 스펙
-
-## 에이전트 아키텍처
-
-### 선택된 패턴
-- **패턴**: {ReAct / Plan-and-Execute / Multi-Agent / ...}
-- **선택 근거**: {agent-patterns 스킬의 3축 평가 결과}
-- **Strands SDK 구현 방식**: {Agent / Agent+Graph / Swarm}
-
-### 모델 설정
-- **Model ID**: `us.anthropic.claude-sonnet-4-6-v1`
-- **Provider**: Amazon Bedrock
-- **Region**: `us-east-1` (환경변수 `AWS_REGION`으로 설정)
-
-## 시스템 프롬프트
-
-### 설계 원칙 (prompt-engineering 스킬 기반)
-- XML 태그 구조화 사용 여부
-- 페르소나 설정
-- 제약 조건
-
-### 프롬프트 전문
-\`\`\`xml
-<role>...</role>
-<context>...</context>
-<tools>...</tools>
-<instructions>...</instructions>
-<constraints>...</constraints>
-\`\`\`
-
-## 커스텀 도구
-
-### {ToolName}
-- **설명**: {도구 목적}
-- **파라미터**: { param1: type, param2: type }
-- **핸들러 로직**: {처리 흐름}
-- **반환 타입**: {type}
-
-## RAG 파이프라인 (해당 시)
-
-### 임베딩
-- **모델**: {Bedrock 임베딩 모델 ID}
-- **차원**: {dimension}
-
-### 검색 전략
-- **방식**: {Bedrock Knowledge Base / 인메모리 / 벡터 DB}
-- **Top-K**: {number}
-
-## API 라우트
-
-### POST /api/chat
-- **요청**: `{ messages: Message[] }`
-- **응답**: SSE 스트리밍
-- **스트리밍 형식**: `data: {json}\n\n`
-
-## 환경변수
-- `AWS_REGION` — Bedrock 리전
-- `AWS_PROFILE` — AWS 프로파일 (로컬 개발)
-- `BEDROCK_MODEL_ID` — 모델 ID (선택)
-```
+섹션 구조: 에이전트 아키텍처 (패턴, 선택 근거, Strands SDK 구현 방식, 모델 설정), 시스템 프롬프트 (설계 원칙 + XML 전문), 커스텀 도구 (도구별: 설명, 파라미터, 핸들러 로직, 반환 타입), RAG 파이프라인 (해당 시: 임베딩 모델, 검색 전략), API 라우트 (요청/응답/스트리밍 형식), 환경변수.
 
 ## AI 스펙 JSON 포맷 (ai-spec.json)
 
-```json
-{
-  "generator": "ai",
-  "architecture": {
-    "automation_level": "agentic",
-    "autonomy_score": 7,
-    "pattern": "react-agent",
-    "strands_pattern": "single-agent",
-    "model_id": "us.anthropic.claude-sonnet-4-20250514-v1:0",
-    "provider": "bedrock",
-    "region": "us-east-1",
-    "printer": false,
-    "invocation_mode": "stream"
-  },
-  "system_prompt": {
-    "template": "xml-structured",
-    "sections": ["role", "context", "tools", "instructions", "constraints"],
-    "language": "ko"
-  },
-  "tools": [
-    {
-      "name": "searchDocuments",
-      "description": "문서에서 관련 정보를 검색합니다",
-      "input_schema": { "query": { "type": "z.string()", "description": "검색 쿼리" } },
-      "callback_type": "bedrock-knowledge-base",
-      "file_path": "src/lib/ai/tools/search.ts"
-    }
-  ],
-  "rag": {
-    "enabled": false,
-    "embedding_model": null,
-    "retrieval_strategy": null
-  },
-  "api_routes": [
-    {
-      "method": "POST",
-      "path": "/api/chat",
-      "streaming": true,
-      "file_path": "src/app/api/chat/route.ts"
-    }
-  ],
-  "types": [
-    {
-      "name": "ChatMessage",
-      "file_path": "src/types/ai.ts",
-      "fields": { "role": "'user' | 'assistant'", "content": "string", "timestamp": "Date" }
-    }
-  ],
-  "env_vars": ["AWS_REGION", "AWS_PROFILE"],
-  "dependencies": ["@strands-agents/sdk"],
-  "generation_order": ["ai-types", "ai-prompts", "ai-tools", "ai-rag", "ai-agent", "ai-api"]
-}
-```
+`generator: "ai"`, `architecture` (automation_level, autonomy_score, pattern, strands_pattern, model_id, provider, region, printer, invocation_mode), `system_prompt` (template, sections[], language), `tools[]` (name, description, input_schema, callback_type, file_path), `rag` (enabled, embedding_model, retrieval_strategy), `api_routes[]` (method, path, streaming, file_path), `types[]` (name, file_path, fields), `env_vars[]`, `dependencies[]`, `generation_order`.
 
 ## 에러 처리
 

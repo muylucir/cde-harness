@@ -273,7 +273,7 @@ cde-harness/
 │   │   ├── pipeline-status.md
 │   │   ├── pipeline.md
 │   │   └── reconcile.md
-│   ├── skills/                     # 참조 스킬 (8개)
+│   ├── skills/                     # 참조 스킬 (9개)
 │   │   ├── agent-patterns/
 │   │   ├── ascii-diagram/
 │   │   ├── aws-cdk-patterns/
@@ -281,7 +281,8 @@ cde-harness/
 │   │   ├── cloudscape-design/
 │   │   ├── mermaid-diagrams/
 │   │   ├── prompt-engineering/
-│   │   └── strands-sdk-guide/
+│   │   ├── strands-sdk-python-guide/
+│   │   └── strands-sdk-typescript-guide/
 │   └── settings.json               # Claude Code 권한 설정
 │
 ├── .pipeline/
@@ -290,6 +291,8 @@ cde-harness/
 │   │   ├── customer-brief.md         # 통합된 브리프 (/brief 또는 직접 작성)
 │   │   ├── source-analysis.md        # 소스별 분석 보고서 (/brief 생성)
 │   │   └── manifest.json             # 입력 파일 체크섬 (변경 감지용)
+│   ├── scripts/
+│   │   └── checkpoint.mjs            # CHECKPOINT 검증 스크립트
 │   ├── artifacts/                  # 파이프라인 산출물 (버전별)
 │   │   └── v{N}/
 │   │       ├── 00-domain/            # 도메인 리서치 결과
@@ -353,7 +356,7 @@ cde-harness/
 | 에이전트 | 스킬 | 산출물 |
 |----------|------|--------|
 | `spec-writer-backend` | `mermaid-diagrams`, `aws-infra-patterns` | `backend-spec.json/md` |
-| `spec-writer-ai` (조건부) | `agent-patterns`, `prompt-engineering`, `strands-sdk-guide` | `ai-spec.json/md` |
+| `spec-writer-ai` (조건부) | `agent-patterns`, `prompt-engineering`, `strands-sdk-typescript-guide` | `ai-spec.json/md` |
 | `spec-writer-frontend` | `cloudscape-design`, `ascii-diagram` | `frontend-spec.json/md`, `specs-summary.md`, `_manifest.json` |
 
 ### 5A. 백엔드 코드 생성 (Code Generator — Backend)
@@ -365,7 +368,7 @@ cde-harness/
 - **실행 조건**: 요구사항에 AI 기능(챗봇, RAG, 에이전트 등)이 포함된 경우에만
 - **AI 기능은 Mocking 금지** — Amazon Bedrock을 통해 실제 모델 호출 필수
 - **출력**: `@strands-agents/sdk` 기반 Agent, `tool()` + Zod 도구, SSE 스트리밍 API
-- **참조 스킬**: `agent-patterns`, `prompt-engineering`, `strands-sdk-guide` (TypeScript)
+- **참조 스킬**: `agent-patterns`, `prompt-engineering`, `strands-sdk-typescript-guide`
 
 ### 5B. 프론트엔드 코드 생성 (Code Generator — Frontend)
 - **입력**: 프론트엔드 명세서 + 백엔드 생성 로그 (타입/API 참조)
@@ -633,7 +636,7 @@ cd infra && npx cdk destroy   # 인프라 제거
 
 ---
 
-## 참조 스킬 (8개)
+## 참조 스킬 (9개)
 
 에이전트가 필요한 시점에 자동으로 참조하는 도메인 지식 라이브러리입니다. Progressive disclosure 구조(SKILL.md → references/)로 컨텍스트를 효율적으로 사용합니다.
 
@@ -642,7 +645,8 @@ cd infra && npx cdk destroy   # 인프라 제거
 | `cloudscape-design` | architect, spec-writer-frontend, code-gen-frontend, reviewer | 101개 컴포넌트 카탈로그, 73개 UI 패턴, 코드 예제 5개, 디자인 토큰 |
 | `agent-patterns` | spec-writer-ai, code-gen-ai | AI 에이전트 설계 패턴 3계층 택소노미, 18개 패턴 레퍼런스 |
 | `prompt-engineering` | spec-writer-ai, code-gen-ai | XML 구조화, Structured Output, Tool Use, Extended Thinking |
-| `strands-sdk-guide` | spec-writer-ai, code-gen-ai | Strands SDK TypeScript 구현 가이드, 도구/MCP/멀티에이전트 |
+| `strands-sdk-typescript-guide` | spec-writer-ai, code-gen-ai | Strands SDK TypeScript 구현 가이드, 도구/MCP/멀티에이전트 |
+| `strands-sdk-python-guide` | (범용 참조) | Strands SDK Python 구현 가이드, 도구/MCP/모델 프로바이더/배포 |
 | `aws-infra-patterns` | aws-architect | 스토리지 선택 의사결정, IAM 정책 템플릿, 비용 추정 공식 |
 | `aws-cdk-patterns` | aws-deployer | CDK construct 코드, 데이터 레이어 듀얼 모드, 시드 마이그레이션 |
 | `mermaid-diagrams` | spec-writer-backend | Mermaid Flowchart/Sequence 문법, 패턴별 예제 |

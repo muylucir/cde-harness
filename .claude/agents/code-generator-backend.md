@@ -78,166 +78,25 @@ src/
 - **Repository** (`src/lib/db/`): `data_model_hints.common_relationships`에 관계형 조회 메서드 추가 (예: `findByVehicleId()`)
 - **주석**: `terminology`의 도메인 용어를 JSDoc에 풀네임과 함께 사용 (예: `/** MTBF(평균고장간격)를 계산한다 */`)
 
-## 코드 생성 규칙
+## 핵심 규칙
 
-### AI/Bedrock 코드는 이 에이전트의 담당이 아니다
+1. **AI/Bedrock 코드는 이 에이전트의 담당이 아니다** — `code-generator-ai`가 `@strands-agents/sdk`로 구현
+2. **인메모리 스토어 + Repository 패턴** — `backend-spec.json`의 스펙을 따라 구현
+3. **정렬은 타입 안전 접근자 패턴** — `as unknown as Record` 이중 캐스트 금지. `Record<string, (item: T) => string | number>` 사용
+4. **zod로 모든 POST/PUT 요청 검증**
+5. **코딩 규칙은 CLAUDE.md 참조** — TypeScript, 주석, 네이밍 컨벤션 등
 
-AI 기능(Bedrock 호출, 에이전트, 채팅 API 등)은 `code-generator-ai` 에이전트가 `@strands-agents/sdk`로 구현한다. 이 에이전트는 `src/lib/services/bedrock.ts`를 생성하지 않는다. AI 관련 타입(`src/types/ai.ts` 등)이 필요한 경우에도 `code-generator-ai`가 생성한다.
+## 점진적 작업 규칙 (중요)
 
-### 데이터 레이어 — 인메모리 스토어 (프로토타입 기본)
+**한 번의 응답에서 모든 파일을 생성하지 않는다.** 출력 토큰 한도를 초과하지 않도록 다음 순서로 나눠서 작업한다:
 
-```typescript
-// src/lib/db/store.ts
-// 프로토타입용 인메모리 스토어. DynamoDB 등으로 교체 가능하도록 repository 패턴 사용.
+1. **턴 1**: types + validation 파일 생성
+2. **턴 2**: data (시드) + db (store, repository) 파일 생성
+3. **턴 3**: api route handlers 생성
+4. **턴 4**: middleware + `npm run build` + `npm run lint` 검증
+5. **턴 5**: 빌드 에러 수정 (있으면) + 생성 로그 작성
 
-class InMemoryStore<T extends { id: string }> {
-  private items: Map<string, T> = new Map();
-
-  findAll(): T[] { ... }
-  findById(id: string): T | undefined { ... }
-  create(item: T): T { ... }
-  update(id: string, updates: Partial<T>): T | undefined { ... }
-  delete(id: string): boolean { ... }
-}
-```
-
-### Repository 패턴
-
-```typescript
-// src/lib/db/{resource}.repository.ts
-// 리소스별 데이터 접근. 스토어 구현체를 교체하면 DB 변경 가능.
-
-import { InMemoryStore } from './store';
-import type { Resource } from '@/types/resource';
-import { seedResources } from '@/data/seed';
-
-const store = new InMemoryStore<Resource>();
-// 시드 데이터 로딩
-seedResources.forEach((item) => store.create(item));
-
-export const resourceRepository = {
-  findAll: () => store.findAll(),
-  findById: (id: string) => store.findById(id),
-  create: (data: Omit<Resource, 'id'>) => store.create({ ...data, id: crypto.randomUUID() }),
-  update: (id: string, data: Partial<Resource>) => store.update(id, data),
-  delete: (id: string) => store.delete(id),
-};
-```
-
-### 타입 안전한 정렬 패턴
-
-Repository에서 정렬을 지원할 때 `as unknown as Record` 이중 캐스트를 금지한다. 대신 타입 안전한 정렬 키 접근자 패턴을 사용한다:
-
-```typescript
-// 타입 안전한 정렬 — `as unknown as Record` 이중 캐스트 금지
-const SORTABLE_FIELDS: Record<string, (item: Resource) => string | number> = {
-  createdAt: (i) => i.createdAt,
-  severity: (i) => i.severity,
-  title: (i) => i.title,
-};
-const accessor = SORTABLE_FIELDS[sortBy];
-if (!accessor) throw new Error(`Invalid sort field: ${sortBy}`);
-items.sort((a, b) => String(accessor(a)).localeCompare(String(accessor(b))));
-```
-
-### API Route Handlers
-
-```typescript
-// src/app/api/{resource}/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { resourceRepository } from '@/lib/db/resource.repository';
-import { createResourceSchema } from '@/lib/validation/schemas';
-
-export async function GET() {
-  const items = resourceRepository.findAll();
-  return NextResponse.json(items);
-}
-
-export async function POST(request: NextRequest) {
-  const body = await request.json();
-  const parsed = createResourceSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
-  const created = resourceRepository.create(parsed.data);
-  return NextResponse.json(created, { status: 201 });
-}
-```
-
-### 요청 검증 (zod)
-
-```typescript
-// src/lib/validation/schemas.ts
-import { z } from 'zod';
-
-export const createResourceSchema = z.object({
-  name: z.string().min(1).max(100),
-  type: z.string(),
-  // ...
-});
-
-export type CreateResourceRequest = z.infer<typeof createResourceSchema>;
-```
-
-### AWS 서비스 연동 (필요 시, AI/Bedrock 제외)
-
-```typescript
-// src/lib/services/dynamodb.ts — DynamoDB 접근
-// src/lib/services/s3.ts — S3 접근
-// 프로토타입에서는 환경 변수(AWS_REGION 등)로 설정
-// .env.local에 AWS credentials 저장, 절대 하드코딩 금지
-// 참고: Bedrock/AI 관련 서비스는 code-generator-ai가 @strands-agents/sdk로 구현
-```
-
-### 미들웨어 — 보안 헤더
-
-```typescript
-// src/middleware.ts
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-
-export function middleware(request: NextRequest) {
-  const response = NextResponse.next();
-  response.headers.set('X-Frame-Options', 'DENY');
-  response.headers.set('X-Content-Type-Options', 'nosniff');
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  return response;
-}
-
-export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
-};
-```
-
-### TypeScript 규칙
-- **No `any`** — zod 스키마에서 타입 추론
-- **No `@ts-ignore`**
-- 타입은 `src/types/`에 정의하고 프론트엔드와 공유
-- API 응답 타입도 명시적으로 정의
-
-### 주석 규칙 (핸드오버용)
-- 모든 파일에 **파일 헤더** 필수 (한국어 설명 + @requirements 태그)
-- 모든 export 함수/타입에 **JSDoc** 필수 (한국어 설명 + @param/@returns/@throws)
-- 비즈니스 로직, SLA 기준, 도메인 특화 상수에 **인라인 주석** (한국어)
-- 자명한 코드에는 주석 달지 않음
-
-```typescript
-/**
- * 차량 데이터 접근 레이어
- *
- * 인메모리 스토어 기반. DynamoDB로 교체 시 이 파일만 수정하면 된다.
- *
- * @requirements FR-001, FR-002
- */
-
-/**
- * ID로 차량을 조회한다.
- *
- * @param id - 차량 고유 ID
- * @returns 차량 정보 또는 undefined (미발견 시)
- */
-export function findById(id: string): Vehicle | undefined { ... }
-```
+각 턴에서 Write 도구로 파일을 쓴 뒤, 다음 턴으로 넘어간다.
 
 ## 생성 프로세스
 
@@ -293,24 +152,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 ### `.pipeline/artifacts/v{N}/04-codegen/generation-log-backend.json`
 
-```json
-{
-  "metadata": { "created": "<ISO-8601>", "version": 1, "generator": "backend" },
-  "files_created": [
-    { "path": "src/types/vehicle.ts", "spec": "backend-spec.json", "spec_section": "types", "lines": 45, "status": "created" },
-    { "path": "src/app/api/vehicles/route.ts", "spec": "backend-spec.json", "spec_section": "api", "lines": 30, "status": "created" }
-  ],
-  "dependencies_installed": ["zod"],
-  "build_result": {
-    "success": true,
-    "attempts": 1,
-    "errors": [
-      { "message": "Type error...", "file": "src/types/vehicle.ts", "fix_applied": "Changed type to..." }
-    ],
-    "warnings": []
-  }
-}
-```
+`metadata`, `files_created[]` (path, spec, spec_section, lines, status), `dependencies_installed[]`, `build_result` (success, attempts, errors[], warnings[]) 구조.
 
 ## 피드백 처리
 

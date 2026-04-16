@@ -57,13 +57,23 @@ allowedTools:
 | 목데이터 예시 | `terminology` | 컬럼 헤더와 라벨에 도메인 용어 사용. 약어는 풀네임 병기 (예: "MTBF (평균고장간격)") |
 | 동작 명세 | `domain_workflows` | 상세 페이지의 상태 전환을 워크플로우 `steps[]` 순서에 맞춰 기술 |
 
+## 점진적 작업 규칙 (중요)
+
+**한 번의 응답에서 모든 출력 파일을 작성하지 않는다.** 입력 아티팩트 읽기 + JSON + MD + 요약 + 매니페스트를 합치면 출력 토큰 한도를 초과한다. 나눠서 작업한다:
+
+1. **턴 1**: 입력 파일 읽기 (requirements.json, architecture.json, backend-spec.json, ai-spec.json, domain-context.json)
+2. **턴 2**: `frontend-spec.json` 작성
+3. **턴 3**: `frontend-spec.md` 작성
+4. **턴 4**: `specs-summary.md` + `_manifest.json` 작성
+
+각 턴에서 Write 도구로 파일을 쓴 뒤, 다음 턴으로 넘어간다.
+
 ## 처리 프로세스
 
-1. `requirements.json`, `architecture.json`, `backend-spec.json`을 읽고 프론트엔드 관련 FR/컴포넌트를 파악
-2. `ai-spec.json`이 있으면 AI 채팅 UI 스펙 포함 (`has_ai: true`)
-3. `domain-context.json`이 있으면 도메인 컨텍스트 활용 테이블에 따라 보강
-4. 담당 범위 6개(hooks → contexts → layout → shared → feature → page) 순서로 스펙 작성
-5. 이중 출력: `frontend-spec.json` → `frontend-spec.md` → `specs-summary.md` → `_manifest.json` 순서로 작성
+1. 입력 파일에서 프론트엔드 관련 FR/컴포넌트 파악
+2. `ai-spec.json` → `has_ai: true/false`, `domain-context.json` → 도메인 보강
+3. 담당 범위 6개(hooks → contexts → layout → shared → feature → page) 순서로 스펙 작성
+4. 이중 출력: json → md → summary → manifest 순서
 
 ## 출력
 
@@ -86,149 +96,17 @@ allowedTools:
 
 ## 프론트엔드 스펙 마크다운 포맷 (frontend-spec.md)
 
-컴포넌트별로 **반드시** 다음 섹션을 포함:
-
-```markdown
-# 프론트엔드 스펙
-
-## {ComponentName}
-
-### 메타데이터
-- **파일 경로**: src/components/{feature}/{ComponentName}.tsx
-- **타입**: page | layout | feature | shared | provider
-- **요구사항**: FR-001, FR-003
-- **Cloudscape 패턴**: {pattern-path}
-
-### Props 인터페이스
-\`\`\`typescript
-interface {ComponentName}Props {
-  // 모든 props에 대한 정확한 TypeScript 인터페이스
-}
-\`\`\`
-
-### Cloudscape 컴포넌트 사용
-| Component | Import Path | Key Props | Event Handlers |
-|-----------|-------------|-----------|----------------|
-| Table | @cloudscape-design/components/table | items, columnDefinitions, ... | onSelectionChange |
-
-### 상태 관리
-- **Local state**: { variableName: type = initialValue }
-- **useCollection**: { filtering: boolean, sorting: boolean, pagination: { pageSize: N } }
-
-### 목데이터 예시
-\`\`\`typescript
-export const MOCK_{RESOURCE}: {TypeName}[] = [
-  // 3~5개 현실적인 엔트리 (TypeScript 인터페이스와 일치)
-];
-\`\`\`
-
-### 동작 명세
-1. 마운트 시: {동작}
-2. {이벤트} 발생 시: {동작}
-3. 에러 상태: {처리 방법}
-4. 로딩 상태: {표시할 컴포넌트}
-5. 빈 상태: {표시할 내용}
-
-### 사용자 시나리오 매핑
-| User Story | 페르소나 | 이 컴포넌트의 역할 |
-|------------|---------|-------------------|
-| US-001: {스토리 제목} | P-001 ({역할}) | {이 컴포넌트가 해당 스토리에서 수행하는 역할} |
-
-*참고: requirements.json의 `user_stories[]`와 `personas[]`에서 이 컴포넌트의 `requirements`(FR ID)에 매핑되는 항목을 참조한다.*
-
-### 페르소나 기반 UX 가이드
-architecture.json의 `metadata.primary_persona.technical_proficiency`에 따라:
-- **low**: 빈 상태에 안내 문구(EmptyState + 행동 유도 버튼) 추가, 위자드 패턴 선호, 인라인 도움말 표시
-- **medium**: 표준 Cloudscape 패턴 그대로 적용
-- **high**: 밀집 테이블 레이아웃 (compact density), 배치 작업 UI, 키보드 단축키 안내
-
-### 접근성 요구사항
-- enableKeyboardNavigation: {boolean}
-- ariaLabel: "{label}"
-
-### 파일 의존성
-- src/types/{type}.ts
-- src/lib/{util}.ts
-```
+컴포넌트별로 다음 섹션을 포함: 메타데이터 (파일 경로, 타입, 요구사항, Cloudscape 패턴), Props 인터페이스, Cloudscape 컴포넌트 사용 테이블, 상태 관리, 동작 명세 (마운트/이벤트/에러/로딩/빈 상태), 사용자 시나리오 매핑 (US → 페르소나 → 컴포넌트 역할), 페르소나 기반 UX (low/medium/high), 접근성, 파일 의존성.
 
 ## 프론트엔드 스펙 JSON 포맷 (frontend-spec.json)
 
-```json
-{
-  "generator": "frontend",
-  "specs": [
-    {
-      "component": "ResourceTable",
-      "file_path": "src/components/resources/ResourceTable.tsx",
-      "type": "feature",
-      "requirements": ["FR-001"],
-      "cloudscape_components": [
-        { "name": "Table", "import_path": "@cloudscape-design/components/table", "key_props": ["items", "columnDefinitions"], "event_handlers": ["onSelectionChange"] }
-      ],
-      "props_interface": "ResourceTableProps",
-      "use_collection": { "filtering": true, "sorting": true, "pagination": { "pageSize": 10 } },
-      "state": "local",
-      "dependencies": ["src/types/resource.ts", "src/hooks/useResources.ts"],
-      "imports": ["@cloudscape-design/components/table", "@cloudscape-design/collection-hooks"]
-    }
-  ],
-  "hooks": [
-    {
-      "name": "useResources",
-      "file_path": "src/hooks/useResources.ts",
-      "api_endpoint": "GET /api/resources",
-      "return_type": "Resource[]"
-    }
-  ],
-  "generation_order": ["hooks", "contexts", "layout", "shared", "feature", "page"]
-}
-```
+`generator: "frontend"`, `specs[]` (component, file_path, type, requirements, cloudscape_components[], props_interface, use_collection, state, dependencies, imports), `hooks[]` (name, file_path, api_endpoint, return_type), `generation_order`.
 
 ## 매니페스트 (_manifest.json)
 
 backend-spec.json + ai-spec.json(있으면) + frontend-spec.json을 읽고 집계한다.
 
-```json
-{
-  "metadata": {
-    "created": "<ISO-8601>",
-    "total_specs": 18,
-    "backend_specs": 6,
-    "ai_specs": 6,
-    "frontend_specs": 6,
-    "has_ai": true
-  },
-  "requirements_coverage": {
-    "FR-001": { "backend": ["resource-api"], "ai": [], "frontend": ["ResourceTable", "ResourcesPage"] },
-    "FR-002": { "backend": ["resource-api"], "frontend": ["ResourceDetail"] }
-  },
-  "uncovered_requirements": [],
-  "generation_order": [
-    { "phase": "types", "generator": "backend", "file": "backend-spec.json" },
-    { "phase": "validation", "generator": "backend", "file": "backend-spec.json" },
-    { "phase": "data", "generator": "backend", "file": "backend-spec.json" },
-    { "phase": "db", "generator": "backend", "file": "backend-spec.json" },
-    { "phase": "api", "generator": "backend", "file": "backend-spec.json" },
-    { "phase": "middleware", "generator": "backend", "file": "backend-spec.json" },
-    { "phase": "ai-types", "generator": "ai", "file": "ai-spec.json" },
-    { "phase": "ai-prompts", "generator": "ai", "file": "ai-spec.json" },
-    { "phase": "ai-tools", "generator": "ai", "file": "ai-spec.json" },
-    { "phase": "ai-rag", "generator": "ai", "file": "ai-spec.json" },
-    { "phase": "ai-agent", "generator": "ai", "file": "ai-spec.json" },
-    { "phase": "ai-api", "generator": "ai", "file": "ai-spec.json" },
-    { "phase": "hooks", "generator": "frontend", "file": "frontend-spec.json" },
-    { "phase": "contexts", "generator": "frontend", "file": "frontend-spec.json" },
-    { "phase": "layout", "generator": "frontend", "file": "frontend-spec.json" },
-    { "phase": "shared", "generator": "frontend", "file": "frontend-spec.json" },
-    { "phase": "feature", "generator": "frontend", "file": "frontend-spec.json" },
-    { "phase": "page", "generator": "frontend", "file": "frontend-spec.json" }
-  ],
-  "output_files": {
-    "machine_readable": ["backend-spec.json", "ai-spec.json", "frontend-spec.json"],
-    "human_readable": ["backend-spec.md", "ai-spec.md", "frontend-spec.md", "specs-summary.md"]
-  }
-}
-```
+구조: `metadata` (created, total/backend/ai/frontend_specs, has_ai), `requirements_coverage` (FR별 backend/ai/frontend 컴포넌트), `uncovered_requirements[]`, `generation_order[]` (phase, generator, file — BE phases → AI phases → FE phases 순서), `output_files` (machine_readable[], human_readable[]).
 
 AI 기능이 없으면 `ai_specs: 0`, `has_ai: false`로 설정하고, generation_order에서 ai-* phase를 제외한다.
 

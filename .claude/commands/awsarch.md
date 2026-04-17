@@ -102,22 +102,35 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
 ## AWS 인프라 프로비저닝 계획
 
 ### 프로비저닝할 리소스
-| 서비스 | 리소스 | 수량 |
-|--------|--------|------|
-| DynamoDB | 테이블 | {N}개 |
-| DynamoDB | GSI | {N}개 |
-| S3 | 버킷 | {0 or 1}개 |
-| Cognito | User Pool | {0 or 1}개 |
+| 카테고리 | 서비스 | 리소스 | 수량 |
+|---------|--------|--------|------|
+| 데이터 | DynamoDB | 테이블 / GSI | {N}/{N}개 |
+| 데이터 | Aurora / ElastiCache / OpenSearch / S3 / Cognito | - | {0 or N}개 |
+| 통합 | SQS | 큐 (+ DLQ) | {0 or N}개 |
+| 통합 | SNS | 토픽 | {0 or N}개 |
+| 통합 | EventBridge | 규칙 / 스케줄 | {0 or N}개 |
+| 통합 | Step Functions | 상태 머신 | {0 or N}개 |
+| 컴퓨팅 | Lambda | 함수 | {0 or N}개 |
+| AI | Bedrock AgentCore | Runtime / Memory / Gateway / Identity / Observability | {0 or 1}개 each |
+| AI | Bedrock | 모델 (Claude Sonnet 등) | {N}개 |
 
 ### 예상 비용
-- 월간: ${aws-architecture.json.cost_estimate.monthly_total_usd}
+- 월간 범위: ${aws-architecture.json.cost_estimate.monthly_total_usd}
 - 근거: {assumptions}
+- 서비스별 세부: {breakdown}
+
+### ⚠️ 사용량 기반 요금 경고 (해당 시)
+- **Bedrock 모델**: 토큰 단위 과금 (Claude Sonnet: $3/M input + $15/M output). 프로토타입 사용량에 따라 $1–$20/월
+- **AgentCore Runtime**: 호출 수 + 실행 시간 기반. 예측 불가 — 모니터링 필수
+- **AgentCore Memory**: 저장 크기 + 검색 횟수 기반
+- **권장**: CloudWatch Billing Alarm을 $50/월로 설정 (aws-deployer가 자동 구성)
 
 ### 배포 리전
 - {aws_region}
 
 ### 정리 방법
-- `cd infra && npx cdk destroy`
+- `cd infra && npx cdk destroy` (CDK 관리 리소스)
+- AgentCore 배포 리소스(Runtime/Memory 등)는 `agentcore destroy` 또는 콘솔에서 수동 정리 필요
 
 > 진행하시겠습니까? (Y/N)
 ```

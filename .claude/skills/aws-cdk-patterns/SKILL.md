@@ -274,6 +274,225 @@ new cdk.CfnOutput(this, 'UserPoolClientId', {
 });
 ```
 
+### SQS (+ DLQ)
+
+```typescript
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+
+const dlq = new sqs.Queue(this, 'ReportsDLQ', {
+  queueName: `${projectName}-reports-dlq-${stage}`,
+  retentionPeriod: cdk.Duration.days(14),
+  removalPolicy: cdk.RemovalPolicy.DESTROY,
+});
+
+const queue = new sqs.Queue(this, 'ReportsQueue', {
+  queueName: `${projectName}-reports-${stage}`,
+  visibilityTimeout: cdk.Duration.minutes(15), // 워커 타임아웃 × 6
+  retentionPeriod: cdk.Duration.days(4),
+  deadLetterQueue: { queue: dlq, maxReceiveCount: 3 },
+  removalPolicy: cdk.RemovalPolicy.DESTROY,
+});
+
+new cdk.CfnOutput(this, 'ReportsQueueUrl', {
+  value: queue.queueUrl,
+  description: 'SQS_REPORTS_QUEUE_URL',
+});
+```
+
+FIFO 큐가 필요하면: `{ fifo: true, contentBasedDeduplication: true, queueName: '...fifo' }`.
+
+### SNS
+
+```typescript
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+
+const topic = new sns.Topic(this, 'AlertsTopic', {
+  topicName: `${projectName}-alerts-${stage}`,
+});
+
+// 이메일 구독 (수동 확인 필요)
+topic.addSubscription(new subscriptions.EmailSubscription('admin@example.com'));
+
+// SQS 구독 (필터 가능)
+topic.addSubscription(new subscriptions.SqsSubscription(queue, {
+  filterPolicy: {
+    severity: sns.SubscriptionFilter.stringFilter({ allowlist: ['critical', 'high'] }),
+  },
+}));
+
+new cdk.CfnOutput(this, 'AlertsTopicArn', {
+  value: topic.topicArn,
+  description: 'SNS_ALERTS_TOPIC_ARN',
+});
+```
+
+### EventBridge (규칙 + 스케줄 + 타겟)
+
+```typescript
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
+
+// 커스텀 이벤트 버스 (도메인 이벤트)
+const bus = new events.EventBus(this, 'AppBus', {
+  eventBusName: `${projectName}-bus-${stage}`,
+});
+
+// 패턴 기반 규칙: OrderCreated 이벤트 → Lambda
+new events.Rule(this, 'OrderCreatedRule', {
+  eventBus: bus,
+  eventPattern: {
+    source: ['orders'],
+    detailType: ['OrderCreated'],
+  },
+  targets: [new targets.LambdaFunction(orderHandlerFn)],
+});
+
+// 스케줄: 매일 자정 Step Functions 실행 (default bus)
+new events.Rule(this, 'DailyReportSchedule', {
+  schedule: events.Schedule.cron({ minute: '0', hour: '0' }), // UTC
+  targets: [new targets.SfnStateMachine(reportStateMachine)],
+});
+
+new cdk.CfnOutput(this, 'EventBusName', {
+  value: bus.eventBusName,
+  description: 'EVENT_BUS_NAME',
+});
+```
+
+### Step Functions
+
+```typescript
+import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
+import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
+
+// Task 정의 (Lambda 호출)
+const aggregateTask = new tasks.LambdaInvoke(this, 'Aggregate', {
+  lambdaFunction: aggregateFn,
+  outputPath: '$.Payload',
+});
+
+const transformTask = new tasks.LambdaInvoke(this, 'Transform', {
+  lambdaFunction: transformFn,
+  outputPath: '$.Payload',
+});
+
+// 실패 시 SNS 알림
+const notifyFailure = new tasks.SnsPublish(this, 'NotifyFailure', {
+  topic: topic,
+  message: sfn.TaskInput.fromJsonPathAt('$'),
+});
+
+// Choice로 성공/실패 분기
+const checkSuccess = new sfn.Choice(this, 'CheckSuccess')
+  .when(sfn.Condition.booleanEquals('$.success', true), new sfn.Succeed(this, 'Done'))
+  .otherwise(notifyFailure);
+
+// 정의 조립: aggregate → transform → check
+const definition = aggregateTask
+  .next(transformTask)
+  .next(checkSuccess);
+
+const stateMachine = new sfn.StateMachine(this, 'ReportStateMachine', {
+  stateMachineName: `${projectName}-report-${stage}`,
+  definitionBody: sfn.DefinitionBody.fromChainable(definition),
+  stateMachineType: sfn.StateMachineType.STANDARD,
+  timeout: cdk.Duration.hours(1),
+  removalPolicy: cdk.RemovalPolicy.DESTROY,
+});
+
+// 재시도/Catch는 각 Task에 .addRetry() / .addCatch() 로 추가
+aggregateTask.addRetry({ maxAttempts: 3, backoffRate: 2 });
+
+new cdk.CfnOutput(this, 'ReportStateMachineArn', {
+  value: stateMachine.stateMachineArn,
+  description: 'STEP_FUNCTION_REPORT_ARN',
+});
+```
+
+### Lambda (NodejsFunction + 트리거)
+
+```typescript
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
+
+// SQS 소비자 Lambda
+const reportWorker = new NodejsFunction(this, 'ReportWorker', {
+  functionName: `${projectName}-report-worker-${stage}`,
+  entry: 'lambda/report-worker.ts', // handler 파일
+  runtime: lambda.Runtime.NODEJS_20_X,
+  memorySize: 512,
+  timeout: cdk.Duration.minutes(2), // SQS Visibility Timeout(15분) 내
+  environment: {
+    TABLE_NAME: table.tableName,
+    MODEL_ID: 'anthropic.claude-sonnet-4-6-20250514-v1:0',
+  },
+  bundling: { minify: true, sourceMap: true },
+});
+
+// SQS → Lambda 트리거
+reportWorker.addEventSource(new lambdaEventSources.SqsEventSource(queue, {
+  batchSize: 10,
+  maxBatchingWindow: cdk.Duration.seconds(5),
+}));
+
+// 권한 자동 부여 (SQS Receive/Delete + DynamoDB RW)
+queue.grantConsumeMessages(reportWorker);
+table.grantReadWriteData(reportWorker);
+reportWorker.addToRolePolicy(new iam.PolicyStatement({
+  actions: ['bedrock:InvokeModel'],
+  resources: ['arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-*'],
+}));
+```
+
+DynamoDB Streams 트리거는 `new lambdaEventSources.DynamoEventSource(table, { startingPosition: lambda.StartingPosition.LATEST, ... })`.
+
+### Bedrock AgentCore (CustomResource 패턴)
+
+AgentCore는 네이티브 CDK L2 construct가 제한적이다. 프로토타입에서는 CLI (`agentcore deploy`)를 선호하되, CDK에서 리소스를 참조하려면 `CustomResource` + AWS SDK로 래핑한다.
+
+```typescript
+import * as cr from 'aws-cdk-lib/custom-resources';
+import * as iam from 'aws-cdk-lib/aws-iam';
+
+// 전제: `agentcore configure` + `agentcore deploy`로 이미 배포된 Agent가 있다고 가정
+// CDK는 해당 Agent ID를 환경 변수로 Next.js에 전달하는 역할만 수행
+const agentId = 'arn:aws:bedrock-agentcore:ap-northeast-2:123456789012:agent-runtime/my-agent';
+const memoryId = 'arn:aws:bedrock-agentcore:ap-northeast-2:123456789012:memory/my-memory';
+
+// Next.js 서버 (Amplify/ECS/Lambda 등)에 IAM 권한 부여
+const invokeAgentPolicy = new iam.PolicyStatement({
+  actions: [
+    'bedrock-agentcore:InvokeAgentRuntime',
+    'bedrock-agentcore:GetAgentRuntime',
+    'bedrock-agentcore:StoreMemory',
+    'bedrock-agentcore:RetrieveMemory',
+  ],
+  resources: [agentId, memoryId],
+});
+
+// 예: Next.js를 실행하는 Lambda 또는 ECS Task Role에 부여
+// nextjsServerRole.addToPolicy(invokeAgentPolicy);
+
+new cdk.CfnOutput(this, 'AgentCoreAgentId', {
+  value: agentId,
+  description: 'AGENTCORE_AGENT_ID',
+});
+new cdk.CfnOutput(this, 'AgentCoreMemoryId', {
+  value: memoryId,
+  description: 'AGENTCORE_MEMORY_ID',
+});
+```
+
+**AgentCore 배포 흐름 (aws-deployer가 실행)**:
+1. `src/lib/ai/` 코드를 `BedrockAgentCoreApp`으로 래핑 + Dockerfile 작성
+2. `agentcore configure` → `agentcore deploy` 실행 (CodeBuild + ECR + Runtime 자동)
+3. 생성된 Agent ARN/Memory ARN을 CDK 스택의 환경 변수로 주입
+4. CDK `cdk deploy`로 Next.js 서버에 IAM 권한 부여
+
+상세 CLI 워크플로우는 전역 스킬 `bedrock-agentcore-guide` 참조.
+
 ## 데이터 레이어 듀얼 모드
 
 InMemoryStore → AWS 서비스로 교체할 때 Repository 패턴으로 추상화. 상세 구현은 [references/data-layer.md](references/data-layer.md) 참조.

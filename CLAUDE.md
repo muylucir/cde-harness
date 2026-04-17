@@ -119,6 +119,32 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
 11. Run `npm run test:e2e` after code generation to verify actual behavior
 12. `DATA_SOURCE` 환경변수로 듀얼 모드 지원: `memory`(기본, InMemoryStore) | `dynamodb`(DynamoDBStore). Repository 패턴의 `createStore()` 팩토리로 추상화. `/awsarch` 실행 후 활성화.
 
+## API Contract Conventions (BE/FE 공통)
+
+BE와 FE가 생성하는 모든 API 응답/요청은 아래 형식을 **예외 없이** 따른다. 단일 소스는 spec-writer-backend가 생성하는 `.pipeline/artifacts/v{N}/03-specs/api-contract.json`이며, 실제 구현 매니페스트는 code-generator-backend가 생성하는 `.pipeline/artifacts/v{N}/04-codegen/api-manifest.json`이다. **스펙과 실제 구현이 다르면 실제 구현을 신뢰한다.**
+
+### 응답 envelope (고정)
+- **목록 응답**: `{ items: T[]; total: number; nextToken?: string }`
+- **단일 응답**: `{ item: T }` (경로: `/api/{resource}/[id]` GET)
+- **Mutation 응답**: `{ item: T }` (POST, PUT/PATCH), `{ success: true }` (DELETE)
+- **에러 응답**: `{ error: { code: string; message: string; details?: unknown } }`
+- `{data}` / `{results}` / `{payload}` 등 다른 이름 **금지**
+
+### HTTP 상태 코드
+- `200` OK (성공 GET, PUT), `201` Created (POST), `204` No Content (DELETE 성공)
+- `400` Bad Request (zod validation 실패), `401` Unauthorized, `403` Forbidden
+- `404` Not Found, `409` Conflict (중복/경쟁), `500` Internal Server Error
+
+### 경로/쿼리 네이밍
+- **동적 세그먼트는 항상 `[id]`**: `/api/vehicles/[id]/route.ts`. `[vehicleId]`, `[userId]` 등 변형 금지
+- **쿼리는 camelCase**: `?page=1&pageSize=20&sortBy=createdAt&sortOrder=desc`. `page_size`, `sort_by` 같은 snake_case 금지
+- **리소스명은 복수형 kebab-case**: `/api/maintenance-records` (O), `/api/MaintenanceRecord` (X)
+
+### zod ↔ TypeScript 바인딩 (drift 원천 제거)
+- 요청 바디 타입은 **반드시 `z.infer<typeof XxxSchema>`로 도출**한다. 별도 `interface CreateVehicleRequest` 수동 선언 금지
+- 예: `export const createVehicleSchema = z.object({ ... }); export type CreateVehicleRequest = z.infer<typeof createVehicleSchema>;`
+- FE 훅의 제네릭 타입은 BE가 export한 타입(`import type { CreateVehicleRequest }`)을 그대로 사용
+
 ## Coding Convention
 
 ESLint가 강제하는 규칙 (eslint.config.mjs 참조):

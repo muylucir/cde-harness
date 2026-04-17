@@ -32,7 +32,8 @@ allowedTools:
 
 - `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — FR, NFR과 함께 **`personas[]`**, **`user_stories[]`** 도 참조한다
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — `metadata.primary_persona` 참조
-- `.pipeline/artifacts/v{N}/03-specs/backend-spec.json` — BE 타입/API 참조
+- `.pipeline/artifacts/v{N}/03-specs/backend-spec.json` — BE 타입/API 참조 (보조)
+- `.pipeline/artifacts/v{N}/03-specs/api-contract.json` — **BE/FE 공통 계약. 훅 스펙의 `endpoint_id`는 이 파일의 `endpoints[].id`를 참조한다.**
 - `.pipeline/artifacts/v{N}/03-specs/ai-spec.json` — AI API/타입 참조 (있을 때)
 - `.pipeline/artifacts/v{N}/00-domain/domain-context.json` (있으면)
 
@@ -105,7 +106,9 @@ allowedTools:
 
 ## 프론트엔드 스펙 JSON 포맷 (frontend-spec.json)
 
-`generator: "frontend"`, `specs[]` (component, file_path, type, requirements, cloudscape_components[], props_interface, use_collection, state, dependencies, imports), `hooks[]` (name, file_path, api_endpoint, return_type), `generation_order`.
+`generator: "frontend"`, `specs[]` (component, file_path, type, requirements, cloudscape_components[], props_interface, use_collection, state, dependencies, imports), `hooks[]` (name, file_path, **endpoint_id**, api_endpoint, return_type, request_type), `generation_order`.
+
+**`hooks[].endpoint_id`**: `api-contract.json`의 `endpoints[].id` 값과 일치해야 한다. code-generator-frontend는 이 id로 매니페스트의 실제 responseType/requestType을 조회하여 훅 제네릭에 바인딩한다.
 
 ## 매니페스트 (_manifest.json)
 
@@ -143,6 +146,7 @@ AI 기능이 없으면 `ai_specs: 0`, `has_ai: false`로 설정하고, generatio
 |----------|------|
 | `architecture.json` 미존재 | "아키텍처가 없습니다. architect를 먼저 실행하세요." 에러 출력 + 중단 |
 | `backend-spec.json` 미존재 | "백엔드 스펙이 없습니다. spec-writer-backend를 먼저 실행하세요." 에러 출력 + 중단 |
+| `api-contract.json` 미존재 | "API 계약이 없습니다. spec-writer-backend가 api-contract.json을 생성했는지 확인하세요." 에러 출력 + 중단 |
 | `ai-spec.json` 미존재 | 정상 처리: `has_ai: false`로 설정, AI 관련 phase를 generation_order에서 제외 |
 | Skill 호출 실패 | 경고 출력 + 스킬 없이 프롬프트 본문의 기본 패턴으로 계속 |
 | state.json 파싱 실패 | 경고 출력 + 버전을 v1로 기본 설정 |

@@ -276,12 +276,13 @@ node .pipeline/scripts/checkpoint.mjs start spec-writer-backend
 ```
 - Launch the `spec-writer-backend` agent
 - Input: `01-requirements/requirements.json` + `02-architecture/architecture.json`
-- Output: `backend-spec.json` + `backend-spec.md`
+- Output: `backend-spec.json` + `backend-spec.md` + **`api-contract.json`** (BE/FE 공통 계약)
 
 ```bash
 node .pipeline/scripts/checkpoint.mjs check spec-writer-backend \
   "file:.pipeline/artifacts/v{N}/03-specs/backend-spec.md" \
-  "json:.pipeline/artifacts/v{N}/03-specs/backend-spec.json"
+  "json:.pipeline/artifacts/v{N}/03-specs/backend-spec.json" \
+  "json:.pipeline/artifacts/v{N}/03-specs/api-contract.json"
 ```
 
 **4-2. AI 스펙 (조건부)**
@@ -327,12 +328,14 @@ node .pipeline/scripts/checkpoint.mjs check spec-writer-frontend \
 node .pipeline/scripts/checkpoint.mjs start code-gen-backend
 ```
 - Launch `code-generator-backend`
-- Output: `src/types/`, `src/lib/`, `src/app/api/`, `src/data/`, `src/middleware.ts`
+- Input: 위 + `api-contract.json` (계약 단일 소스)
+- Output: `src/types/`, `src/lib/`, `src/app/api/`, `src/data/`, `src/middleware.ts` + **`04-codegen/api-manifest.json`** (실제 구현 매니페스트, FE가 훅 생성 시 참조)
 
 ```bash
 node .pipeline/scripts/checkpoint.mjs check code-gen-backend \
   "cmd:npm run build" \
-  "cmd:npm run lint"
+  "cmd:npm run lint" \
+  "json:.pipeline/artifacts/v{N}/04-codegen/api-manifest.json"
 ```
 
 **5b. AI Agent (조건부)**
@@ -355,7 +358,7 @@ node .pipeline/scripts/checkpoint.mjs check code-gen-ai \
 node .pipeline/scripts/checkpoint.mjs start code-gen-frontend
 ```
 - Launch `code-generator-frontend`
-- 백엔드가 생성한 `src/types/`와 API 엔드포인트를 참조
+- 백엔드가 생성한 `src/types/`, `src/app/api/**/route.ts`, `src/lib/validation/schemas.ts`, `04-codegen/api-manifest.json`을 **모두 필수 Read** (스펙과 실제 구현이 다르면 실제 구현을 신뢰)
 - Output: `src/components/`, `src/hooks/`, `src/contexts/`, `src/app/` pages
 
 **CHECKPOINT (Stage 5)**: 실패 시 해당 코드 제너레이터에 피드백 → 재생성 (최대 2회).

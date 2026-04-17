@@ -48,11 +48,18 @@ Cloudscape Design System 기반의 UI 코드를 생성하는 에이전트이다.
 
 - `.pipeline/artifacts/v{N}/03-specs/_manifest.json` — `generator: "frontend"` 인 phase만 처리
 - `.pipeline/artifacts/v{N}/03-specs/frontend-spec.json` + `frontend-spec.md` — 프론트엔드 스펙
+- `.pipeline/artifacts/v{N}/03-specs/api-contract.json` — BE/FE 공통 계약 (엔드포인트 id, envelope, typeBindings)
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json`
 - `.pipeline/artifacts/v{N}/04-codegen/generation-log-backend.json` — 백엔드가 생성한 파일 목록 참조
+- `.pipeline/artifacts/v{N}/04-codegen/api-manifest.json` — **BE 실제 구현의 진실. 훅 생성의 단일 소스.**
 - `.pipeline/artifacts/v{N}/00-domain/domain-context.json` (있으면)
 
-**중요**: 백엔드가 이미 생성한 `src/types/`, `src/data/`, `src/lib/db/`, `src/app/api/` 파일들을 읽어 실제 타입과 API 엔드포인트를 확인한 후 UI 코드를 생성한다.
+**중요 (필수 Read 목록)**: 백엔드가 이미 생성한 아래 파일들을 **모두** 읽은 뒤 UI 코드를 생성한다. 스펙만 읽는 것은 금지 — 스펙과 실제 구현이 다르면 **실제 구현을 신뢰**한다.
+
+1. `src/types/**/*.ts` — 공유 타입 전부 (Glob + Read)
+2. `src/app/api/**/route.ts` — 모든 route handler (Glob + Read). 실제 응답 envelope과 요청 파라미터가 진실
+3. `src/lib/validation/schemas.ts` — zod 스키마. 요청 타입은 반드시 `z.infer<typeof ...>`로 import
+4. `.pipeline/artifacts/v{N}/04-codegen/api-manifest.json` — 훅별 `responseType`/`requestType`을 매핑할 때 이 파일의 `routes[].handlers[]`를 직접 참조
 
 피드백이 있으면:
 - `.pipeline/artifacts/v{N}/04-codegen/feedback-from-*-iter-{N}.json`
@@ -88,6 +95,13 @@ AI 기능이 있으면 `cloudscape-design` 스킬의 `references/ai-streaming.md
 6. **훅은 named export만**, default export 금지
 7. **Mutation은 `useApiMutation` 훅** — 컴포넌트에서 raw `fetch()` 금지
 8. **코딩 규칙은 CLAUDE.md 참조**, 상세 패턴은 `cloudscape-design` 스킬 참조
+9. **API 계약 바인딩 (CLAUDE.md "API Contract Conventions" 참조)**:
+   - **스펙 vs. 실제 구현이 다르면 실제 구현을 신뢰한다.** `api-manifest.json`의 `handlers[].responseType`/`requestType`이 훅의 제네릭 타입이다
+   - 모든 훅은 `src/types/`에서 BE가 export한 타입을 그대로 import. 훅 파일에서 응답 타입을 재선언 금지
+   - 예: `useSWR<ListVehiclesResponse>(...)`, `useApiMutation<CreateVehicleRequest, CreateVehicleResponse>(...)`
+   - 목록 언래핑: `const { data } = useSWR<ListVehiclesResponse>(...); const items = data?.items ?? [];` — `data?.results` / `data?.data` 같은 추측 금지
+   - 에러 파싱: `{ error: { code, message } }` envelope 기준. `error.message` 직접 읽기 금지
+   - 쿼리 파라미터 직렬화: camelCase 키 유지 (`?pageSize=20&sortBy=createdAt`)
 
 ## 담당 범위
 
@@ -123,8 +137,8 @@ src/
 
 가능하면 모든 단계를 한 번에 완료한다. 하지만 output이 길어지면 **파일 그룹 Write 완료 직후** 짧은 진행 보고를 하고 멈춰도 된다. 오케스트레이터가 SendMessage로 계속하라고 지시하면 다음 단계를 이어간다.
 
-1. **Read**: _manifest.json, frontend-spec.json, architecture.json, generation-log-backend.json, src/types/ 파일
-2. **Write**: hooks + contexts
+1. **Read (필수, 생략 금지)**: _manifest.json, frontend-spec.json, architecture.json, generation-log-backend.json, **api-contract.json**, **api-manifest.json**, `src/types/**/*.ts` 전체, `src/app/api/**/route.ts` 전체, `src/lib/validation/schemas.ts`
+2. **Write**: hooks + contexts (훅 제네릭은 반드시 api-manifest.json의 responseType/requestType 그대로 사용)
 3. **Write**: layout (AppShell, Navigation, layout.tsx)
 4. **Write**: shared + feature 컴포넌트 (파일 수가 많으면 추가 분할)
 5. **Write**: page 컴포넌트
@@ -165,6 +179,10 @@ src/
 - [ ] 생성 코드에 `any` 타입 없음
 - [ ] 모든 Cloudscape 컴포넌트가 개별 경로 임포트 사용
 - [ ] `"use client"`가 필요한 컴포넌트에만 사용됨
+- [ ] 모든 `useSWR`/`useApiMutation`의 제네릭이 `api-manifest.json`의 `responseType`/`requestType`과 일치
+- [ ] 모든 mutation 훅의 요청 타입이 `src/lib/validation/schemas.ts`에서 `z.infer`로 도출된 타입
+- [ ] 응답 언래핑이 envelope 규약을 따름 (`data?.items`, `data?.item`, `data?.success`)
+- [ ] `fetch()` URL이 `api-manifest.json`의 `routes[].path`와 일치 (동적 세그먼트는 `[id]` → 실제 id 값 치환)
 
 ## 완료 후
 

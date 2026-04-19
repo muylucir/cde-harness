@@ -25,28 +25,58 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
 - Artifacts: `.pipeline/artifacts/v{N}/` (versioned per run)
 - State: `.pipeline/state.json` (스키마는 아래 참조)
 ### state.json 스키마
+
+**단일 소스**: `.pipeline/scripts/checkpoint.mjs`가 이 구조를 작성한다. 문서와 코드가 diverge하면 코드를 신뢰한다.
+
 ```json
 {
-  "current_version": 1,
-  "pipeline_status": "running | completed | failed",
-  "stages": {
-    "<agent-name>": {
-      "status": "pending | running | completed | failed",
-      "started_at": "<ISO-8601>",
-      "completed_at": "<ISO-8601>"
-    }
-  },
+  "current_version": 2,
+  "pipeline_status": "idle | running | completed | halted | failed",
   "versions": {
     "1": {
-      "trigger": "/pipeline | /iterate | /reconcile | /awsarch",
+      "status": "completed | in-progress | halted",
+      "trigger": "pipeline | iterate | reconcile | awsarch | pipeline-from",
       "started_at": "<ISO-8601>",
       "completed_at": "<ISO-8601>",
-      "reentry_point": null,
-      "stages": {}
+      "current_stage": "<stage-name | null>",
+      "stages": [
+        {
+          "stage": "<stage-name>",
+          "status": "running | completed | checkpoint-failed",
+          "started_at": "<ISO-8601>",
+          "completed_at": "<ISO-8601 | null>",
+          "duration_ms": 45000,
+          "checkpoint": {
+            "passed": true,
+            "items": [
+              { "check": "file exists: ...", "passed": true }
+            ],
+            "retries": 0,
+            "checked_at": "<ISO-8601>"
+          }
+        }
+      ],
+      "feedback_loops": [
+        { "from": "reviewer", "to": "code-generator-frontend", "iter": 1, "issues": 3 }
+      ],
+      "test_iterations": 1,
+      "review_iterations": 1,
+      "total_code_regens": 0,
+      "identical_error_streak": 0
     }
   }
 }
 ```
+
+**필드 설명**:
+- `current_version`: 현재 작업 중인 버전 번호 (정수). 새 `/pipeline`, `/iterate` 실행 시 증가.
+- `versions`: 버전별 전체 이력. 이전 버전은 보존된다.
+- `versions[v].stages[]`: **배열**로 시간순 기록. 동일 스테이지가 재실행될 수 있으므로 마지막 엔트리가 최신.
+- `versions[v].total_code_regens`: 코드 제너레이터 재실행 누적 카운터 (budget 체크에 사용).
+- `versions[v].identical_error_streak`: 동일 에러 반복 카운터. 2 이상이면 halt 권고.
+- `feedback_loops[]`: QA→codegen, reviewer→codegen, security→codegen 루프 기록.
+
+유효 스테이지 이름은 `node .pipeline/scripts/checkpoint.mjs list-stages`로 조회한다 (카탈로그 단일 소스는 `.pipeline/scripts/stages.json`).
 
 - Brief generation: `/brief` → raw 입력에서 brief 자동 생성
 - Trigger: `/pipeline` → full run

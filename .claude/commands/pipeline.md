@@ -9,7 +9,7 @@ Execute the complete prototype generation pipeline from customer brief to handov
 ## 절대 규칙 (위반 시 즉시 중단)
 
 1. **코드를 직접 수정하지 마라** — Edit/Write로 `src/` 파일을 수정하는 것은 금지. 반드시 `code-generator-*` 에이전트를 Launch하여 코드를 생성/수정한다.
-2. **Stage 순서를 건너뛰지 마라** — Pre-flight → Stage 1 → 2 → 3 → 4 → 5 → 6 → 7 순서를 반드시 따른다.
+2. **Stage 순서를 건너뛰지 마라** — Pre-flight → Stage 1 → 2 → 3 → 4 → 5 → 6a → 6b → 7 순서를 반드시 따른다. (핸드오버는 `/handover` 별도 커맨드)
 3. **APPROVAL GATE에서 반드시 멈춰라** — 사용자가 응답할 때까지 다음 Stage로 진행하지 않는다 (auto 모드 제외).
 4. **CHECKPOINT를 통과해야 다음 Stage로 간다** — 각 Stage 끝의 검증 조건을 확인한 후에만 다음 Stage로 넘어간다. **auto 모드에서도 CHECKPOINT는 항상 실행한다.**
 
@@ -209,9 +209,9 @@ Stage 6b  리뷰 (동작하는 코드에 대해)
     │  FAIL → 수정 → 6a 테스트부터 재검증
     ↓
 Stage 7   보안 점검
-    ↓
-Stage 7   핸드오버 패키지
 ```
+
+> **핸드오버 패키지는 파이프라인 밖**에서 `/handover` 커맨드로 별도 실행한다. `/pipeline`은 Stage 7(보안)로 끝난다.
 
 ### Stage 1: Domain Research
 

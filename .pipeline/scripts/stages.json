@@ -1,0 +1,314 @@
+{
+  "$schema": "single source of truth for pipeline stage catalog",
+  "description": "파이프라인 스테이지 카탈로그 단일 소스. /pipeline-from, /pipeline-status, checkpoint.mjs가 참조한다.",
+  "stages": [
+    {
+      "name": "domain-researcher",
+      "order": 0,
+      "group": "research",
+      "phase": "pre-design",
+      "optional": true,
+      "description": "업계 워크플로우/KPI/유사 제품 리서치",
+      "prerequisites": [".pipeline/input/customer-brief.md"],
+      "outputs": [
+        ".pipeline/artifacts/v{N}/00-domain/domain-context.json",
+        ".pipeline/artifacts/v{N}/00-domain/domain-context.md"
+      ],
+      "resume_via": "/pipeline-from domain-researcher"
+    },
+    {
+      "name": "requirements-analyst",
+      "order": 1,
+      "group": "design",
+      "phase": "design",
+      "optional": false,
+      "description": "고객 브리프/도메인 컨텍스트에서 FR/NFR/페르소나/데이터모델 도출",
+      "prerequisites": [".pipeline/input/customer-brief.md"],
+      "outputs": [
+        ".pipeline/artifacts/v{N}/01-requirements/requirements.json",
+        ".pipeline/artifacts/v{N}/01-requirements/requirements.md"
+      ],
+      "resume_via": "/pipeline-from requirements-analyst"
+    },
+    {
+      "name": "architect",
+      "order": 2,
+      "group": "design",
+      "phase": "design",
+      "optional": false,
+      "description": "페이지/라우트/컴포넌트 트리/데이터 플로우 설계",
+      "prerequisites": [".pipeline/artifacts/v{N}/01-requirements/requirements.json"],
+      "outputs": [
+        ".pipeline/artifacts/v{N}/02-architecture/architecture.json",
+        ".pipeline/artifacts/v{N}/02-architecture/architecture.md"
+      ],
+      "resume_via": "/pipeline-from architect"
+    },
+    {
+      "name": "spec-writer-backend",
+      "order": 3,
+      "group": "spec",
+      "phase": "spec",
+      "optional": false,
+      "description": "백엔드 타입/API/zod/데이터/미들웨어 스펙 + api-contract.json 생성",
+      "prerequisites": [
+        ".pipeline/artifacts/v{N}/01-requirements/requirements.json",
+        ".pipeline/artifacts/v{N}/02-architecture/architecture.json"
+      ],
+      "outputs": [
+        ".pipeline/artifacts/v{N}/03-specs/backend-spec.json",
+        ".pipeline/artifacts/v{N}/03-specs/backend-spec.md",
+        ".pipeline/artifacts/v{N}/03-specs/api-contract.json"
+      ],
+      "resume_via": "/pipeline-from spec-writer-backend"
+    },
+    {
+      "name": "spec-writer-ai",
+      "order": 4,
+      "group": "spec",
+      "phase": "spec",
+      "optional": true,
+      "optional_condition": "requirements.json has AI-related FR",
+      "description": "AI 에이전트 스펙(ai-contract.json 계약 + ai-internals.json 내부 구현)",
+      "prerequisites": [
+        ".pipeline/artifacts/v{N}/01-requirements/requirements.json",
+        ".pipeline/artifacts/v{N}/02-architecture/architecture.json",
+        ".pipeline/artifacts/v{N}/03-specs/backend-spec.json"
+      ],
+      "outputs": [
+        ".pipeline/artifacts/v{N}/03-specs/ai-contract.json",
+        ".pipeline/artifacts/v{N}/03-specs/ai-internals.json",
+        ".pipeline/artifacts/v{N}/03-specs/ai-spec.md"
+      ],
+      "resume_via": "/pipeline-from spec-writer-ai"
+    },
+    {
+      "name": "spec-writer-frontend",
+      "order": 5,
+      "group": "spec",
+      "phase": "spec",
+      "optional": false,
+      "description": "프론트엔드 컴포넌트/훅/페이지/레이아웃 스펙",
+      "prerequisites": [
+        ".pipeline/artifacts/v{N}/01-requirements/requirements.json",
+        ".pipeline/artifacts/v{N}/02-architecture/architecture.json",
+        ".pipeline/artifacts/v{N}/03-specs/backend-spec.json"
+      ],
+      "outputs": [
+        ".pipeline/artifacts/v{N}/03-specs/frontend-spec.json",
+        ".pipeline/artifacts/v{N}/03-specs/frontend-spec.md",
+        ".pipeline/artifacts/v{N}/03-specs/specs-summary.md",
+        ".pipeline/artifacts/v{N}/03-specs/_manifest.json"
+      ],
+      "resume_via": "/pipeline-from spec-writer-frontend"
+    },
+    {
+      "name": "code-generator-backend",
+      "order": 6,
+      "group": "codegen",
+      "phase": "codegen",
+      "optional": false,
+      "description": "types/validation/db/services/api/middleware 생성 + api-manifest.json",
+      "prerequisites": [
+        ".pipeline/artifacts/v{N}/03-specs/backend-spec.json",
+        ".pipeline/artifacts/v{N}/03-specs/api-contract.json",
+        ".pipeline/artifacts/v{N}/03-specs/_manifest.json"
+      ],
+      "outputs": [
+        "src/types/",
+        "src/lib/",
+        "src/app/api/",
+        "src/data/",
+        "src/middleware.ts",
+        ".pipeline/artifacts/v{N}/04-codegen/api-manifest.json",
+        ".pipeline/artifacts/v{N}/04-codegen/generation-log-backend.json"
+      ],
+      "resume_via": "/pipeline-from code-generator-backend"
+    },
+    {
+      "name": "code-generator-ai",
+      "order": 7,
+      "group": "codegen",
+      "phase": "codegen",
+      "optional": true,
+      "optional_condition": "requirements.json has AI-related FR",
+      "description": "Strands SDK 기반 AI 에이전트 구현 + 스트리밍 라우트",
+      "prerequisites": [
+        ".pipeline/artifacts/v{N}/03-specs/ai-contract.json",
+        ".pipeline/artifacts/v{N}/03-specs/ai-internals.json",
+        ".pipeline/artifacts/v{N}/04-codegen/api-manifest.json"
+      ],
+      "outputs": [
+        "src/lib/ai/",
+        "src/app/api/chat/",
+        ".pipeline/artifacts/v{N}/04-codegen/generation-log-ai.json"
+      ],
+      "resume_via": "/pipeline-from code-generator-ai"
+    },
+    {
+      "name": "code-generator-frontend",
+      "order": 8,
+      "group": "codegen",
+      "phase": "codegen",
+      "optional": false,
+      "description": "페이지/컴포넌트/훅/컨텍스트 생성 (api-manifest 기반)",
+      "prerequisites": [
+        ".pipeline/artifacts/v{N}/03-specs/frontend-spec.json",
+        ".pipeline/artifacts/v{N}/04-codegen/api-manifest.json"
+      ],
+      "outputs": [
+        "src/components/",
+        "src/hooks/",
+        "src/contexts/",
+        "src/app/",
+        ".pipeline/artifacts/v{N}/04-codegen/generation-log-frontend.json"
+      ],
+      "resume_via": "/pipeline-from code-generator-frontend"
+    },
+    {
+      "name": "qa-engineer",
+      "order": 9,
+      "group": "quality",
+      "phase": "quality",
+      "optional": false,
+      "loops_to": ["code-generator-backend", "code-generator-ai", "code-generator-frontend"],
+      "loop_limit": 3,
+      "description": "Playwright E2E 생성/실행, 기능 검증",
+      "prerequisites": [
+        ".pipeline/artifacts/v{N}/01-requirements/requirements.json",
+        ".pipeline/artifacts/v{N}/04-codegen/generation-log-backend.json",
+        ".pipeline/artifacts/v{N}/04-codegen/generation-log-frontend.json"
+      ],
+      "outputs": [
+        "e2e/",
+        ".pipeline/artifacts/v{N}/05-review/test-result.json",
+        ".pipeline/artifacts/v{N}/05-review/test-report.md"
+      ],
+      "resume_via": "/pipeline-from qa-engineer"
+    },
+    {
+      "name": "reviewer",
+      "order": 10,
+      "group": "quality",
+      "phase": "quality",
+      "optional": false,
+      "loops_to": ["code-generator-backend", "code-generator-ai", "code-generator-frontend"],
+      "loop_limit": 2,
+      "description": "9카테고리 정적 품질 리뷰",
+      "prerequisites": [
+        ".pipeline/artifacts/v{N}/05-review/test-result.json",
+        ".pipeline/artifacts/v{N}/04-codegen/generation-log-backend.json",
+        ".pipeline/artifacts/v{N}/04-codegen/generation-log-frontend.json"
+      ],
+      "outputs": [
+        ".pipeline/artifacts/v{N}/05-review/review-report.md",
+        ".pipeline/artifacts/v{N}/05-review/review-result.json"
+      ],
+      "resume_via": "/pipeline-from reviewer"
+    },
+    {
+      "name": "security-auditor-pipeline",
+      "order": 11,
+      "group": "security",
+      "phase": "security",
+      "optional": false,
+      "description": "OWASP 기반 보안 감사 (XSS/인젝션/인증/입력 검증)",
+      "prerequisites": [
+        ".pipeline/artifacts/v{N}/05-review/review-result.json"
+      ],
+      "outputs": [
+        ".pipeline/artifacts/v{N}/06-security/security-report.md",
+        ".pipeline/artifacts/v{N}/06-security/security-result.json"
+      ],
+      "resume_via": "/pipeline-from security-auditor-pipeline"
+    },
+    {
+      "name": "aws-architect",
+      "order": 100,
+      "group": "aws",
+      "phase": "aws-infra",
+      "optional": true,
+      "trigger": "/awsarch",
+      "description": "mock→AWS 전환용 인프라 설계 (DynamoDB/Aurora/S3/Cognito)",
+      "prerequisites": [
+        ".pipeline/artifacts/v{N}/02-architecture/architecture.json",
+        "src/types/",
+        "src/lib/db/"
+      ],
+      "outputs": [
+        ".pipeline/artifacts/v{N}/08-aws-infra/aws-architecture.json",
+        ".pipeline/artifacts/v{N}/08-aws-infra/aws-architecture.md"
+      ],
+      "resume_via": "/pipeline-from aws-architect"
+    },
+    {
+      "name": "aws-deployer",
+      "order": 101,
+      "group": "aws",
+      "phase": "aws-infra",
+      "optional": true,
+      "trigger": "/awsarch",
+      "description": "CDK TypeScript 생성 + 배포 + 데이터 레이어 듀얼 모드 + 시드 마이그레이션",
+      "prerequisites": [
+        ".pipeline/artifacts/v{N}/08-aws-infra/aws-architecture.json",
+        "src/"
+      ],
+      "outputs": [
+        "infra/",
+        ".pipeline/artifacts/v{N}/08-aws-infra/deployment-log.json"
+      ],
+      "resume_via": "/pipeline-from aws-deployer"
+    },
+    {
+      "name": "handover-packager",
+      "order": 200,
+      "group": "handover",
+      "phase": "handover",
+      "optional": true,
+      "trigger": "/handover",
+      "description": "핸드오버 문서 패키지(README, ARCHITECTURE, API, AI-AGENT, AWS, CHECKLIST 등) 생성",
+      "prerequisites": [
+        ".pipeline/artifacts/v{N}/06-security/security-result.json"
+      ],
+      "outputs": [
+        ".pipeline/artifacts/v{N}/07-handover/"
+      ],
+      "resume_via": "/handover"
+    }
+  ],
+  "groups": {
+    "research": "도메인 리서치",
+    "design": "요구사항/아키텍처 설계",
+    "spec": "구현 스펙 작성",
+    "codegen": "코드 생성",
+    "quality": "기능/품질 검증 루프",
+    "security": "보안 감사",
+    "aws": "AWS 인프라 전환 (/awsarch 시)",
+    "handover": "핸드오버 패키지 (/handover 시)"
+  },
+  "loops": {
+    "qa-code": {
+      "trigger_stage": "qa-engineer",
+      "target_stages": ["code-generator-backend", "code-generator-ai", "code-generator-frontend"],
+      "max_iterations": 3,
+      "feedback_file_pattern": ".pipeline/artifacts/v{N}/04-codegen/feedback-from-qa-iter-{K}.json"
+    },
+    "review-code": {
+      "trigger_stage": "reviewer",
+      "target_stages": ["code-generator-backend", "code-generator-ai", "code-generator-frontend"],
+      "max_iterations": 2,
+      "feedback_file_pattern": ".pipeline/artifacts/v{N}/04-codegen/feedback-from-reviewer-iter-{K}.json"
+    },
+    "security-code": {
+      "trigger_stage": "security-auditor-pipeline",
+      "target_stages": ["code-generator-backend", "code-generator-ai", "code-generator-frontend"],
+      "max_iterations": 1,
+      "feedback_file_pattern": ".pipeline/artifacts/v{N}/04-codegen/feedback-from-security-iter-{K}.json"
+    }
+  },
+  "budgets": {
+    "total_code_regens": 8,
+    "identical_error_streak": 2,
+    "notes": "total_code_regens는 루프 합산 상한. identical_error_streak는 동일 에러 반복 시 halt 기준."
+  }
+}

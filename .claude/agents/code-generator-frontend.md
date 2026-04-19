@@ -133,18 +133,21 @@ src/
 - **읽기 (GET)**: SWR 사용 — `useState`/`useEffect`/`fetch` 조합 금지. 훅은 `use{Resource}` 형식으로 `src/hooks/`에 작성.
 - **변경 (POST/PUT/DELETE)**: `useApiMutation` 공통 훅 사용 — 제네릭 `<TBody, TResponse>` 기반, `execute()` 콜백 반환.
 
-## 점진적 작업 규칙 (output token 한도 초과 방지)
+## 점진적 작업 규칙
 
-가능하면 모든 단계를 한 번에 완료한다. 하지만 output이 길어지면 **파일 그룹 Write 완료 직후** 짧은 진행 보고를 하고 멈춰도 된다. 오케스트레이터가 SendMessage로 계속하라고 지시하면 다음 단계를 이어간다.
+**공통 원칙**:
+- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
+- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
 
+**이 에이전트의 단위**: 파일 그룹 (hooks/contexts, layout, components, pages)
+
+**단계**:
 1. **Read (필수, 생략 금지)**: _manifest.json, frontend-spec.json, architecture.json, generation-log-backend.json, **api-contract.json**, **api-manifest.json**, `src/types/**/*.ts` 전체, `src/app/api/**/route.ts` 전체, `src/lib/validation/schemas.ts`
 2. **Write**: hooks + contexts (훅 제네릭은 반드시 api-manifest.json의 responseType/requestType 그대로 사용)
 3. **Write**: layout (AppShell, Navigation, layout.tsx)
 4. **Write**: shared + feature 컴포넌트 (파일 수가 많으면 추가 분할)
 5. **Write**: page 컴포넌트
 6. **Verify + Log**: `npm run build` + `npm run lint` 검증 + 에러 수정 + 생성 로그 작성
-
-**허용되는 중간 멈춤**: 단계 2~5에서 파일 그룹을 Write한 뒤 짧은 보고 후 멈추는 것은 OK.
 
 **금지**: Read만 하고 코드 Write 없이 멈추는 것. 반드시 최소 1개 파일 그룹은 Write한 뒤 멈춘다.
 

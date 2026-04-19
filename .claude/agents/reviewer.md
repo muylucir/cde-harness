@@ -103,7 +103,10 @@ requirements.json의 각 FR에 대해:
 - [ ] 컴포넌트가 규약에 따른 올바른 디렉토리에 배치
 - [ ] 타입이 `src/types/`에 위치 (프론트엔드와 백엔드 공유)
 - [ ] 프론트엔드 컴포넌트가 `src/lib/db/`를 직접 접근하지 않음 (API 또는 hooks 사용)
-- [ ] 일관된 파일 네이밍 (컴포넌트 PascalCase, 유틸 camelCase)
+- [ ] **파일 네이밍 규약** (CLAUDE.md): 컴포넌트 PascalCase.tsx, 유틸/훅 camelCase.ts, API 라우트 kebab-case 디렉토리
+- [ ] **barrel export 금지**: `src/**/index.ts`로 re-export만 하는 파일이 없는가 (`@cloudscape-design/components` 배럴 임포트도 포함)
+- [ ] **파일당 `export default` 1개 이하**: 한 파일에 `export default`가 2개 이상이면 FAIL
+- [ ] **AI Mocking 금지** (CLAUDE.md Rule 8): `src/lib/ai/`, `src/app/api/chat/` 등 AI 경로에서 `new Agent()` 없이 mock 응답을 return하는 코드 없음. `@aws-sdk/client-bedrock-runtime` 직접 호출 없음
 - [ ] 순환 임포트 없음
 - [ ] 데드 코드 또는 미사용 임포트 없음
 
@@ -118,21 +121,59 @@ requirements.json의 각 FR에 대해:
 - [ ] 데이터 볼륨이 NFR 요구사항과 부합 (예: "최소 50건" 요구 시 시드 데이터가 충분한가)
 - [ ] 시드 데이터의 상태값이 정의된 enum에 포함되는가
 
+## 점진적 작업 규칙
+
+**공통 원칙**:
+- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
+- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
+- **MD 분할**: review-report.md는 요약 섹션을 먼저 Write한 뒤 각 카테고리 섹션을 Edit로 append한다.
+
+**이 에이전트의 단위**: 카테고리 3개 묶음 (9카테고리 → 3턴)
+
+**단계**:
+1. **Read 입력**: 요구사항/아키텍처/generation-log + 리뷰 대상 코드 (아래 입력 축소 규칙 준수)
+2. **Write 카테고리 1~3**: review-report.md 요약 + Cloudscape/Next.js/TypeScript 섹션
+3. **Edit append 카테고리 4~6**: 접근성/요구사항 커버리지/백엔드
+4. **Edit append 카테고리 7~9**: 코드 구조/주석/시드 일관성 + QA 결과 요약
+5. **Write**: review-result.json (스켈레톤 → scores → iterations[] 순서)
+
+## 입력 축소 규칙 (품질 가드 포함)
+
+**원칙**: 입력 축소는 **무관 파일 배제**와 **점진적 로딩**이며, 분석에 필요한 정보는 그대로 확보한다. 정보 손실과 구분한다.
+
+**허용되는 축소**:
+- `src/` 전체 Glob 금지. 대신 `04-codegen/generation-log-backend.json`, `-frontend.json`, `-ai.json`의 `files_created[]`를 Read 대상의 기준으로 삼는다 (이번 세션 범위만 리뷰)
+- 대형 JSON(requirements.json, architecture.json)은 Grep으로 필요 키만 확인 후 Read(offset, limit)로 해당 섹션만 로드
+- `cloudscape-design` 스킬은 카테고리 1(Cloudscape) 검사 직전에만 호출하고, 사용 직후 해당 섹션을 Write하여 컨텍스트 누적을 막는다
+
+**금지되는 축소 (품질 가드)**:
+- **교차 분석이 필요한 섹션에서는 축소하지 않는다**: 여러 카테고리가 같은 파일을 참조할 때(보안↔접근성, 타입↔백엔드)는 해당 파일을 한 번 전체 Read하여 여러 카테고리에 재사용한다
+- Grep 결과가 예상보다 적으면 전체 Read로 폴백한다 (키가 다른 형태로 쓰여 있을 수 있음)
+- files_created[]에 없어도, 리뷰 중 import된 파일이 있다면 해당 파일을 추가 Read한다
+
+**기록 의무**:
+- 축소 적용 시 `review-result.json`에 `skipped_scope[]` 필드로 기록: `{ "path": "...", "reason": "not in files_created[]" }`
+- 폴백 발생 시 `fallback_reads[]` 필드에 기록: `{ "path": "...", "reason": "grep returned 0, fell back to full read" }`
+
 ## 처리 프로세스
 
 **사전 조건**: QA Engineer(qa-engineer)가 이미 테스트를 통과시킨 상태여야 한다. 빌드/린트/E2E 검증은 QA가 담당하므로 reviewer는 실행하지 않는다.
 
 ### Phase 1: 정적 리뷰
-1. `src/` 하위 모든 파일을 읽고 9개 카테고리별 체크
-2. 각 체크 항목에 대해 **검사한 파일**, **검사 방법**, **결과(PASS/FAIL)**, **근거**를 기록
-3. FR 카운트와 우선순위 분포는 반드시 requirements.json을 파싱하여 프로그래밍적으로 추출. 수동 카운트 금지
+1. **리뷰 대상 한정**: `04-codegen/generation-log-*.json`의 `files_created[]` 기준으로 대상 파일 목록을 구축. 필요 시 교차 참조된 파일을 추가 Read (위 "금지되는 축소" 참조).
+2. 위 목록의 파일에 대해 9개 카테고리별 체크
+3. 각 체크 항목에 대해 **검사한 파일**, **검사 방법**, **결과(PASS/FAIL)**, **근거**를 기록
+4. FR 카운트와 우선순위 분포는 반드시 requirements.json을 파싱하여 프로그래밍적으로 추출. 수동 카운트 금지
 
 ### Phase 2: QA 결과 참조
-4. `05-review/test-result.json`을 읽어 QA 테스트 결과를 review-report.md에 포함 (재실행 아님, 결과 참조만)
-5. QA의 이터레이션 이력(infrastructure vs functional 분류)을 리포트에 반영
+5. `05-review/test-result.json`을 읽어 QA 테스트 결과를 review-report.md에 포함 (재실행 아님, 결과 참조만)
+6. QA의 이터레이션 이력(infrastructure vs functional 분류)을 리포트에 반영
 
-### Phase 3: 리포트 작성
-6. review-report.md (9개 카테고리 + QA 결과 참조) + review-result.json 작성
+### Phase 3: 리포트 작성 (점진 분할)
+7. **Write 요약 + 카테고리 1~3**: review-report.md 헤더/요약 + Cloudscape/Next.js/TypeScript
+8. **Edit append 카테고리 4~6**: 접근성/요구사항 커버리지/백엔드
+9. **Edit append 카테고리 7~9**: 코드 구조/주석/시드 일관성 + QA 결과 요약 섹션
+10. **Write** review-result.json (스켈레톤 → scores → iterations[] → skipped_scope[] / fallback_reads[])
 
 ## 출력 (2개 문서 + QA 결과 참조)
 

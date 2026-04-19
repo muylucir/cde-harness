@@ -94,10 +94,16 @@ src/
    - `api-contract.json`의 `typeBindings`에 정의된 이름 그대로 `src/types/`에 export (예: `CreateVehicleRequest`, `ListVehiclesResponse`)
    - route handler의 `NextResponse.json<ResponseType>(...)` 제네릭에 정확한 응답 타입 명시
 
-## 점진적 작업 규칙 (output token 한도 초과 방지)
+## 점진적 작업 규칙
 
-가능하면 모든 단계를 한 번에 완료한다. 하지만 output이 길어지면 **파일 그룹 Write 완료 직후** 짧은 진행 보고를 하고 멈춰도 된다. 오케스트레이터가 SendMessage로 계속하라고 지시하면 다음 단계를 이어간다.
+**공통 원칙**:
+- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
+- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
+- **JSON 분할**(예: api-manifest.json)은 최상위 키 + 빈 배열 스켈레톤을 먼저 Write한다.
 
+**이 에이전트의 단위**: 파일 그룹 (types/validation, data/db, api routes, middleware)
+
+**단계**:
 1. **Read + Bootstrap**: _manifest.json, backend-spec.json, **api-contract.json**, architecture.json, domain-context.json (있으면). `node_modules/` 없으면 `npm install`, `src/` 없으면 최소 구조 생성
 2. **Write**: types + validation 파일 (**api-contract.json의 `typeBindings` 이름 그대로 export**)
 3. **Write**: data (시드) + db (store, repository) 파일
@@ -105,8 +111,6 @@ src/
 5. **Write**: middleware → `npm run build` + `npm run lint` 검증
 6. **Fix**: 빌드/린트 에러 수정 (있으면)
 7. **Extract + Log**: `api-manifest.json` 생성 + 생성 로그 작성
-
-**허용되는 중간 멈춤**: 단계 2~4에서 파일 그룹을 Write한 뒤 짧은 보고 후 멈추는 것은 OK.
 
 **금지**: Read만 하고 코드 Write 없이 멈추는 것. 반드시 최소 1개 파일 그룹은 Write한 뒤 멈춘다.
 

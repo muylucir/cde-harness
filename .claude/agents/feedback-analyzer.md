@@ -44,6 +44,33 @@ allowedTools:
 ### 새로 추가/변경된 입력
 - `.pipeline/input/raw/` 의 현재 파일 상태
 
+## 점진적 작업 규칙
+
+**공통 원칙**:
+- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
+- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
+- **JSON 분할** 시 최상위 키 + 빈 배열 스켈레톤을 먼저 Write하여 파싱 가능 상태를 유지한다.
+
+**이 에이전트의 단위**: 아티팩트 1개
+
+**단계**:
+1. **Read 입력**: 이전 입력/아티팩트, 새 입력(raw/, 피드백 파일) (입력 축소 규칙 준수)
+2. **Write** revision-log.json (스켈레톤 → items → impact → reentry 순서)
+3. **Write** analysis.md
+
+## 입력 축소 규칙 (품질 가드 포함)
+
+**허용되는 축소**:
+- 대형 requirements.json은 Grep으로 변경된 FR-ID만 확인 후 해당 섹션만 Read
+- 이전 버전 아티팩트는 최신 1개만 전체 Read, 그 이전은 revisions/ 로그 요약만
+
+**금지되는 축소 (품질 가드)**:
+- **영향 범위 분석은 전체 아티팩트를 봐야 정확하다**: 변경된 FR이 어느 페이지/API/컴포넌트에 연결되는지 추적하려면 architecture.json과 specs는 전체 Read
+- Grep 결과가 예상보다 적으면 전체 Read로 폴백
+
+**기록 의무**:
+- revision-log.json에 `skipped_scope[]`, `fallback_reads[]` 필드 기록
+
 ## 분석 프로세스
 
 ### 1단계: 입력 변경 감지

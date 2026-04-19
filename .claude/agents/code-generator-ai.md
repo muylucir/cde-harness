@@ -58,7 +58,7 @@ allowedTools:
 - Tool Use Prompting (도구 설명, 파라미터 정의)
 - Extended Thinking 활용 (복잡한 추론이 필요한 경우)
 
-### `strands-sdk-typescript-guide` — Strands Agents SDK TypeScript 구현
+### `strands-sdk-guide` — Strands Agents SDK TypeScript 구현
 - `@strands-agents/sdk` 패키지로 에이전트 코드 작성
 - `tool()` 함수 + Zod 스키마로 커스텀 도구 정의
 - MCP 서버/클라이언트 연동 (stdio, Streamable HTTP)
@@ -69,8 +69,9 @@ allowedTools:
 
 - `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — AI 관련 FR/NFR 확인
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — AI 컴포넌트 확인
-- `.pipeline/artifacts/v{N}/03-specs/ai-spec.json` — **AI 전용 스펙 (필수 입력)**
-- `.pipeline/artifacts/v{N}/03-specs/ai-spec.md` — AI 스펙 한국어 상세 문서
+- `.pipeline/artifacts/v{N}/03-specs/ai-contract.json` — **AI 외부 계약 (필수)**: 엔드포인트, SSE 이벤트, 요청/응답 스키마
+- `.pipeline/artifacts/v{N}/03-specs/ai-internals.json` — **AI 내부 구현 (필수)**: 시스템 프롬프트, 도구, RAG, 에이전트 토폴로지
+- `.pipeline/artifacts/v{N}/03-specs/ai-spec.md` — AI 스펙 한국어 상세 문서 (참고용)
 - `.pipeline/artifacts/v{N}/03-specs/_manifest.json` — `generator: "ai"` phase 확인
 - `.pipeline/artifacts/v{N}/04-codegen/generation-log-backend.json` — 백엔드 생성 결과 참조
 
@@ -104,7 +105,7 @@ src/
 
 ## 구현 프로세스
 
-**이 에이전트는 자체적으로 설계 결정을 하지 않는다.** `ai-spec.json`에 정의된 아키텍처, 패턴, 도구, API 라우트를 그대로 코드로 변환한다.
+**이 에이전트는 자체적으로 설계 결정을 하지 않는다.** `ai-contract.json`(외부 계약)과 `ai-internals.json`(내부 구현)에 정의된 아키텍처, 패턴, 도구, API 라우트를 그대로 코드로 변환한다.
 
 ### 절대 규칙
 
@@ -112,25 +113,28 @@ src/
 2. **ai-spec.json의 결정을 따른다** — 패턴, 도구, API 라우트를 자의적으로 변경하지 않는다.
 3. **3개 스킬을 참조하여 구현한다** — `agent-patterns`, `prompt-engineering`, `strands-sdk-guide`
 
-### 점진적 작업 규칙 (output token 한도 초과 방지)
+### 점진적 작업 규칙
 
-가능하면 모든 단계를 한 번에 완료한다. 하지만 output이 길어지면 **파일 그룹 Write 완료 직후** 짧은 진행 보고를 하고 멈춰도 된다. 오케스트레이터가 SendMessage로 계속하라고 지시하면 다음 단계를 이어간다.
+**공통 원칙**:
+- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
+- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
 
-1. **Read**: ai-spec.json, _manifest.json, generation-log-backend.json
-2. **Write**: types + prompts 파일
-3. **Write**: tools 파일
+**이 에이전트의 단위**: 파일 그룹 (types/prompts, tools, rag+agent, API routes)
+
+**단계**:
+1. **Read**: `ai-contract.json`(외부 계약) + `ai-internals.json`(내부 구현), _manifest.json, generation-log-backend.json
+2. **Write**: types + prompts 파일 (ai-internals.json의 systemPrompt)
+3. **Write**: tools 파일 (ai-internals.json의 toolDefinitions)
 4. **Write**: rag (있으면) + agent.ts
-5. **Write**: API route handlers
+5. **Write**: API route handlers (ai-contract.json의 endpoint/event 스키마)
 6. **Verify + Log**: `npm run build` + `npm run lint` 검증 + 에러 수정 + 생성 로그 작성
-
-**허용되는 중간 멈춤**: 단계 2~5에서 파일 그룹을 Write한 뒤 짧은 보고 후 멈추는 것은 OK.
 
 **금지**: Read만 하고 코드 Write 없이 멈추는 것. 반드시 최소 1개 파일 그룹은 Write한 뒤 멈춘다.
 
 ### 구현 시 필수 참조 사항
 
-- **Agent 생성**: `BedrockModel` 프로바이더 + `printer: false` — 상세는 `strands-sdk-typescript-guide` 스킬 참조
-- **SSE 스트리밍**: `agent.stream()` async iterator → `textDelta`만 추출 → 구조화 이벤트 전송. `invoke()` → `NextResponse.json()` 금지. 상세는 `strands-sdk-typescript-guide`의 `references/nextjs-integration.md` 참조
+- **Agent 생성**: `BedrockModel` 프로바이더 + `printer: false` — 상세는 `strands-sdk-guide` 스킬 참조
+- **SSE 스트리밍**: `agent.stream()` async iterator → `textDelta`만 추출 → 구조화 이벤트 전송. `invoke()` → `NextResponse.json()` 금지. 상세는 `strands-sdk-guide`의 `references/nextjs-integration.md` 참조
 - **비스트리밍**: `agent.invoke(prompt)` 사용
 - **의존성**: `@strands-agents/sdk` (필수), `zod` (도구 스키마), RAG 시 `@aws-sdk/client-bedrock-agent-runtime`
 

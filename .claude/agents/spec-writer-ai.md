@@ -56,7 +56,7 @@ allowedTools:
 
 자동화 수준에 따라 프롬프트 구조가 달라진다 (스킬 참조). XML 태그 5개 섹션: `<role>`, `<context>`, `<tools>`, `<instructions>`, `<constraints>`.
 
-### `strands-sdk-typescript-guide` — Strands Agents SDK TypeScript 구현 스펙
+### `strands-sdk-guide` — Strands Agents SDK TypeScript 구현 스펙
 
 스펙에 포함할 항목: BedrockModel 프로바이더 설정, tool()+Zod 도구 정의, invoke/stream 호출 방식, `printer: false`, Vended Tools/MCP 연동 여부. 상세 코드 패턴은 스킬 참조.
 
@@ -66,15 +66,21 @@ allowedTools:
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — AI 컴포넌트
 - `.pipeline/artifacts/v{N}/03-specs/backend-spec.json` — 백엔드 타입/API 참조
 
-## 점진적 작업 규칙 (output token 한도 초과 방지)
+## 점진적 작업 규칙
 
-가능하면 모든 단계를 한 번에 완료한다. 하지만 output이 길어지면 **파일 Write 완료 직후** 짧은 진행 보고를 하고 멈춰도 된다. 오케스트레이터가 SendMessage로 계속하라고 지시하면 다음 단계를 이어간다.
+**공통 원칙**:
+- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
+- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
+- **JSON 분할** 시 최상위 키 + 빈 배열 스켈레톤을 먼저 Write하여 파싱 가능 상태를 유지한다.
+- **스킬 참조 후 즉시 Write**: 3개 스킬(agent-patterns, prompt-engineering, strands-sdk-guide)을 필요 시점별로 나눠 호출하고, 사용 직후 해당 섹션을 Write하여 컨텍스트 누적을 막는다.
 
-1. **Read**: requirements.json, architecture.json, backend-spec.json + 3개 스킬 참조
-2. **Write**: `ai-spec.json` — 전체 JSON을 한 번에 쓴다. 너무 크면 전반부 Write → 후반부 Edit로 분할.
-3. **Write**: `ai-spec.md` — 전체를 한 번에 쓴다. 너무 크면 전반부 Write → 후반부 Edit로 분할.
+**이 에이전트의 단위**: 파일 1개
 
-**허용되는 중간 멈춤**: 파일 1개를 완전히 Write한 뒤 짧은 보고 후 멈추는 것은 OK.
+**단계**:
+1. **Read**: requirements.json, architecture.json, backend-spec.json + 필요 시 스킬 호출
+2. **Write**: `ai-contract.json` — 외부 계약 (엔드포인트, SSE 이벤트, 요청/응답 스키마). FE가 이 파일만 참조한다.
+3. **Write**: `ai-internals.json` — 내부 구현 (시스템 프롬프트, 도구 정의, RAG 설정, 에이전트 토폴로지). code-generator-ai만 참조한다.
+4. **Write**: `ai-spec.md` — 한국어 마크다운 (양쪽 요약)
 
 **금지**: Read만 하고 Write 없이 멈추는 것. 반드시 최소 1개 파일은 Write한 뒤 멈춘다.
 
@@ -82,7 +88,7 @@ allowedTools:
 
 1. `requirements.json`에서 AI 관련 FR을 키워드 매칭으로 식별
 2. `architecture.json`에서 AI 컴포넌트 구조를 파악
-3. 3개 필수 스킬 참조: `agent-patterns`, `prompt-engineering`, `strands-sdk-typescript-guide`
+3. 3개 필수 스킬 참조: `agent-patterns`, `prompt-engineering`, `strands-sdk-guide`
 4. 담당 범위 6개(ai-types → ai-prompts → ai-tools → ai-rag → ai-agent → ai-api) 순서로 스펙 작성
 5. 이중 출력: json → md 순서
 
@@ -101,24 +107,43 @@ AI 스펙에 **프론트엔드 SSE 소비 및 렌더링 요구사항**을 반드
 
 ## 출력
 
-이중 출력 — json (기계용) → md (사람용) 순서로 연속 작성.
+AI 스펙은 **외부 계약**과 **내부 구현**으로 분할하여 3개 파일로 출력한다. 이 분리를 통해 FE는 `ai-contract.json`만 참조하면 되고, code-generator-ai만 `ai-internals.json`을 읽는다.
 
-1. `ai-spec.json` 작성
-2. `ai-spec.md` 작성
+1. `ai-contract.json` 작성 — 외부 계약 (FE/code-gen-ai 공통)
+2. `ai-internals.json` 작성 — 내부 구현 (code-gen-ai 전용)
+3. `ai-spec.md` 작성 — 사람용 통합 문서 (한국어)
 
 ```
 03-specs/
-├── ai-spec.json                ← code-generator-ai가 파싱하는 기계용 스펙
-└── ai-spec.md                  ← 사람이 리뷰하는 AI 상세 마크다운 (한국어)
+├── ai-contract.json            ← 외부 계약: 엔드포인트, SSE 이벤트, 요청/응답 스키마 (FE+code-gen-ai 참조)
+├── ai-internals.json           ← 내부 구현: 시스템 프롬프트, 도구, RAG, 에이전트 토폴로지 (code-gen-ai 전용)
+└── ai-spec.md                  ← 사람이 리뷰하는 AI 상세 마크다운 (양쪽 요약)
 ```
 
 ## AI 스펙 마크다운 포맷 (ai-spec.md)
 
 섹션 구조: 에이전트 아키텍처 (패턴, 선택 근거, Strands SDK 구현 방식, 모델 설정), 시스템 프롬프트 (설계 원칙 + XML 전문), 커스텀 도구 (도구별: 설명, 파라미터, 핸들러 로직, 반환 타입), RAG 파이프라인 (해당 시: 임베딩 모델, 검색 전략), API 라우트 (요청/응답/스트리밍 형식), 환경변수.
 
-## AI 스펙 JSON 포맷 (ai-spec.json)
+## AI 계약 JSON 포맷 (ai-contract.json)
 
-`generator: "ai"`, `architecture` (automation_level, autonomy_score, pattern, strands_pattern, model_id, provider, region, printer, invocation_mode), `system_prompt` (template, sections[], language), `tools[]` (name, description, input_schema, callback_type, file_path), `rag` (enabled, embedding_model, retrieval_strategy), `api_routes[]` (method, path, streaming, file_path), `types[]` (name, file_path, fields), `env_vars[]`, `dependencies[]`, `generation_order`.
+**외부 계약** — FE와 code-generator-ai가 공통으로 참조. 변경 시 FE 훅과 AI 라우트 구현 양쪽 영향:
+
+- `api_routes[]`: method, path, streaming, request_schema (zod 바인딩), response_schema 또는 sse_events
+- `sse_events[]` (streaming=true일 때): event_type, data_schema (예: `textDelta`, `toolStart`, `toolEnd`, `done`)
+- `types[]`: name, file_path, fields (FE가 import type으로 쓰는 것만)
+- `env_vars[]`: 공개 변수 (AWS_REGION 등)
+
+## AI 내부 구현 JSON 포맷 (ai-internals.json)
+
+**내부 구현** — code-generator-ai만 참조. FE는 이 파일을 읽을 이유 없음:
+
+- `architecture` (automation_level, autonomy_score, pattern, strands_pattern, model_id, provider, region, printer, invocation_mode)
+- `system_prompt` (template, sections[], language)
+- `tools[]` (name, description, input_schema, callback_type, file_path, handler_logic)
+- `rag` (enabled, embedding_model, retrieval_strategy, vector_store)
+- `agent_topology` (멀티 에이전트일 때: sub_agents, graph, swarm 설정)
+- `env_vars[]` (AWS_ACCESS_KEY 등 민감 변수)
+- `dependencies[]`, `generation_order`
 
 ## 에러 처리
 

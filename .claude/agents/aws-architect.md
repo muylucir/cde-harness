@@ -42,7 +42,7 @@ allowedTools:
 - `agentcore deploy` CLI 워크플로우
 - `BedrockAgentCoreApp` 코드 템플릿
 
-### `strands-sdk-typescript-guide` — AI 기능이 있으면 호출
+### `strands-sdk-guide` — AI 기능이 있으면 호출
 - AgentCore Runtime에 배포될 Strands 에이전트 구조 이해
 - Session Management, Agent State, Hooks 파악 → 메모리 필요 여부 결정
 

@@ -7,11 +7,15 @@
  *   1. 스테이지 시작/완료 타임스탬프를 state.json에 정확히 기록
  *   2. 체크포인트 조건(파일 존재, JSON 유효성, grep 패턴)을 코드로 검증
  *   3. 검증 결과를 state.json에 구조화하여 기록
+ *   4. stages.json을 단일 소스로 하여 유효 스테이지/전제조건/예산을 조회
  *
  * 사용법:
  *   node .pipeline/scripts/checkpoint.mjs start  <stage>              # 스테이지 시작 기록
  *   node .pipeline/scripts/checkpoint.mjs check  <stage> <checks...>  # 체크포인트 검증 + 완료 기록
  *   node .pipeline/scripts/checkpoint.mjs status                      # 현재 상태 요약 출력
+ *   node .pipeline/scripts/checkpoint.mjs list-stages [--json]        # 유효 스테이지 목록 출력
+ *   node .pipeline/scripts/checkpoint.mjs validate-stage <stage>      # 스테이지명 + 전제조건 검증
+ *   node .pipeline/scripts/checkpoint.mjs budget <stage>              # 이터레이션 예산 확인 (초과 시 exit 1)
  *
  * check 형식:
  *   file:<path>                    파일 존재 확인
@@ -35,6 +39,22 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '../..');
 const STATE_PATH = resolve(__dirname, '../state.json');
+const STAGES_PATH = resolve(__dirname, './stages.json');
+
+/** stages.json 로드 (없으면 명확한 에러) */
+function readStages() {
+  if (!existsSync(STAGES_PATH)) {
+    console.error(`✗ stages.json not found at ${STAGES_PATH}`);
+    process.exit(1);
+  }
+  return JSON.parse(readFileSync(STAGES_PATH, 'utf-8'));
+}
+
+/** 스테이지 정의 조회 (없으면 null) */
+function findStageDef(name) {
+  const stages = readStages().stages;
+  return stages.find((s) => s.name === name) ?? null;
+}
 
 // ── 유틸리티 ──────────────────────────────────────────────
 
@@ -275,6 +295,105 @@ function cmdStatus() {
   console.log(`  Total: ${formatDuration(totalMs)}`);
 }
 
+// ── 카탈로그/예산 커맨드 ─────────────────────────────────
+
+function cmdListStages(jsonOutput = false) {
+  const catalog = readStages();
+  if (jsonOutput) {
+    console.log(JSON.stringify(catalog, null, 2));
+    return;
+  }
+
+  console.log('유효 스테이지 목록 (stages.json):');
+  console.log('─'.repeat(80));
+  const byGroup = {};
+  for (const s of catalog.stages) {
+    byGroup[s.group] ??= [];
+    byGroup[s.group].push(s);
+  }
+  for (const [group, groupLabel] of Object.entries(catalog.groups)) {
+    if (!byGroup[group]) continue;
+    console.log(`\n[${group}] ${groupLabel}`);
+    for (const s of byGroup[group]) {
+      const opt = s.optional ? ' (optional)' : '';
+      const trig = s.trigger ? ` [${s.trigger}]` : '';
+      console.log(`  ${String(s.order).padStart(3)} ${s.name.padEnd(30)}${opt}${trig}`);
+      console.log(`      ${s.description}`);
+    }
+  }
+  console.log('\n' + '─'.repeat(80));
+  console.log('재개: /pipeline-from <stage-name>');
+}
+
+function cmdValidateStage(name) {
+  const def = findStageDef(name);
+  if (!def) {
+    console.error(`✗ Unknown stage: "${name}"`);
+    console.error(`  Run: node .pipeline/scripts/checkpoint.mjs list-stages`);
+    process.exit(1);
+  }
+
+  const state = readState();
+
+  console.log(`Stage: ${def.name} (order=${def.order}, group=${def.group})`);
+  console.log(`Description: ${def.description}`);
+  if (def.trigger) console.log(`Trigger: ${def.trigger}`);
+  if (def.optional_condition) console.log(`Optional when: ${def.optional_condition}`);
+
+  console.log('\nPrerequisites:');
+  let allOk = true;
+  for (const p of def.prerequisites ?? []) {
+    const concrete = p.replace('v{N}', `v${state.current_version}`);
+    const abs = resolve(ROOT, concrete);
+    const ok = existsSync(abs);
+    if (!ok) allOk = false;
+    console.log(`  ${ok ? '✓' : '✗'} ${concrete}`);
+  }
+
+  console.log('\nExpected outputs:');
+  for (const o of def.outputs ?? []) {
+    const concrete = o.replace('v{N}', `v${state.current_version}`);
+    console.log(`    ${concrete}`);
+  }
+
+  if (!allOk) {
+    console.error('\n✗ Prerequisites missing — run earlier stages first.');
+    process.exit(1);
+  }
+  console.log('\n✓ All prerequisites satisfied.');
+}
+
+function cmdBudget(stageName) {
+  const catalog = readStages();
+  const state = readState();
+  const ver = state.versions?.[String(state.current_version)];
+  if (!ver) {
+    console.log('(no version in progress)');
+    return;
+  }
+
+  const budgets = catalog.budgets ?? {};
+  const totalMax = budgets.total_code_regens ?? 8;
+  const streakMax = budgets.identical_error_streak ?? 2;
+
+  const totalRegens = ver.total_code_regens ?? 0;
+  const streak = ver.identical_error_streak ?? 0;
+
+  console.log(`Budget check for stage: ${stageName}`);
+  console.log(`  total_code_regens:       ${totalRegens} / ${totalMax}`);
+  console.log(`  identical_error_streak:  ${streak} / ${streakMax}`);
+
+  const exceeded = totalRegens >= totalMax || streak >= streakMax;
+  if (exceeded) {
+    console.error(`\n✗ Budget exceeded — halt recommended. Reason:`);
+    if (totalRegens >= totalMax) console.error(`  total regens reached ${totalRegens} (max ${totalMax})`);
+    if (streak >= streakMax) console.error(`  identical error streak reached ${streak} (max ${streakMax})`);
+    console.error(`\nTag halt-report with "수렴 실패" and present 3 recovery options to user.`);
+    process.exit(1);
+  }
+  console.log('\n✓ Within budget.');
+}
+
 // ── 메인 ─────────────────────────────────────────────────
 
 const [, , action, stageName, ...checkArgs] = process.argv;
@@ -300,13 +419,34 @@ switch (action) {
     cmdStatus();
     break;
 
+  case 'list-stages': {
+    const jsonFlag = process.argv.slice(3).includes('--json');
+    cmdListStages(jsonFlag);
+    break;
+  }
+
+  case 'validate-stage':
+    if (!stageName) {
+      console.error('Usage: checkpoint.mjs validate-stage <stage-name>');
+      process.exit(1);
+    }
+    cmdValidateStage(stageName);
+    break;
+
+  case 'budget':
+    cmdBudget(stageName ?? '(current)');
+    break;
+
   default:
-    console.error('Usage: checkpoint.mjs <start|check|status> [args...]');
+    console.error('Usage: checkpoint.mjs <command> [args...]');
     console.error('');
     console.error('Commands:');
     console.error('  start <stage>              Record stage start time');
     console.error('  check <stage> <checks...>  Verify checkpoint + record completion');
     console.error('  status                     Show pipeline status summary');
+    console.error('  list-stages [--json]       Show valid stages from stages.json');
+    console.error('  validate-stage <stage>     Validate stage name + prerequisites');
+    console.error('  budget <stage>             Check iteration budget (exit 1 if exceeded)');
     console.error('');
     console.error('Check formats:');
     console.error('  file:<path>                File exists');

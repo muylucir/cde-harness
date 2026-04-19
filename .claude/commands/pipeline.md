@@ -293,13 +293,14 @@ node .pipeline/scripts/checkpoint.mjs start spec-writer-ai
 ```
 - Launch the `spec-writer-ai` agent
 - Input: 위와 동일 + `backend-spec.json` (BE 타입/API 참조)
-- Output: `ai-spec.json` + `ai-spec.md`
+- Output: `ai-contract.json` (외부 계약) + `ai-internals.json` (내부 구현) + `ai-spec.md`
 - 참조 스킬: `agent-patterns`, `prompt-engineering`, `strands-sdk-guide`
 
 ```bash
 node .pipeline/scripts/checkpoint.mjs check spec-writer-ai \
   "file:.pipeline/artifacts/v{N}/03-specs/ai-spec.md" \
-  "json:.pipeline/artifacts/v{N}/03-specs/ai-spec.json"
+  "json:.pipeline/artifacts/v{N}/03-specs/ai-contract.json" \
+  "json:.pipeline/artifacts/v{N}/03-specs/ai-internals.json"
 ```
 
 **4-3. 프론트엔드 스펙**
@@ -307,9 +308,11 @@ node .pipeline/scripts/checkpoint.mjs check spec-writer-ai \
 node .pipeline/scripts/checkpoint.mjs start spec-writer-frontend
 ```
 - Launch the `spec-writer-frontend` agent
-- Input: 위와 동일 + `backend-spec.json` + `ai-spec.json` (있을 때)
+- Input: 위와 동일 + `backend-spec.json` + `ai-contract.json` (있을 때, FE는 외부 계약만 참조)
 - Output: `frontend-spec.json` + `frontend-spec.md` + `specs-summary.md` + `_manifest.json`
 - 참조 스킬: `cloudscape-design`, `ascii-diagram`
+
+> **향후 병렬화 후보**: `ai-contract.json`이 확정된 시점 이후 `spec-writer-frontend`와 AI 내부 구현(`ai-internals` 작성)은 독립적으로 실행 가능하다. 현재는 실행 안정성을 위해 순차 유지.
 
 **CHECKPOINT (Stage 4)**: 누락 시 해당 `spec-writer`를 재실행한다 (최대 1회).
 ```bash
@@ -511,12 +514,25 @@ When all stages pass:
 
 ## Circuit Breaker
 
-If any feedback loop reaches max iterations:
+각 루프(Stage 6a QA, 6b Review, Stage 7 Security)는 자체 max iterations가 있으나, **전역 예산**도 함께 적용한다. 모든 루프의 코드 재생성 횟수가 합쳐서 `budgets.total_code_regens` (기본 8회)를 넘거나, 동일 에러가 `identical_error_streak` (기본 2회) 연속 발생하면 즉시 halt한다.
+
+### 루프 진입 전 예산 확인
+
+코드 제너레이터를 재호출하기 전에 반드시:
+```bash
+node .pipeline/scripts/checkpoint.mjs budget <stage>
+```
+exit 1이면 halt 처리로 진행 (수렴 실패 태그).
+
+### Halt 처리 흐름
+
+If any feedback loop reaches max iterations **또는** budget 초과:
 1. Set pipeline status to `"halted"`
 2. Generate `.pipeline/artifacts/v{N}/halt-report.md` with:
    - Which stage failed and why
+   - **수렴 실패 태그** (budget 초과 시)
    - Specific issues that couldn't be resolved
-   - Attempted fixes
+   - Attempted fixes + 동일 에러 반복 여부
 3. Present 3 options to user:
    a. Manually fix the issues and run `/pipeline-from {stage}`
    b. Adjust requirements and restart with `/pipeline`

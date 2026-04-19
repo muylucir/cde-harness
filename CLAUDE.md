@@ -106,6 +106,8 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
 *code-generator-ai는 요구사항에 AI 기능이 포함된 경우에만 실행*
 *[...]* = 리뷰+테스트+수정 이터레이션 (PASS까지 반복)*
 
+> **AI 스펙 분리**: spec-writer-ai는 `ai-contract.json` (외부 계약: 엔드포인트/SSE 이벤트/스키마)과 `ai-internals.json` (내부 구현: 시스템 프롬프트/도구/RAG)로 분할 출력한다. FE는 `ai-contract.json`만 참조하므로, 향후 `ai-contract` 확정 시점 이후 FE와 AI 내부 구현은 병렬화 가능 (현재는 실행 안정성을 위해 순차 유지).
+
 ### Reconcile 흐름 (코드 → 아티팩트 역동기화)
 
 ```

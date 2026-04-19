@@ -107,24 +107,43 @@ AI 스펙에 **프론트엔드 SSE 소비 및 렌더링 요구사항**을 반드
 
 ## 출력
 
-이중 출력 — json (기계용) → md (사람용) 순서로 연속 작성.
+AI 스펙은 **외부 계약**과 **내부 구현**으로 분할하여 3개 파일로 출력한다. 이 분리를 통해 FE는 `ai-contract.json`만 참조하면 되고, code-generator-ai만 `ai-internals.json`을 읽는다.
 
-1. `ai-spec.json` 작성
-2. `ai-spec.md` 작성
+1. `ai-contract.json` 작성 — 외부 계약 (FE/code-gen-ai 공통)
+2. `ai-internals.json` 작성 — 내부 구현 (code-gen-ai 전용)
+3. `ai-spec.md` 작성 — 사람용 통합 문서 (한국어)
 
 ```
 03-specs/
-├── ai-spec.json                ← code-generator-ai가 파싱하는 기계용 스펙
-└── ai-spec.md                  ← 사람이 리뷰하는 AI 상세 마크다운 (한국어)
+├── ai-contract.json            ← 외부 계약: 엔드포인트, SSE 이벤트, 요청/응답 스키마 (FE+code-gen-ai 참조)
+├── ai-internals.json           ← 내부 구현: 시스템 프롬프트, 도구, RAG, 에이전트 토폴로지 (code-gen-ai 전용)
+└── ai-spec.md                  ← 사람이 리뷰하는 AI 상세 마크다운 (양쪽 요약)
 ```
 
 ## AI 스펙 마크다운 포맷 (ai-spec.md)
 
 섹션 구조: 에이전트 아키텍처 (패턴, 선택 근거, Strands SDK 구현 방식, 모델 설정), 시스템 프롬프트 (설계 원칙 + XML 전문), 커스텀 도구 (도구별: 설명, 파라미터, 핸들러 로직, 반환 타입), RAG 파이프라인 (해당 시: 임베딩 모델, 검색 전략), API 라우트 (요청/응답/스트리밍 형식), 환경변수.
 
-## AI 스펙 JSON 포맷 (ai-spec.json)
+## AI 계약 JSON 포맷 (ai-contract.json)
 
-`generator: "ai"`, `architecture` (automation_level, autonomy_score, pattern, strands_pattern, model_id, provider, region, printer, invocation_mode), `system_prompt` (template, sections[], language), `tools[]` (name, description, input_schema, callback_type, file_path), `rag` (enabled, embedding_model, retrieval_strategy), `api_routes[]` (method, path, streaming, file_path), `types[]` (name, file_path, fields), `env_vars[]`, `dependencies[]`, `generation_order`.
+**외부 계약** — FE와 code-generator-ai가 공통으로 참조. 변경 시 FE 훅과 AI 라우트 구현 양쪽 영향:
+
+- `api_routes[]`: method, path, streaming, request_schema (zod 바인딩), response_schema 또는 sse_events
+- `sse_events[]` (streaming=true일 때): event_type, data_schema (예: `textDelta`, `toolStart`, `toolEnd`, `done`)
+- `types[]`: name, file_path, fields (FE가 import type으로 쓰는 것만)
+- `env_vars[]`: 공개 변수 (AWS_REGION 등)
+
+## AI 내부 구현 JSON 포맷 (ai-internals.json)
+
+**내부 구현** — code-generator-ai만 참조. FE는 이 파일을 읽을 이유 없음:
+
+- `architecture` (automation_level, autonomy_score, pattern, strands_pattern, model_id, provider, region, printer, invocation_mode)
+- `system_prompt` (template, sections[], language)
+- `tools[]` (name, description, input_schema, callback_type, file_path, handler_logic)
+- `rag` (enabled, embedding_model, retrieval_strategy, vector_store)
+- `agent_topology` (멀티 에이전트일 때: sub_agents, graph, swarm 설정)
+- `env_vars[]` (AWS_ACCESS_KEY 등 민감 변수)
+- `dependencies[]`, `generation_order`
 
 ## 에러 처리
 

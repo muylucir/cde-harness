@@ -69,8 +69,9 @@ allowedTools:
 
 - `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — AI 관련 FR/NFR 확인
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — AI 컴포넌트 확인
-- `.pipeline/artifacts/v{N}/03-specs/ai-spec.json` — **AI 전용 스펙 (필수 입력)**
-- `.pipeline/artifacts/v{N}/03-specs/ai-spec.md` — AI 스펙 한국어 상세 문서
+- `.pipeline/artifacts/v{N}/03-specs/ai-contract.json` — **AI 외부 계약 (필수)**: 엔드포인트, SSE 이벤트, 요청/응답 스키마
+- `.pipeline/artifacts/v{N}/03-specs/ai-internals.json` — **AI 내부 구현 (필수)**: 시스템 프롬프트, 도구, RAG, 에이전트 토폴로지
+- `.pipeline/artifacts/v{N}/03-specs/ai-spec.md` — AI 스펙 한국어 상세 문서 (참고용)
 - `.pipeline/artifacts/v{N}/03-specs/_manifest.json` — `generator: "ai"` phase 확인
 - `.pipeline/artifacts/v{N}/04-codegen/generation-log-backend.json` — 백엔드 생성 결과 참조
 
@@ -104,7 +105,7 @@ src/
 
 ## 구현 프로세스
 
-**이 에이전트는 자체적으로 설계 결정을 하지 않는다.** `ai-spec.json`에 정의된 아키텍처, 패턴, 도구, API 라우트를 그대로 코드로 변환한다.
+**이 에이전트는 자체적으로 설계 결정을 하지 않는다.** `ai-contract.json`(외부 계약)과 `ai-internals.json`(내부 구현)에 정의된 아키텍처, 패턴, 도구, API 라우트를 그대로 코드로 변환한다.
 
 ### 절대 규칙
 

@@ -66,15 +66,21 @@ allowedTools:
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — AI 컴포넌트
 - `.pipeline/artifacts/v{N}/03-specs/backend-spec.json` — 백엔드 타입/API 참조
 
-## 점진적 작업 규칙 (output token 한도 초과 방지)
+## 점진적 작업 규칙
 
-가능하면 모든 단계를 한 번에 완료한다. 하지만 output이 길어지면 **파일 Write 완료 직후** 짧은 진행 보고를 하고 멈춰도 된다. 오케스트레이터가 SendMessage로 계속하라고 지시하면 다음 단계를 이어간다.
+**공통 원칙**:
+- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
+- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
+- **JSON 분할** 시 최상위 키 + 빈 배열 스켈레톤을 먼저 Write하여 파싱 가능 상태를 유지한다.
+- **스킬 참조 후 즉시 Write**: 3개 스킬(agent-patterns, prompt-engineering, strands-sdk-guide)을 필요 시점별로 나눠 호출하고, 사용 직후 해당 섹션을 Write하여 컨텍스트 누적을 막는다.
 
-1. **Read**: requirements.json, architecture.json, backend-spec.json + 3개 스킬 참조
-2. **Write**: `ai-spec.json` — 전체 JSON을 한 번에 쓴다. 너무 크면 전반부 Write → 후반부 Edit로 분할.
-3. **Write**: `ai-spec.md` — 전체를 한 번에 쓴다. 너무 크면 전반부 Write → 후반부 Edit로 분할.
+**이 에이전트의 단위**: 파일 1개
 
-**허용되는 중간 멈춤**: 파일 1개를 완전히 Write한 뒤 짧은 보고 후 멈추는 것은 OK.
+**단계**:
+1. **Read**: requirements.json, architecture.json, backend-spec.json + 필요 시 스킬 호출
+2. **Write**: `ai-contract.json` — 외부 계약 (엔드포인트, SSE 이벤트, 요청/응답 스키마). FE가 이 파일만 참조한다.
+3. **Write**: `ai-internals.json` — 내부 구현 (시스템 프롬프트, 도구 정의, RAG 설정, 에이전트 토폴로지). code-generator-ai만 참조한다.
+4. **Write**: `ai-spec.md` — 한국어 마크다운 (양쪽 요약)
 
 **금지**: Read만 하고 Write 없이 멈추는 것. 반드시 최소 1개 파일은 Write한 뒤 멈춘다.
 

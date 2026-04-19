@@ -112,18 +112,21 @@ src/
 2. **ai-spec.json의 결정을 따른다** — 패턴, 도구, API 라우트를 자의적으로 변경하지 않는다.
 3. **3개 스킬을 참조하여 구현한다** — `agent-patterns`, `prompt-engineering`, `strands-sdk-guide`
 
-### 점진적 작업 규칙 (output token 한도 초과 방지)
+### 점진적 작업 규칙
 
-가능하면 모든 단계를 한 번에 완료한다. 하지만 output이 길어지면 **파일 그룹 Write 완료 직후** 짧은 진행 보고를 하고 멈춰도 된다. 오케스트레이터가 SendMessage로 계속하라고 지시하면 다음 단계를 이어간다.
+**공통 원칙**:
+- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
+- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
 
-1. **Read**: ai-spec.json, _manifest.json, generation-log-backend.json
-2. **Write**: types + prompts 파일
-3. **Write**: tools 파일
+**이 에이전트의 단위**: 파일 그룹 (types/prompts, tools, rag+agent, API routes)
+
+**단계**:
+1. **Read**: `ai-contract.json`(외부 계약) + `ai-internals.json`(내부 구현), _manifest.json, generation-log-backend.json
+2. **Write**: types + prompts 파일 (ai-internals.json의 systemPrompt)
+3. **Write**: tools 파일 (ai-internals.json의 toolDefinitions)
 4. **Write**: rag (있으면) + agent.ts
-5. **Write**: API route handlers
+5. **Write**: API route handlers (ai-contract.json의 endpoint/event 스키마)
 6. **Verify + Log**: `npm run build` + `npm run lint` 검증 + 에러 수정 + 생성 로그 작성
-
-**허용되는 중간 멈춤**: 단계 2~5에서 파일 그룹을 Write한 뒤 짧은 보고 후 멈추는 것은 OK.
 
 **금지**: Read만 하고 코드 Write 없이 멈추는 것. 반드시 최소 1개 파일 그룹은 Write한 뒤 멈춘다.
 

@@ -82,15 +82,19 @@ allowedTools:
 
 ### 4단계: Brief 생성
 
-## 점진적 작업 규칙 (output token 한도 초과 방지)
+## 점진적 작업 규칙
 
-가능하면 모든 단계를 한 번에 완료한다. 하지만 output이 길어지면 **파일 Write 완료 직후** 짧은 진행 보고를 하고 멈춰도 된다. 오케스트레이터가 SendMessage로 계속하라고 지시하면 다음 단계를 이어간다.
+**공통 원칙**:
+- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
+- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
+- **JSON 분할** 시 최상위 키 + 빈 배열 스켈레톤을 먼저 Write하여 파싱 가능 상태를 유지한다.
 
-1. **Read**: `.pipeline/input/raw/` 의 모든 파일 + clarifications.md 확인
+**이 에이전트의 단위**: 파일 1개
+
+**단계**:
+1. **Read**: `.pipeline/input/raw/`의 모든 파일 + clarifications.md 확인
 2. **Write**: `customer-brief.md`
 3. **Write**: `source-analysis.md` + `manifest.json` + `clarifications.md` (아래 "clarifications 생성 트리거" 조건 중 **하나라도** 해당하면 **필수 생성**)
-
-**허용되는 중간 멈춤**: 파일 1개를 완전히 Write한 뒤 짧은 보고 후 멈추는 것은 OK.
 
 **금지**: Read만 하고 Write 없이 멈추는 것. 반드시 최소 1개 파일은 Write한 뒤 멈춘다.
 

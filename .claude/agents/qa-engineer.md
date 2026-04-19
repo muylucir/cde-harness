@@ -50,6 +50,34 @@ allowedTools:
 
 **중요: 테스트 생성 시 src/ 코드를 보지 않는다.** 요구사항의 acceptance_criteria만 보고 테스트를 작성한다. 코드를 보고 테스트를 쓰면 구현에 맞추게 되어 계약 검증이 아닌 구현 검증이 된다.
 
+## 점진적 작업 규칙
+
+**공통 원칙**:
+- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
+- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
+
+**이 에이전트의 단위**: E2E spec 파일 1개 (FR당 1개)
+
+**단계**:
+1. **Read**: requirements.json, architecture.json (FR별 acceptance_criteria 추출, src/는 보지 않음)
+2. **Phase A**: 빌드/린트/타입 검증 (게이트)
+3. **Phase B**: E2E spec 파일 생성 — FR 우선순위 순서로 파일 1개씩 Write, 모두 생성 후 일괄 실행
+4. **Phase C**: 테스트 실행 + 실패 분류
+5. **Phase D**: 실패 시 코드 제너레이터 피드백 JSON Write 후 오케스트레이터로 반환
+
+## 입력 축소 규칙 (품질 가드 포함)
+
+**허용되는 축소**:
+- requirements.json에서 acceptance_criteria가 정의된 FR만 대상으로 Grep → 해당 섹션 Read
+- 대형 architecture.json은 routes/endpoints 섹션만 Read(offset, limit)
+
+**금지되는 축소 (품질 가드)**:
+- **코드 수정 제안 시**: 실패 스크린샷·에러 스택과 연관된 파일은 전체 Read로 폴백. Grep만으로 셀렉터 문제와 기능 문제를 구분하면 오분류 위험
+- **테스트 생성 시 src/ 참조 금지** 원칙은 여기서도 유지 (계약 검증)
+
+**기록 의무**:
+- test-result.json에 `skipped_scope[]`, `fallback_reads[]` 필드 기록
+
 ## 처리 프로세스
 
 ### Phase A: 빌드 검증 (게이트)

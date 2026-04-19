@@ -109,6 +109,42 @@ npm run dev
 | ascii-diagram | README.md의 프로젝트 구조 디렉토리 트리 렌더링 | 문서 생성 3a단계 (README.md) |
 | cloudscape-design | 컴포넌트 목록 교차 검증, 페이지 패턴 설명 보강 | ARCHITECTURE.md 컴포넌트 계층 작성 시 |
 
+## 점진적 작업 규칙
+
+**공통 원칙**:
+- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
+- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
+
+**이 에이전트의 단위**: MD 파일 1개
+
+**단계 (각 단계 Write 후 정지 허용)**:
+1. **Read 입력**: 전 버전 아티팩트, src/, infra/ (아래 입력 축소 규칙 준수)
+2. **Write** README.md
+3. **Write** ARCHITECTURE.md (mermaid-diagrams 스킬 호출 직전에만)
+4. **Write** API.md
+5. **Write** AI-AGENT.md (AI 기능 있을 때)
+6. **Write** AWS-INFRA.md (`/awsarch` 실행 후일 때)
+7. **Write** PRODUCTION-CHECKLIST.md
+8. **Write** REVISION-HISTORY.md (v2 이상일 때)
+9. **Write** SETUP.md
+10. **Write** manifest.json (skipped_scope / fallback_reads 포함)
+
+## 입력 축소 규칙 (품질 가드 포함)
+
+**원칙**: 입력 축소는 **무관 파일 배제**와 **점진적 로딩**이다. 분석에 필요한 정보는 그대로 확보한다.
+
+**허용되는 축소**:
+- 버전 4개 이상일 때 이전 버전은 revisions/ 로그 요약만 Read, 최신 3개는 전체 Read
+- 대형 JSON은 Grep으로 필요 키 확인 후 Read(offset, limit)
+- 스킬(mermaid/ascii/cloudscape)은 해당 문서 직전에 호출하고 사용 직후 Write로 컨텍스트 비움
+
+**금지되는 축소 (품질 가드)**:
+- **교차 참조 문서는 축소하지 않는다**: ARCHITECTURE / API / AI-AGENT는 서로 참조하므로 작성 시 architecture.json / api-contract.json / ai-contract.json 전체 Read
+- Grep 결과가 예상보다 적으면 전체 Read로 폴백
+
+**기록 의무**:
+- manifest.json에 `skipped_scope[]`, `fallback_reads[]` 필드로 기록
+
 ## 핸드오버 패키지 구성
 
 출력 디렉토리: `.pipeline/artifacts/v{N}/07-handover/`

@@ -118,16 +118,20 @@ allowedTools:
 
 > 최대 횟수 도달 시 최소 깊이 미충족 카테고리는 domain-context.md에 "리서치 불충분" 경고를 표기한다.
 
-## 점진적 작업 규칙 (output token 한도 초과 방지)
+## 점진적 작업 규칙
 
-가능하면 모든 단계를 한 번에 완료한다. 하지만 output이 길어지면 **파일 Write 완료 직후** 짧은 진행 보고를 하고 멈춰도 된다. 오케스트레이터가 SendMessage로 계속하라고 지시하면 다음 단계를 이어간다.
+**공통 원칙**:
+- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
+- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
+- **JSON 분할** 시 최상위 키 + 빈 배열 스켈레톤을 먼저 Write하여 파싱 가능 상태를 유지한다.
 
+**이 에이전트의 단위**: 파일 1개
+
+**단계**:
 1. **Read**: customer-brief.md → 키워드 추출
 2. **WebSearch**: 카테고리 2a~2f (포화 판정까지)
-3. **Write**: `domain-context.json`
+3. **Write**: `domain-context.json` (크면 카테고리별 배열을 Edit로 채움)
 4. **Write**: `domain-context.md`
-
-**허용되는 중간 멈춤**: 파일 1개를 완전히 Write한 뒤 짧은 보고 후 멈추는 것은 OK.
 
 **금지**: Read/WebSearch만 하고 Write 없이 멈추는 것. 반드시 최소 1개 파일은 Write한 뒤 멈춘다.
 

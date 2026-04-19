@@ -57,6 +57,7 @@ allowedTools:
 1. **Read 입력**: 이전 입력/아티팩트, 새 입력(raw/, 피드백 파일) (입력 축소 규칙 준수)
 2. **Write** revision-log.json (스켈레톤 → items → impact → reentry 순서)
 3. **Write** analysis.md
+4. **(조건부) Write** `.pipeline/input/clarifications.md` — 아래 "clarifications 생성 트리거"에 하나라도 해당하면 필수 생성
 
 ## 입력 축소 규칙 (품질 가드 포함)
 
@@ -163,7 +164,42 @@ backend-spec.json / frontend-spec.json 변경
     → src/app/vehicles/create/page.tsx 재생성 필요
 ```
 
-### 7단계: 재진입 지점 결정
+### 7단계: 모호한 피드백 판정 → clarifications 생성
+
+피드백이 모호하거나 불완전해서 requirements-analyst/architect가 추론으로 메꿔야 할 가능성이 높으면 `.pipeline/input/clarifications.md`를 생성하여 사용자에게 직접 질문한다. 1차 `/pipeline`에서 brief-composer가 사용하는 메커니즘과 동일하다.
+
+#### clarifications 생성 트리거 (하나라도 해당하면 **필수** 생성)
+
+1. **요구사항 수정인데 변경 범위가 불명확**: "UI 개선해주세요" (어느 페이지/컴포넌트?), "성능 개선" (어떤 지표/목표?)
+2. **신규 요구사항의 acceptance_criteria를 추론할 수 없음**: "가맹점별 매출 데이터 보여주세요" (조회 단위? 기간? 권한?)
+3. **데이터 필드 추가 요청인데 타입/제약이 불명**: "전화번호 필드 추가" (국가코드 포함? 검증 규칙? 필수 여부?)
+4. **페르소나/권한 변경 암시**: "관리자만 볼 수 있게" (기존 페르소나 재정의? 새 역할?)
+5. **상충되는 피드백**: 동일 FR에 대해 여러 피드백이 모순 (예: "간소화하자" + "필드 더 추가")
+6. **삭제 요청이 다른 FR에 영향**: "대시보드 차트 빼주세요" (차트가 참조하는 데이터/페이지 연쇄 영향 불명)
+
+"피드백이 짧다" 자체는 트리거가 아니다. 명확하고 짧은 피드백(예: "테이블 기본 정렬을 createdAt desc로 바꿔주세요")은 질문 없이 진행한다.
+
+#### `.pipeline/input/clarifications.md` 형식
+
+brief-composer가 생성하는 형식과 동일하게 유지한다. 질문별로 다음을 포함:
+- **출처**: 어느 피드백 항목(FB-XXX)과 어느 요청 문장에서 유래했는지
+- **현재 추론**: 답변이 없을 경우 feedback-analyzer가 사용할 기본값
+- **반영 위치**: 답변이 오면 어느 아티팩트/FR에 반영되는지 (예: FR-003 acceptance_criteria, 새 FR-006 description)
+- **답변 란**: 비어있으며 사용자가 직접 채움
+
+파일이 이미 존재하면 (이전 이터레이션에서 남아있는 경우) **덮어쓰지 않고** 이번 리비전용 질문을 append하되, 상단에 `## v{N+1} 이터레이션 질문` 구분선을 둔다. 또는 버전별 별도 파일 `.pipeline/input/clarifications-v{N+1}.md`로 생성해도 된다 (/iterate가 두 경로 모두 점검).
+
+#### 사용자 대면 보고
+
+clarifications 파일이 생성되면 APPROVAL GATE 보고에 다음을 포함:
+```
+확인이 필요한 항목이 N건 있습니다.
+.pipeline/input/clarifications.md 파일에 답변을 작성해주세요.
+답변 후 /iterate를 계속 진행하면 brief-composer가 customer-brief.md에 자동 반영합니다.
+비워두면 각 항목의 "현재 추론" 값으로 진행합니다.
+```
+
+### 8단계: 재진입 지점 결정
 
 영향 범위에 따라 재진입 지점을 결정한다.
 
@@ -294,6 +330,9 @@ backend-spec.json / frontend-spec.json 변경
 - [ ] `_manifest.json`의 의존성을 따라 영향 스펙/코드를 추적했는가
 - [ ] 재진입 지점이 가장 상위 영향 범위에 맞는가
 - [ ] 리비전 로그와 한국어 분석 보고서가 모두 작성되었는가
+- [ ] "clarifications 생성 트리거" 6개 조건을 점검했는가
+- [ ] 트리거 1건 이상 해당하면 `.pipeline/input/clarifications.md`를 생성했는가 (analysis.md의 주의사항만으로 대체하지 않음)
+- [ ] 사용자 보고 시 clarifications 건수를 명시했는가
 
 ## 완료 후
 
@@ -302,4 +341,5 @@ backend-spec.json / frontend-spec.json 변경
 2. 영향받는 요구사항/컴포넌트/스펙/코드 파일 수
 3. 변경 없는 파일 수 (보존 범위)
 4. 권장 재진입 지점과 이유
-5. 사용자 확인을 요청하고, 승인 시 `/iterate`가 해당 지점부터 파이프라인 재실행
+5. **확인 필요 항목이 있으면** clarifications.md의 질문 건수와 파일 경로
+6. 사용자 확인을 요청하고, 승인 시 `/iterate`가 해당 지점부터 파이프라인 재실행

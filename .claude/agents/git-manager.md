@@ -26,6 +26,7 @@ allowedTools:
 | pre-pipeline | `git status`, working tree | 클린 여부 보고 |
 | post-pipeline | `state.json`, `src/`, `e2e/`, `.pipeline/artifacts/v{N}/` | git commit |
 | pre-iterate | `state.json` (current_version) | `iterate/v{N+1}` 브랜치 |
+| cancel-iterate | `state.json` (current_version), 현재 브랜치 | 브랜치 삭제 + main 복귀 |
 | post-iterate | `state.json`, revision logs, 변경 파일 | git commit |
 | pre-reconcile | `state.json` (current_version) | `reconcile/v{N+1}` 브랜치 |
 | post-reconcile | `state.json`, revision logs, 갱신된 아티팩트 | git commit (아티팩트만) |
@@ -75,9 +76,9 @@ allowedTools:
    ```
 4. `state.json`에서 메타데이터 추출하여 커밋 메시지 자동 구성
 
-### 3. `pre-iterate` — 이터레이션 시작 전
+### 3. `pre-iterate` — 이터레이션 시작 전 (Phase 0)
 
-`/iterate` Phase 3에서 호출. 브랜치를 생성한다.
+`/iterate` **Phase 0**에서 호출. **feedback-analyzer 실행 전에** 브랜치를 먼저 생성한다. 이렇게 해야 revision 로그, clarifications 질문, brief 갱신 등 모든 이터레이션 산출물이 `iterate/v{N+1}` 브랜치에서 추적된다.
 
 **동작:**
 1. 워킹 트리 클린 확인 (커밋되지 않은 변경이 있으면 에러)
@@ -86,7 +87,25 @@ allowedTools:
    ```bash
    git checkout -b iterate/v{N+1}
    ```
-4. 사용자에게 보고: "iterate/v{N+1} 브랜치를 생성했습니다"
+4. 사용자에게 보고: "iterate/v{N+1} 브랜치를 생성했습니다. 이 브랜치에서 영향 분석과 이터레이션이 진행됩니다."
+
+### 3b. `cancel-iterate` — 이터레이션 취소 (APPROVAL GATE에서 사용자가 거절)
+
+`/iterate` Phase 1(영향 분석) 이후 APPROVAL GATE에서 사용자가 취소를 선택하면 호출. **생성된 브랜치와 분석 산출물을 모두 폐기**하여 main을 깨끗하게 유지한다.
+
+**동작:**
+1. 현재 브랜치가 `iterate/v{N+1}` 패턴인지 확인. 아니면 중단하고 경고.
+2. 워킹 디렉토리의 미커밋 변경 목록을 사용자에게 제시 (revision 아티팩트, clarifications 등)
+3. 사용자에게 최종 확인: "iterate/v{N+1} 브랜치와 분석 산출물을 모두 폐기합니다. 계속하시겠습니까?"
+4. 확인 시:
+   ```bash
+   git checkout -- .              # 워킹 트리 변경 폐기
+   git clean -fd .pipeline/revisions/ .pipeline/artifacts/v{N+1}/ .pipeline/input/  # 미추적 파일 정리 (지정 경로만)
+   git checkout main
+   git branch -D iterate/v{N+1}
+   ```
+5. `state.json`에서 v{N+1} 엔트리를 제거하거나 `status: "cancelled"`로 표시 (current_version은 v{N}로 되돌림)
+6. 사용자에게 보고: "iterate/v{N+1} 브랜치를 삭제했습니다. main 브랜치로 복귀했습니다."
 
 ### 4. `post-iterate` — 이터레이션 완료 후
 
@@ -323,9 +342,11 @@ allowedTools:
     ↓
 /pipeline 완료 → git-manager(post-pipeline)
 
-/iterate 시작 → git-manager(pre-iterate)
+/iterate 시작 (Phase 0) → git-manager(pre-iterate)
     ↓
-이터레이션 실행 ...
+영향 분석 → APPROVAL GATE
+    ├─ 취소 → git-manager(cancel-iterate) → 브랜치 삭제 후 종료
+    └─ 승인 → 이터레이션 실행 ...
     ↓
 /iterate 완료 → git-manager(post-iterate)
 

@@ -2,6 +2,7 @@
 name: strands-sdk-python-guide
 description: |
   Strands Agents SDK Python 개발 종합 가이드. AI 에이전트 구축, 배포, 운영을 위한 베스트 프랙티스, 패턴, 코드 예제 제공.
+  **Scope**: non-pipeline use only. CDE 파이프라인은 TypeScript SDK(`@strands-agents/sdk`)만 사용한다 (CLAUDE.md Rule 9). 이 스킬은 파이프라인 외부 Python 프로젝트에서만 호출한다.
   다음 상황에서 반드시 사용:
   (1) Strands SDK Python으로 새 에이전트 생성 또는 기존 에이전트 수정
   (2) @tool 데코레이터로 커스텀 도구 개발

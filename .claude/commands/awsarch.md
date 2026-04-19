@@ -194,8 +194,9 @@ cd infra && npx cdk diff
 
 **3-3. CDK Deploy**:
 ```bash
-cd infra && npx cdk deploy --require-approval never --outputs-file cdk-outputs.json
+cd infra && npx cdk deploy --require-approval broadening --outputs-file cdk-outputs.json
 ```
+> **`--require-approval broadening`** 사용 이유: Phase 2 APPROVAL GATE에서 사용자가 `cdk diff`를 이미 확인했지만, IAM 권한이 확대되는 변경(`broadening`)이 새로 감지되면 CDK가 한 번 더 확인을 요청한다. `never`는 IAM 변경도 통과시키므로 사용하지 않는다.
 
 **3-4. 환경 변수 설정**:
 - `cdk-outputs.json` 파싱 → `.env.local` 작성

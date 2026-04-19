@@ -58,7 +58,7 @@ allowedTools:
 - Tool Use Prompting (도구 설명, 파라미터 정의)
 - Extended Thinking 활용 (복잡한 추론이 필요한 경우)
 
-### `strands-sdk-typescript-guide` — Strands Agents SDK TypeScript 구현
+### `strands-sdk-guide` — Strands Agents SDK TypeScript 구현
 - `@strands-agents/sdk` 패키지로 에이전트 코드 작성
 - `tool()` 함수 + Zod 스키마로 커스텀 도구 정의
 - MCP 서버/클라이언트 연동 (stdio, Streamable HTTP)
@@ -133,8 +133,8 @@ src/
 
 ### 구현 시 필수 참조 사항
 
-- **Agent 생성**: `BedrockModel` 프로바이더 + `printer: false` — 상세는 `strands-sdk-typescript-guide` 스킬 참조
-- **SSE 스트리밍**: `agent.stream()` async iterator → `textDelta`만 추출 → 구조화 이벤트 전송. `invoke()` → `NextResponse.json()` 금지. 상세는 `strands-sdk-typescript-guide`의 `references/nextjs-integration.md` 참조
+- **Agent 생성**: `BedrockModel` 프로바이더 + `printer: false` — 상세는 `strands-sdk-guide` 스킬 참조
+- **SSE 스트리밍**: `agent.stream()` async iterator → `textDelta`만 추출 → 구조화 이벤트 전송. `invoke()` → `NextResponse.json()` 금지. 상세는 `strands-sdk-guide`의 `references/nextjs-integration.md` 참조
 - **비스트리밍**: `agent.invoke(prompt)` 사용
 - **의존성**: `@strands-agents/sdk` (필수), `zod` (도구 스키마), RAG 시 `@aws-sdk/client-bedrock-agent-runtime`
 

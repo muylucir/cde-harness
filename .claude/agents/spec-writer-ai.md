@@ -56,7 +56,7 @@ allowedTools:
 
 자동화 수준에 따라 프롬프트 구조가 달라진다 (스킬 참조). XML 태그 5개 섹션: `<role>`, `<context>`, `<tools>`, `<instructions>`, `<constraints>`.
 
-### `strands-sdk-typescript-guide` — Strands Agents SDK TypeScript 구현 스펙
+### `strands-sdk-guide` — Strands Agents SDK TypeScript 구현 스펙
 
 스펙에 포함할 항목: BedrockModel 프로바이더 설정, tool()+Zod 도구 정의, invoke/stream 호출 방식, `printer: false`, Vended Tools/MCP 연동 여부. 상세 코드 패턴은 스킬 참조.
 
@@ -88,7 +88,7 @@ allowedTools:
 
 1. `requirements.json`에서 AI 관련 FR을 키워드 매칭으로 식별
 2. `architecture.json`에서 AI 컴포넌트 구조를 파악
-3. 3개 필수 스킬 참조: `agent-patterns`, `prompt-engineering`, `strands-sdk-typescript-guide`
+3. 3개 필수 스킬 참조: `agent-patterns`, `prompt-engineering`, `strands-sdk-guide`
 4. 담당 범위 6개(ai-types → ai-prompts → ai-tools → ai-rag → ai-agent → ai-api) 순서로 스펙 작성
 5. 이중 출력: json → md 순서
 

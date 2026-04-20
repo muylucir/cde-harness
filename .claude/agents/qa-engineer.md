@@ -92,6 +92,20 @@ npm run type-check   # 타입 에러
 
 하나라도 실패하면 테스트를 생성하지 않고, 해당 코드 제너레이터에 빌드 에러 피드백을 전달한다.
 
+### Phase A-2: AI 스모크 검증 (AI 기능이 있을 때만)
+
+`.pipeline/artifacts/v{N}/03-specs/ai-contract.json`이 존재하면 E2E 테스트 실행 전에 AI 스모크를 먼저 돌려 "빌드는 되지만 AI가 동작하지 않는" 리그레션을 차단한다:
+
+```bash
+node .pipeline/scripts/ai-smoke.mjs
+```
+
+실패 시:
+- 검사 항목(`no stub strings`, `all ai-contract routes invoke an Agent`, `sse_events ⊆ emitted`, `section_marker_map` 일관성, nested agent 에러 경로)별로 **기능 이슈(Type 2)** 피드백을 `code-generator-ai`에 전달한다. 테스트 코드는 생성하지 않고 바로 코드 수정 루프로 진입.
+- 이 스모크는 **계약 검증**이다 (ai-contract.json + ai-internals.json이 진실의 원천). 실패 시 스펙을 바꾸지 말고 구현을 바꾼다.
+
+AI 기능 스펙이 없으면(AI 미사용 프로토타입) 스킵한다.
+
 ### Phase B: 테스트 생성 (요구사항 기반 — 코드를 보지 않음)
 
 requirements.json의 각 FR에 대해 E2E 테스트를 생성한다.
@@ -163,6 +177,33 @@ test.describe('FR-003: 인시던트 목록', () => {
 **P0 FR 테스트 깊이 요구:**
 - P0 FR은 최소 1개 이상의 **사용자 인터랙션 테스트** 필수 (click, fill, navigate)
 - 페이지 로드 확인이나 텍스트 존재 확인만으로는 P0 커버리지 인정 안 함
+
+**AI 기능 FR 테스트 규칙 (ai-contract.json이 있을 때만):**
+
+AI 엔드포인트는 HTTP 200/201만 확인하면 stub·placeholder도 통과하므로, 아래 중 최소 1개 이상을 반드시 포함한다:
+
+1. **스트리밍 엔드포인트(`streaming: true`)**: `ai-contract.sse_events[].event_type` 중 최소 2개 이상의 이벤트를 실제로 수신하는지 검증 (예: `tool_call`과 `done`이 모두 도착). 수신 이벤트 0건이나 `done`만 오는 경우 실패로 간주.
+2. **Non-streaming 엔드포인트(`streaming: false`)**: 응답 body의 AI 생성 필드(narrative, summary, recommendations 등)가 stub 패턴(`/will be populated/i`, `/^TODO/i`, `/placeholder/i`)과 일치하지 않음을 어서션.
+3. **도구 호출 가시성**: Tool Trace/ToolTracePanel이 있는 프로토타입이라면 특정 에이전트를 trigger한 후 도구 호출 로그가 1개 이상 기록되는지 검증.
+
+예시:
+```typescript
+test('AI-FR-008: 진단 스트림이 tool_call과 done 이벤트를 모두 emit한다', async ({ request }) => {
+  const res = await request.post('/api/agents/diagnose/stream', { data: { accountId: 'ACC-1001' } });
+  const body = await res.text();
+  expect(body).toMatch(/event:\s*tool_call/);
+  expect(body).toMatch(/event:\s*done/);
+});
+
+test('AI-FR-012: 주간 리포트 narrative가 placeholder 아님', async ({ request }) => {
+  const res = await request.post('/api/agents/weekly-report', { data: {} });
+  const json = await res.json();
+  expect(json.item.narrative).toBeTruthy();
+  expect(json.item.narrative).not.toMatch(/will be populated|placeholder|TODO/i);
+});
+```
+
+이 테스트들은 **계약 어서션**이다 — 실패 시 테스트를 약화하지 말고 `code-generator-ai`에 Type 2 피드백.
 
 ### Phase B-2: Playwright 설정
 
@@ -408,6 +449,9 @@ src/ 코드를 참조하지 않고 요구사항만으로 작성되었다.
 - [ ] Type 2(기능) 실패가 코드 제너레이터로 피드백되었는가
 - [ ] 이터레이션 이력이 test-result.json에 보존되었는가
 - [ ] `npm run build` + `npm run lint` 가 통과하였는가
+- [ ] **AI 기능이 있다면 `node .pipeline/scripts/ai-smoke.mjs` 통과하였는가**
+- [ ] **AI 스트리밍 엔드포인트 테스트가 이벤트 수신 어서션(sse_events 중 2개 이상)을 포함하는가**
+- [ ] **AI non-streaming 엔드포인트 테스트가 stub 문자열 부재 어서션을 포함하는가**
 
 ## 완료 후
 

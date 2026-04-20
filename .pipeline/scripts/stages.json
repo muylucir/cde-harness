@@ -143,6 +143,12 @@
         "src/app/api/chat/",
         ".pipeline/artifacts/v{N}/04-codegen/generation-log-ai.json"
       ],
+      "checkpoint": [
+        "cmd:npm run build",
+        "cmd:npm run lint",
+        "cmd:node .pipeline/scripts/ai-smoke.mjs"
+      ],
+      "checkpoint_notes": "ai-smoke는 빌드 성공 후에도 남는 AI 런타임 결함(stub 문자열, Agent 호출 누락, SSE 이벤트명 drift, Bedrock 직접 import, nested agent silent fail)을 차단한다. stages.json의 체크 항목은 pipeline.md Stage 5b의 checkpoint.mjs check 커맨드와 동일해야 한다.",
       "resume_via": "/pipeline-from code-generator-ai"
     },
     {

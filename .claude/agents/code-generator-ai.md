@@ -112,6 +112,14 @@ src/
 1. **`@aws-sdk/client-bedrock-runtime` 직접 호출 금지** — 모든 AI 기능은 `@strands-agents/sdk`의 `Agent`를 통해 구현한다.
 2. **ai-spec.json의 결정을 따른다** — 패턴, 도구, API 라우트를 자의적으로 변경하지 않는다.
 3. **3개 스킬을 참조하여 구현한다** — `agent-patterns`, `prompt-engineering`, `strands-sdk-guide`
+4. **Stub·Placeholder 금지** — AI 라우트 핸들러는 반드시 실제 `new Agent({...})` 인스턴스를 만들고 `.invoke()` 또는 `.stream()`을 호출한다. 아래 패턴 전부 금지:
+   - `narrative: 'Narrative will be populated by the AI ... agent.'` 같은 하드코딩 placeholder 문자열
+   - `TODO`, `FIXME: implement AI call`, `// AI agent will be wired here` 주석으로만 표기된 빈 핸들러
+   - `service.compute*()`만 호출하고 Agent 호출이 없는 AI 엔드포인트 (spec상 `streaming: false`이더라도 반드시 `agent.invoke()` 경유)
+   - 조건부 분기로 "개발 중에는 static 응답 반환" 류의 코드
+5. **nested agent 에러는 반드시 상위로 전파** — 도구 내부에서 또 다른 Agent를 호출하는 경우(예: `draftEmail`, `invokeDiagnosisSubAgent`), 실패 시 `{ error: { code, message, retriable } }` 형태로 반환하고 상위 Agent의 시스템 프롬프트 계약에 맞게 FE에 `error` 이벤트를 emit한다. `catch {}` 후 template 문자열을 실제 생성물처럼 반환하면 안 된다. 명시적 fallback이 필요하면 `fallback: true` 플래그와 함께 SSE `error_events` 계약으로 전송한다.
+6. **SSE 이벤트명은 ai-contract의 `section_marker_map`을 정수(source of truth)로 삼는다** — 라우트 핸들러의 `emit('<event_type>', ...)`이 `sse_events[].event_type`과 문자열 단위로 일치해야 한다. 섹션 파서가 사용하는 마커도 `section_marker_map`에서 생성한다.
+7. **세션/요약/상태 관리 메서드는 stub 금지** — `summarizeIfOver20Turns`처럼 ai-internals의 `agent_topology.memory`에 명시된 훅은 실제 구현 필수. 빈 바디 또는 미구현 throw 금지.
 
 ### 점진적 작업 규칙
 
@@ -127,9 +135,22 @@ src/
 3. **Write**: tools 파일 (ai-internals.json의 toolDefinitions)
 4. **Write**: rag (있으면) + agent.ts
 5. **Write**: API route handlers (ai-contract.json의 endpoint/event 스키마)
-6. **Verify + Log**: `npm run build` + `npm run lint` 검증 + 에러 수정 + 생성 로그 작성
+6. **Verify + Log**: `npm run build` + `npm run lint` + `node .pipeline/scripts/ai-smoke.mjs` 검증 + 에러 수정 + 생성 로그 작성
 
 **금지**: Read만 하고 코드 Write 없이 멈추는 것. 반드시 최소 1개 파일 그룹은 Write한 뒤 멈춘다.
+
+### 입력 축소 규칙 (AI 전용 품질 가드)
+
+**허용되는 축소**:
+- `api-manifest.json`은 AI 라우트와 교차되는 타입 섹션만 Read
+- `generation-log-backend.json`은 AI 도구가 참조하는 service 목록만 추출
+
+**금지되는 축소 (정보 손실 방지)**:
+- `ai-internals.json`의 `system_prompt*.template` 전문 — Grep 후 전체 Read 폴백 필수. `<output_format>`/`<constraints>` 섹션이 누락되면 섹션 마커가 없는 프롬프트가 생성된다.
+- `ai-internals.json`의 `tools[].input_schema` / `handler_logic` / `fallback_policy` — 전체 Read.
+- `ai-contract.json`의 `sse_events[]` / `section_marker_map` / `error_events[]` — 전체 Read. 구현 중 반복 참조.
+
+**Grep 결과가 예상보다 적을 때**: 해당 섹션을 전체 Read로 폴백하고 `generation-log-ai.json`의 `fallback_reads[]`에 기록.
 
 ### 구현 시 필수 참조 사항
 
@@ -163,15 +184,22 @@ src/
 ## 검증 체크리스트
 
 - [ ] `npm run build` 성공
+- [ ] `node .pipeline/scripts/ai-smoke.mjs` 통과 (stub 금지/이벤트명 일관성/Agent 인스턴스/Bedrock 직접 import 금지)
 - [ ] `@aws-sdk/client-bedrock-runtime` 직접 import가 없는가 (Strands SDK만 사용)
 - [ ] `BedrockModel` 인스턴스로 모델 프로바이더가 설정되었는가
 - [ ] Agent 생성 시 `printer: false`가 설정되었는가
 - [ ] 시스템 프롬프트가 XML 5개 섹션(`<role>`, `<context>`, `<tools>`, `<instructions>`, `<constraints>`)을 따르는가
 - [ ] 도구 정의가 `tool()` + Zod `inputSchema` + `callback` 패턴인가
+- [ ] **AI 엔드포인트 전부에 `new Agent(...)` + `.invoke()` 또는 `.stream()` 호출이 존재하는가** (service 메서드만 호출하는 엔드포인트 0건)
+- [ ] **stub 문자열(`will be populated`, `TODO: wire agent`, `Narrative placeholder`) 0건**
+- [ ] **SSE 핸들러의 emit 이벤트 타입이 `ai-contract.sse_events[].event_type`와 문자열 단위로 일치하는가**
+- [ ] **nested agent 실패 경로가 `error_events[]` 계약대로 FE에 전송되는가** (silent fail/template fallback 금지)
 - [ ] 스트리밍이 `for await...of agent.stream()` async iterator인가
+- [ ] 섹션 파서의 finalFlush에서 미완성 JSON은 `error` 이벤트로 emit하고 부분 반환하지 않는가
+- [ ] 세션/요약 메서드(`summarizeIfOver*Turns` 등)가 실제 구현되어 있는가 (빈 바디 금지)
 - [ ] API 키/시크릿이 환경변수로 관리됨 (하드코딩 없음)
 - [ ] RAG 사용 시 임베딩 모델과 검색 로직이 구현됨
-- [ ] 에러 처리 (모델 호출 실패, 타임아웃 등)
+- [ ] 에러 처리 (모델 호출 실패, 타임아웃, AccessDenied, Throttling)
 
 ## 완료 후
 

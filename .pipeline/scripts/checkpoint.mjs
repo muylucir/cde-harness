@@ -188,6 +188,78 @@ function runCheck(checkStr) {
   }
 }
 
+// ── Budget 자동 파생 ────────────────────────────────────
+
+// code-generator-* 스테이지 이름 (stages.json.loops[].target_stages와 정합)
+const CODEGEN_STAGE_NAMES = [
+  'code-generator-backend',
+  'code-generator-ai',
+  'code-generator-frontend',
+];
+
+/**
+ * 체크포인트 items[]를 파일 라인/버전 토큰을 제거한 정규화 시그니처로 변환한다.
+ * 재생성 시 달라지는 토큰으로 인한 false reset 방지.
+ */
+function errorSignature(items) {
+  if (!Array.isArray(items)) return '';
+  return items
+    .filter((i) => !i.passed)
+    .map((i) =>
+      String(i.reason || i.check || '')
+        .replace(/:\d+/g, '')
+        .replace(/\bv\d+\b/g, 'vN')
+        .slice(0, 120)
+    )
+    .sort()
+    .join('|');
+}
+
+/**
+ * ver.stages[] 배열을 읽어 total_code_regens / identical_error_streak를 파생한다.
+ * - total_code_regens: 각 code-generator-* 스테이지의 재실행 횟수 합산 (첫 실행은 제외).
+ * - identical_error_streak: 현재 checkpoint-failed 엔트리와 직전 checkpoint-failed 엔트리의 에러 시그니처 비교.
+ *   일치하면 +1, 다르면 1로 리셋. completed는 0으로 리셋.
+ */
+function deriveBudgetCounters(ver) {
+  const regens = {};
+  for (const s of ver.stages) {
+    if (CODEGEN_STAGE_NAMES.includes(s.stage)) {
+      regens[s.stage] = (regens[s.stage] || 0) + 1;
+    }
+  }
+  ver.total_code_regens = Object.values(regens).reduce(
+    (sum, count) => sum + Math.max(0, count - 1),
+    0
+  );
+
+  // 가장 최근에 체크포인트가 기록된 엔트리(running 제외)를 찾는다.
+  // 마지막이 completed이면 연속 실패 리셋. checkpoint-failed이면 이전 실패와 시그니처 비교.
+  const latestFinalized = [...ver.stages]
+    .reverse()
+    .find((s) => s.status === 'completed' || s.status === 'checkpoint-failed');
+  if (!latestFinalized || latestFinalized.status === 'completed') {
+    ver.identical_error_streak = 0;
+    return;
+  }
+  const latestSig = errorSignature(latestFinalized.checkpoint?.items || []);
+  if (!latestSig) {
+    ver.identical_error_streak = 0;
+    return;
+  }
+  // 과거 실패들 중 최신부터 역순으로 시그니처 비교
+  const latestIdx = ver.stages.lastIndexOf(latestFinalized);
+  let streak = 1;
+  for (let i = latestIdx - 1; i >= 0; i--) {
+    const s = ver.stages[i];
+    if (s.status !== 'checkpoint-failed') continue;
+    const prevSig = errorSignature(s.checkpoint?.items || []);
+    if (prevSig === latestSig) streak++;
+    else break;
+  }
+  ver.identical_error_streak = streak;
+}
+
 // ── 커맨드 핸들러 ────────────────────────────────────────
 
 function cmdStart(stageName) {
@@ -250,6 +322,10 @@ function cmdCheck(stageName, checkArgs) {
     retries: allPassed ? prevRetries : prevRetries + 1,
     checked_at: now,
   };
+
+  // Budget 자동 파생 (P0-B): ver.stages[]를 스캔해 total_code_regens/identical_error_streak를 계산.
+  // LLM이 수동으로 상태를 조작하지 않도록 checkpoint 기록 시점에 파이프라인이 스스로 증분한다.
+  deriveBudgetCounters(ver);
 
   writeState(state);
 
@@ -379,7 +455,7 @@ function cmdBudget(stageName) {
   const totalRegens = ver.total_code_regens ?? 0;
   const streak = ver.identical_error_streak ?? 0;
 
-  console.log(`Budget check for stage: ${stageName}`);
+  console.log(`Budget check for stage: ${stageName} (auto-derived from ver.stages)`);
   console.log(`  total_code_regens:       ${totalRegens} / ${totalMax}`);
   console.log(`  identical_error_streak:  ${streak} / ${streakMax}`);
 

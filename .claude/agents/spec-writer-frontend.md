@@ -34,7 +34,7 @@ allowedTools:
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — `metadata.primary_persona` 참조
 - `.pipeline/artifacts/v{N}/03-specs/backend-spec.json` — BE 타입/API 참조 (보조)
 - `.pipeline/artifacts/v{N}/03-specs/api-contract.json` — **BE/FE 공통 계약. 훅 스펙의 `endpoint_id`는 이 파일의 `endpoints[].id`를 참조한다.**
-- `.pipeline/artifacts/v{N}/03-specs/ai-spec.json` — AI API/타입 참조 (있을 때)
+- `.pipeline/artifacts/v{N}/03-specs/ai-contract.json` — AI 외부 계약 (있을 때, FE는 이 파일만 참조. endpoints/sse_events를 훅 타입에 반영)
 - `.pipeline/artifacts/v{N}/00-domain/domain-context.json` (있으면)
 
 피드백이 있으면:
@@ -81,7 +81,7 @@ allowedTools:
 ## 처리 프로세스
 
 1. 입력 파일에서 프론트엔드 관련 FR/컴포넌트 파악
-2. `ai-spec.json` → `has_ai: true/false`, `domain-context.json` → 도메인 보강
+2. `has_ai` 판정: `requirements.json`의 `functional_requirements[].title` 또는 `description`에 AI 키워드(`chatbot`, `chat`, `ai`, `agent`, `rag`, `llm`, `bedrock`, `생성형`, `대화형`, `요약`, `추천`, `자동 분류`, `콘텐츠 생성`) 포함 여부로 결정. `domain-context.json` → 도메인 보강. 병행 확인: `has_ai:true`인데 `ai-contract.json`이 없으면 에러(spec-writer-ai 누락). 있으면 `endpoints`/`sse_events`를 FE 훅 타입에 반영.
 3. 담당 범위 6개(hooks → contexts → layout → shared → feature → page) 순서로 스펙 작성
 4. 이중 출력: json → md → summary → manifest 순서
 
@@ -116,7 +116,7 @@ allowedTools:
 
 ## 매니페스트 (_manifest.json)
 
-backend-spec.json + ai-spec.json(있으면) + frontend-spec.json을 읽고 집계한다.
+backend-spec.json + ai-contract.json(있으면) + frontend-spec.json을 읽고 집계한다. `has_ai`는 requirements.json의 FR 키워드 스캔 결과를 정수로 사용한다(파일 존재 여부가 아님).
 
 구조: `metadata` (created, total/backend/ai/frontend_specs, has_ai), `requirements_coverage` (FR별 backend/ai/frontend 컴포넌트), `uncovered_requirements[]`, `generation_order[]` (phase, generator, file — BE phases → AI phases → FE phases 순서), `output_files` (machine_readable[], human_readable[]).
 
@@ -151,7 +151,8 @@ AI 기능이 없으면 `ai_specs: 0`, `has_ai: false`로 설정하고, generatio
 | `architecture.json` 미존재 | "아키텍처가 없습니다. architect를 먼저 실행하세요." 에러 출력 + 중단 |
 | `backend-spec.json` 미존재 | "백엔드 스펙이 없습니다. spec-writer-backend를 먼저 실행하세요." 에러 출력 + 중단 |
 | `api-contract.json` 미존재 | "API 계약이 없습니다. spec-writer-backend가 api-contract.json을 생성했는지 확인하세요." 에러 출력 + 중단 |
-| `ai-spec.json` 미존재 | 정상 처리: `has_ai: false`로 설정, AI 관련 phase를 generation_order에서 제외 |
+| FR에 AI 키워드 없음 | 정상 처리: `has_ai: false`로 설정, AI 관련 phase를 generation_order에서 제외 |
+| FR에 AI 키워드 있음인데 `ai-contract.json` 미존재 | 에러: "spec-writer-ai가 실행되지 않았습니다. 파이프라인 순서를 확인하세요." 출력 + 중단 |
 | Skill 호출 실패 | 경고 출력 + 스킬 없이 프롬프트 본문의 기본 패턴으로 계속 |
 | state.json 파싱 실패 | 경고 출력 + 버전을 v1로 기본 설정 |
 

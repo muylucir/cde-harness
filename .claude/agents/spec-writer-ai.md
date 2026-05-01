@@ -46,7 +46,7 @@ allowedTools:
 2. 자율성 ≤5: AI-Assisted Workflow → Sequential Pipeline + LLM 호출 조합
 3. 자율성 ≥6: Agentic AI → 3계층 택소노미로 에이전트 유형 선택
 
-**자동화 수준 판단 결과를 ai-spec.json의 `architecture.automation_level`에 기록한다.**
+**자동화 수준 판단 결과를 ai-internals.json의 `architecture.automation_level`에 기록한다.**
 
 - 3계층 택소노미: Agent Pattern × LLM Workflow × Agentic Workflow
 - 에이전트 유형 선택 (ReAct, Plan-and-Execute, Multi-Agent 등)

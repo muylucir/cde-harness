@@ -110,7 +110,7 @@ src/
 ### 절대 규칙
 
 1. **`@aws-sdk/client-bedrock-runtime` 직접 호출 금지** — 모든 AI 기능은 `@strands-agents/sdk`의 `Agent`를 통해 구현한다.
-2. **ai-spec.json의 결정을 따른다** — 패턴, 도구, API 라우트를 자의적으로 변경하지 않는다.
+2. **ai-contract.json + ai-internals.json의 결정을 따른다** — 패턴, 도구, API 라우트를 자의적으로 변경하지 않는다. (ai-contract는 외부 계약, ai-internals는 내부 구현)
 3. **3개 스킬을 참조하여 구현한다** — `agent-patterns`, `prompt-engineering`, `strands-sdk-guide`
 4. **Stub·Placeholder 금지** — AI 라우트 핸들러는 반드시 실제 `new Agent({...})` 인스턴스를 만들고 `.invoke()` 또는 `.stream()`을 호출한다. 아래 패턴 전부 금지:
    - `narrative: 'Narrative will be populated by the AI ... agent.'` 같은 하드코딩 placeholder 문자열
@@ -173,8 +173,8 @@ src/
 
 | 시나리오 | 대응 |
 |----------|------|
-| `ai-spec.json` 미존재 | "AI 스펙이 없습니다. spec-writer-ai를 먼저 실행하세요." 에러 출력 + 중단 |
-| `ai-spec.json` 필수 필드 누락 (`architecture`, `system_prompt`, `api_routes`) | 누락 필드를 상세 보고 + 중단 |
+| `ai-contract.json` 또는 `ai-internals.json` 미존재 | "AI 스펙이 없습니다. spec-writer-ai를 먼저 실행하세요." 에러 출력 + 중단 |
+| `ai-contract.json` 필수 필드(`endpoints`, `sse_events`) 또는 `ai-internals.json` 필수 필드(`system_prompt`, `tools`, `architecture`) 누락 | 누락 필드를 상세 보고 + 중단 |
 | `npm install` 실패 (네트워크/권한) | 에러 내용 보고 + 중단 |
 | `npm run build` 실패 | 에러 분석 + 자동 수정 시도 + 최대 3회 재시도. 3회 초과 시 에러 보고 + 중단 |
 | Skill 호출 실패 | 경고 출력 + 스킬 없이 프롬프트 본문의 코드 패턴으로 계속 |

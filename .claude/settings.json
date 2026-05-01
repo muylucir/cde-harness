@@ -24,5 +24,19 @@
       "Bash(mkdir:*)",
       "Bash(cp:*)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // \"\"' | { read -r f; case \"$f\" in *.pipeline/state.json) printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"state.json은 checkpoint.mjs 서브커맨드로만 수정하세요. CLAUDE.md 정책: node .pipeline/scripts/checkpoint.mjs check <stage> <args>\"}}' ;; *) exit 0 ;; esac; }",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
   }
 }

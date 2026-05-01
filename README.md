@@ -2,6 +2,8 @@
 
 AWS Solutions Architect가 고객 요구사항으로부터 **Next.js 16 + Cloudscape Design System** 프로토타입을 자동 생성하기 위한 Claude Code 하네스입니다.
 
+> **처음 사용하시나요?** [`docs/ONBOARDING.md`](docs/ONBOARDING.md)를 먼저 읽으세요 — 90분 안에 첫 파이프라인을 완료하는 가이드와 트러블슈팅을 제공합니다.
+
 ## 개요
 
 이 하네스는 19개 서브에이전트 파이프라인을 통해 고객의 비정형 요구사항을 빌드 가능한 프로토타입 코드로 변환합니다.

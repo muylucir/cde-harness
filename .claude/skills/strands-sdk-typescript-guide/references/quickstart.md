@@ -8,7 +8,11 @@
 - [도구 추가](#도구-추가)
 - [스트리밍 응답](#스트리밍-응답)
 - [모델 선택](#모델-선택)
+- [AgentResult와 메트릭 접근](#agentresult와-메트릭-접근)
 - [대화 유지](#대화-유지)
+- [Structured Output 맛보기](#structured-output-맛보기)
+- [콘솔 출력 제어](#콘솔-출력-제어)
+- [트러블슈팅](#트러블슈팅)
 
 ## 설치
 
@@ -17,22 +21,29 @@ mkdir my-agent && cd my-agent
 npm init -y
 npm pkg set type=module
 
-# SDK 설치
+# 코어 SDK
 npm install @strands-agents/sdk
 
 # 개발 의존성
-npm install --save-dev @types/node typescript
+npm install --save-dev @types/node typescript tsx
 ```
+
+필수 요건:
+- **Node.js 20+** (또는 Bun, Deno 지원)
+- Zod v4 (SDK의 peer dependency)
 
 Vended Tools는 SDK에 포함되어 있어 별도 설치 불필요:
 
 ```typescript
 import { bash } from '@strands-agents/sdk/vended-tools/bash'
+import { fileEditor } from '@strands-agents/sdk/vended-tools/file-editor'
+import { httpRequest } from '@strands-agents/sdk/vended-tools/http-request'
+import { notebook } from '@strands-agents/sdk/vended-tools/notebook'
 ```
 
 ## AWS 자격증명 설정
 
-Amazon Bedrock 사용 시 AWS 자격증명이 필요하다.
+기본 모델 프로바이더는 Amazon Bedrock이므로 AWS 자격증명이 필요하다.
 
 ### 방법 1: AWS CLI
 
@@ -49,7 +60,7 @@ export AWS_SESSION_TOKEN=your_session_token  # 임시 자격증명 사용 시
 export AWS_REGION="us-west-2"
 ```
 
-### 방법 3: Bedrock API 키
+### 방법 3: Bedrock API 키 (Bearer Token)
 
 ```bash
 export AWS_BEARER_TOKEN_BEDROCK=your_bearer_token
@@ -57,11 +68,9 @@ export AWS_BEARER_TOKEN_BEDROCK=your_bearer_token
 
 ### 방법 4: IAM 역할
 
-EC2, ECS, Lambda 등 AWS 서비스에서 실행 시 IAM 역할 사용.
+EC2, ECS, Lambda, AgentCore Runtime 등 AWS 서비스에서는 IAM 역할을 권장.
 
-### IAM 권한
-
-필요한 최소 권한:
+### IAM 권한 최소 셋
 
 ```json
 {
@@ -79,6 +88,8 @@ EC2, ECS, Lambda 등 AWS 서비스에서 실행 시 IAM 역할 사용.
 }
 ```
 
+**모델 활성화 필수**: AWS 콘솔의 Bedrock → Model access에서 사용할 Claude/Nova 등의 모델을 먼저 활성화해야 한다.
+
 ## 프로젝트 구조
 
 ```plaintext
@@ -89,7 +100,20 @@ my-agent/
 └── README.md
 ```
 
-`tsconfig.json`은 선택사항 — `npx tsx`로 직접 실행 가능.
+`tsconfig.json`은 선택사항 — `npx tsx src/agent.ts`로 직접 실행 가능. 컴파일이 필요하면:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  }
+}
+```
 
 ## 첫 에이전트 생성
 
@@ -98,13 +122,13 @@ my-agent/
 ```typescript
 import { Agent } from '@strands-agents/sdk'
 
-// 기본 설정 (Bedrock Claude Sonnet 4.5 사용)
+// 기본 설정 (Bedrock Claude Sonnet 최신)
 const agent = new Agent()
 const result = await agent.invoke('Hello, how are you?')
 console.log(result.lastMessage)
 ```
 
-### 시스템 프롬프트 설정
+### 시스템 프롬프트
 
 ```typescript
 const agent = new Agent({
@@ -120,7 +144,7 @@ const result = await agent.invoke('How do I read a file in Node.js?')
 npx tsx src/agent.ts
 ```
 
-Node.js, Bun, Deno 등 모든 TypeScript 런타임에서 실행 가능.
+Node.js 20+, Bun, Deno 모두 지원.
 
 ## 도구 추가
 
@@ -141,12 +165,13 @@ const getWeather = tool({
 
 const calculate = tool({
   name: 'calculate',
-  description: 'Evaluate a mathematical expression',
+  description: 'Evaluate a simple mathematical expression',
   inputSchema: z.object({
     expression: z.string().describe('Mathematical expression'),
   }),
   callback: (input) => {
-    return `Result: ${eval(input.expression)}`
+    // 데모용. 실제 코드는 안전한 파서(mathjs) 사용
+    return `Result: ${Function('"use strict"; return (' + input.expression + ')')()}`
   },
 })
 
@@ -154,11 +179,11 @@ const agent = new Agent({ tools: [getWeather, calculate] })
 const result = await agent.invoke("What's the weather in Seoul and what is 15 * 7?")
 ```
 
-`tool()` 함수는 Zod 스키마 외에 plain JSON Schema도 지원한다.
+`tool()`은 Zod 스키마 외에 plain JSON Schema도 지원한다. 상세는 `tools.md`.
 
 ## 스트리밍 응답
 
-TypeScript에서는 `agent.stream()` async iterator를 사용한다 (callback handler 미지원).
+TypeScript에서는 `agent.stream()` async iterator만 지원한다 (callback handler 없음).
 
 ### 기본 스트리밍
 
@@ -187,6 +212,12 @@ for await (const event of agent.stream('Tell me a story')) {
         console.log(`\n[Tool: ${event.start.name}]`)
       }
       break
+    case 'afterToolCallEvent':
+      console.log(`\n[Tool ${event.toolUse.name} done]`)
+      break
+    case 'agentResultEvent':
+      console.log('\n[Final result]')
+      break
     case 'afterInvocationEvent':
       console.log('\nDone!')
       break
@@ -194,21 +225,28 @@ for await (const event of agent.stream('Tell me a story')) {
 }
 ```
 
+`AgentStreamEvent` 유니온에 포함된 주요 이벤트:
+`BeforeInvocationEvent`, `BeforeModelCallEvent`, `AfterModelCallEvent`,
+`ModelStreamUpdateEvent`(및 하위 `modelContentBlockStartEvent`/`modelContentBlockDeltaEvent`/`modelContentBlockStopEvent`),
+`ContentBlockEvent`, `ModelMessageEvent`, `BeforeToolsEvent`, `BeforeToolCallEvent`,
+`ToolStreamUpdateEvent`, `ToolResultEvent`, `AfterToolCallEvent`, `AfterToolsEvent`,
+`MessageAddedEvent`, `AgentResultEvent`, `AfterInvocationEvent`.
+
 ## 모델 선택
 
-### Bedrock 기본 사용
+### Bedrock 기본
 
 ```typescript
 import { Agent } from '@strands-agents/sdk'
 
-// 기본값 (Claude Sonnet 4.5)
+// 기본값 (Claude Sonnet 최신, SDK 버전에 따라 자동 선택)
 const agent = new Agent()
 
 // 모델 ID 직접 지정
-const agent2 = new Agent({ model: 'anthropic.claude-sonnet-4-20250514-v1:0' })
+const agent2 = new Agent({ model: 'us.anthropic.claude-sonnet-4-20250514-v1:0' })
 ```
 
-### BedrockModel 인스턴스
+### BedrockModel 인스턴스 (파라미터 튜닝)
 
 ```typescript
 import { Agent, BedrockModel } from '@strands-agents/sdk'
@@ -217,19 +255,31 @@ const bedrock = new BedrockModel({
   modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
   region: 'us-west-2',
   temperature: 0.3,
+  topP: 0.8,
+  maxTokens: 2048,
 })
 
 const agent = new Agent({ model: bedrock })
 ```
 
-### AgentResult
+다른 프로바이더 (OpenAI, Google, Vercel, Custom)는 `model-providers.md` 참조.
+
+## AgentResult와 메트릭 접근
 
 모든 `invoke()` 호출은 `AgentResult`를 반환한다:
 
 ```typescript
 const result = await agent.invoke('What is the square root of 144?')
-console.log(result.lastMessage)  // 마지막 어시스턴트 메시지
-console.log(agent.messages)      // 전체 메시지 히스토리
+
+console.log(result.lastMessage)   // 마지막 어시스턴트 메시지
+console.log(agent.messages)        // 전체 메시지 히스토리
+
+// 메트릭
+if (result.metrics) {
+  const usage = result.metrics.accumulatedUsage
+  console.log(`Tokens — input: ${usage.inputTokens}, output: ${usage.outputTokens}, total: ${usage.totalTokens}`)
+  console.log(`Duration: ${result.metrics.totalDuration}ms`)
+}
 ```
 
 ## 대화 유지
@@ -244,43 +294,43 @@ const result = await agent.invoke('What is my name?')
 // "Your name is Alice"
 ```
 
-### 대화 초기화
+새 인스턴스를 만들면 히스토리가 초기화된다. 영속화가 필요하면 Session Manager를 사용(`state-and-sessions.md`).
+
+## Structured Output 맛보기
+
+Zod 스키마를 주면 `result.structuredOutput`에서 타입 안전한 값을 꺼낼 수 있다.
 
 ```typescript
-// 새 에이전트 인스턴스 생성
-const freshAgent = new Agent()
-```
-
-## 콘솔 출력 제어
-
-에이전트는 기본적으로 실시간 콘솔 출력을 한다. 비활성화하려면:
-
-```typescript
-const agent = new Agent({ printer: false })
-```
-
-## Structured Output (간편 사용)
-
-Zod 스키마로 타입 안전한 응답을 추출한다. 상세 내용은 [state-and-sessions.md](state-and-sessions.md#structured-output) 참조.
-
-```typescript
+import { Agent } from '@strands-agents/sdk'
 import z from 'zod'
 
 const PersonSchema = z.object({
   name: z.string().describe('Name of the person'),
   age: z.number().describe('Age of the person'),
 })
+type Person = z.infer<typeof PersonSchema>
 
 const agent = new Agent({ structuredOutputSchema: PersonSchema })
 const result = await agent.invoke('John Smith is 30 years old')
-console.log(result.structuredOutput) // { name: 'John Smith', age: 30 }
+const person = result.structuredOutput as Person
+console.log(person) // { name: 'John Smith', age: 30 }
+```
+
+상세한 사용(스트리밍, `refine`, 에러 처리)은 `state-and-sessions.md#structured-output`.
+
+## 콘솔 출력 제어
+
+에이전트는 기본적으로 실시간 콘솔 출력(printer)을 한다. 서버 환경(Next.js, Express, AgentCore)에서는 반드시 비활성화:
+
+```typescript
+const agent = new Agent({ printer: false })
 ```
 
 ## 트러블슈팅
 
 ### "on-demand throughput isn't supported" 에러
 
-Cross-Region Inference가 필요한 모델의 경우 리전 접두사 추가:
+Cross-Region Inference가 필요한 모델은 리전 접두사를 붙여야 한다:
 
 ```typescript
 // 잘못됨
@@ -289,3 +339,21 @@ const agent = new Agent({ model: 'anthropic.claude-sonnet-4-20250514-v1:0' })
 // 올바름
 const agent = new Agent({ model: 'us.anthropic.claude-sonnet-4-20250514-v1:0' })
 ```
+
+사용 가능한 프로파일은 `us.` / `eu.` / `apac.` / `global.` 등. AWS 콘솔의 Bedrock → Cross-region inference에서 확인.
+
+### `AccessDeniedException` on model invocation
+
+AWS 콘솔의 Bedrock → Model access에서 해당 모델을 먼저 활성화해야 한다.
+
+### Zod 버전 충돌
+
+SDK는 Zod v4를 peer dependency로 가진다. 프로젝트의 Zod 버전을 확인한다:
+
+```bash
+npm ls zod
+```
+
+### `printer: false`가 무시되는 것처럼 보임
+
+stdout 외에 SDK 내부 로깅이 섞이는 경우, `configureLogging()`으로 레벨을 조정한다 (`observability.md` 참조).

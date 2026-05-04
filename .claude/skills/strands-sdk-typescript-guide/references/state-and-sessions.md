@@ -1,14 +1,17 @@
 # State, Session, Structured Output 가이드 (TypeScript)
 
 ## 목차
-- [Agent State](#agent-state)
+- [Agent State (appState)](#agent-state-appstate)
+- [Invocation State](#invocation-state)
 - [Session Management](#session-management)
+- [Immutable Snapshots (TypeScript 전용)](#immutable-snapshots-typescript-전용)
+- [Multi-Agent Session](#multi-agent-session)
+- [커스텀 SnapshotStorage](#커스텀-snapshotstorage)
 - [Structured Output](#structured-output)
 
-## Agent State
+## Agent State (appState)
 
-Agent State(appState)는 대화 컨텍스트 외부의 key-value 저장소이다.
-대화 히스토리와 달리 모델 추론 시 전달되지 않지만, 도구와 애플리케이션 로직에서 접근/수정 가능하다.
+`appState`는 대화 컨텍스트 외부의 JSON key-value 저장소. 모델 추론 시 전달되지 않지만 도구와 애플리케이션 로직에서 접근/수정 가능하다.
 
 ### 기본 사용
 
@@ -20,29 +23,43 @@ const agent = new Agent({
   appState: { user_preferences: { theme: 'dark' }, session_count: 0 },
 })
 
-// 상태 읽기
-const theme = agent.appState.get('user_preferences')
-console.log(theme) // { theme: 'dark' }
+// 조회
+const prefs = agent.appState.get('user_preferences')
+console.log(prefs) // { theme: 'dark' }
 
-// 상태 쓰기
+// 갱신
 agent.appState.set('last_action', 'login')
 agent.appState.set('session_count', 1)
 
-// 상태 삭제
+// 삭제
 agent.appState.delete('last_action')
 ```
 
-상태 값은 JSON 직렬화 가능해야 한다. 함수 등 직렬화 불가능한 값은 에러가 발생한다.
+### JSON 직렬화 검증
 
-### 도구에서 State 사용 (ToolContext)
+값은 JSON 직렬화 가능해야 한다. 함수 등은 예외를 던진다.
 
-도구 콜백의 두 번째 파라미터로 `ToolContext`를 받아 에이전트 상태에 접근한다:
+```typescript
+const agent = new Agent()
+
+agent.appState.set('string_value', 'hello')
+agent.appState.set('number_value', 42)
+agent.appState.set('dict_value', { nested: 'data' })
+
+try {
+  agent.appState.set('function', () => 'test')
+} catch (error) {
+  console.log(`Error: ${error}`)
+}
+```
+
+### 도구에서 appState 사용 (ToolContext)
 
 ```typescript
 import { Agent, tool, ToolContext } from '@strands-agents/sdk'
 import z from 'zod'
 
-const trackAction = tool({
+const trackUserAction = tool({
   name: 'track_user_action',
   description: 'Track user actions in agent state',
   inputSchema: z.object({
@@ -51,36 +68,45 @@ const trackAction = tool({
   callback: (input, context?: ToolContext) => {
     if (!context) throw new Error('Context is required')
 
-    const count = (context.agent.appState.get('action_count') as number) || 0
-    context.agent.appState.set('action_count', count + 1)
+    const actionCount = (context.agent.appState.get('action_count') as number) || 0
+    context.agent.appState.set('action_count', actionCount + 1)
     context.agent.appState.set('last_action', input.action)
-
-    return `Action '${input.action}' recorded. Total: ${count + 1}`
+    return `Action '${input.action}' recorded. Total: ${actionCount + 1}`
   },
 })
 
-const agent = new Agent({ tools: [trackAction] })
+const agent = new Agent({ tools: [trackUserAction] })
 await agent.invoke('Track that I logged in')
 console.log(agent.appState.get('action_count')) // 1
 ```
 
-### Request State
+## Invocation State
 
-각 에이전트 호출은 이벤트 루프 사이클 동안 지속되는 request state를 유지한다.
-Agent State와 달리 호출이 끝나면 사라지며, 에이전트 컨텍스트에 포함되지 않는다.
+각 `invoke()`/`stream()` 호출에만 유효한 요청 스코프 상태. `ToolContext.invocationState`로 접근.
+
+```typescript
+const result = await agent.invoke('Hi there!', {
+  invocationState: { requestId: 'r-42', userId: 'u-1' },
+})
+
+console.log(result.invocationState) // { requestId: 'r-42', userId: 'u-1' }
+```
+
+도구 내부에서 HTTP 요청별 auth 토큰, tenant ID 등을 전달할 때 사용. `appState`와 달리 모델 컨텍스트에 포함되지 않고, 호출이 끝나면 소멸.
 
 ## Session Management
 
-Session Management는 에이전트 상태와 대화 히스토리를 여러 상호작용에 걸쳐 영속화한다.
-애플리케이션 재시작이나 분산 환경에서도 맥락과 연속성을 유지할 수 있다.
+Session Management는 에이전트 상태와 대화 히스토리를 여러 invocation/프로세스에 걸쳐 영속화한다.
 
 세션에 포함되는 정보:
-- 대화 히스토리 (messages)
-- Agent State (appState)
+- 대화 히스토리 (`messages`)
+- Agent State (`appState`)
 - 시스템 프롬프트
 - 도구 설정
 
-### 기본 사용 (FileStorage)
+`SessionManager`는 Plugin이다. `sessionManager` 필드는 `plugins` 배열에 전달하는 단축 표기.
+
+### FileStorage (로컬 파일)
 
 ```typescript
 import { Agent, SessionManager, FileStorage } from '@strands-agents/sdk'
@@ -96,14 +122,29 @@ const agent = new Agent({ sessionManager: session })
 await agent.invoke('Hello!')
 ```
 
-> `SessionManager`는 Plugin이다. `sessionManager` 필드는 `plugins` 배열에 전달하는 단축 표기.
-
 ### S3Storage (클라우드 영속화)
-
-분산 환경에서는 S3에 세션을 저장한다:
 
 ```typescript
 import { Agent, SessionManager, S3Storage } from '@strands-agents/sdk'
+
+const session = new SessionManager({
+  sessionId: 'user-456',
+  storage: {
+    snapshot: new S3Storage({
+      bucket: 'my-agent-sessions',
+      prefix: 'production',
+      region: 'us-west-2',
+    }),
+  },
+})
+
+const agent = new Agent({ sessionManager: session })
+await agent.invoke('Tell me about AWS S3')
+```
+
+`S3Client` 인스턴스를 직접 주입할 수도 있다:
+
+```typescript
 import { S3Client } from '@aws-sdk/client-s3'
 
 const session = new SessionManager({
@@ -113,16 +154,12 @@ const session = new SessionManager({
       bucket: 'my-agent-sessions',
       prefix: 'production',
       s3Client: new S3Client({ region: 'us-west-2' }),
-      // 또는: region: 'us-west-2' (s3Client 대신 사용 가능)
     }),
   },
 })
-
-const agent = new Agent({ sessionManager: session })
-await agent.invoke('Tell me about AWS S3')
 ```
 
-필요한 S3 IAM 권한: `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`, `s3:ListBucket`
+필요한 IAM 권한: `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`, `s3:ListBucket`.
 
 ### 스토리지 구조
 
@@ -130,21 +167,30 @@ await agent.invoke('Tell me about AWS S3')
 <baseDir>/
 └── <sessionId>/
     └── scopes/
-        └── agent/
-            └── <agentId>/
+        ├── agent/
+        │   └── <agentId>/
+        │       └── snapshots/
+        │           ├── snapshot_latest.json          # 최신 mutable
+        │           └── immutable_history/
+        │               ├── snapshot_<uuid7>.json     # 불변 체크포인트
+        │               └── snapshot_<uuid7>.json
+        └── multiAgent/
+            └── <orchestratorId>/
                 └── snapshots/
-                    ├── snapshot_latest.json        # 최신 mutable 스냅샷
-                    └── immutable_history/
-                        ├── snapshot_<uuid7>.json   # 불변 체크포인트
-                        └── snapshot_<uuid7>.json
+                    └── snapshot_latest.json
 ```
 
-### Immutable Snapshots (TypeScript 전용)
+### 세션 삭제
 
-`snapshot_latest` 외에 **불변 스냅샷**(append-only 체크포인트)을 지원한다.
-UUID v7로 식별되며, time-travel 복원이 가능하다.
+```typescript
+await session.deleteSession() // 해당 sessionId의 모든 스냅샷/매니페스트 제거
+```
 
-#### 스냅샷 생성 트리거
+## Immutable Snapshots (TypeScript 전용)
+
+Python에 없는 TS 전용 기능. `snapshot_latest.json` 외에 **append-only 불변 체크포인트**를 UUID v7로 기록한다. Time-travel 복원 가능.
+
+### 스냅샷 트리거
 
 ```typescript
 const session = new SessionManager({
@@ -155,13 +201,17 @@ const session = new SessionManager({
 })
 
 const agent = new Agent({ sessionManager: session })
-await agent.invoke('First message')  // 2 messages — 스냅샷 없음
-await agent.invoke('Second message') // 4 messages — 불변 스냅샷 생성
+await agent.invoke('First message')   // 2 messages — no snapshot
+await agent.invoke('Second message')  // 4 messages — snapshot created
 ```
 
-#### 스냅샷 목록 조회 및 복원
+트리거 시그니처: `(params: SnapshotTriggerParams) => boolean`. `params.agentData`, `params.scope`, `params.scopeId` 활용 가능.
+
+### 스냅샷 목록 조회 및 복원
 
 ```typescript
+import { Agent, SessionManager, FileStorage } from '@strands-agents/sdk'
+
 const storage = new FileStorage('./sessions')
 const location = {
   sessionId: 'my-session',
@@ -169,7 +219,7 @@ const location = {
   scopeId: 'default',
 }
 
-// 모든 불변 스냅샷 ID 조회 (시간순)
+// 모든 불변 스냅샷 ID 조회 (시간 정렬, UUID v7)
 const snapshotIds = await storage.listSnapshotIds({ location })
 
 // 페이지네이션
@@ -189,17 +239,89 @@ await agent.initialize()
 await session.restoreSnapshot({ target: agent, snapshotId: snapshotIds[0]! })
 ```
 
-### 세션 삭제
+## Multi-Agent Session
+
+Graph/Swarm도 세션을 공유할 수 있다. 저장 트리거를 노드 단위 또는 오케스트레이터 단위로 선택 가능.
 
 ```typescript
-// 세션의 모든 스냅샷과 매니페스트 제거
-await session.deleteSession()
+import { Agent, Graph, SessionManager, FileStorage } from '@strands-agents/sdk'
+
+const session = new SessionManager({
+  sessionId: 'graph-session',
+  storage: { snapshot: new FileStorage('./sessions') },
+  multiAgentSaveLatestOn: 'node', // 'node' (기본) | 'invocation'
+})
+
+const researcher = new Agent({ id: 'researcher' })
+const writer = new Agent({ id: 'writer' })
+
+const graph = new Graph({
+  nodes: [researcher, writer],
+  edges: [['researcher', 'writer']],
+  sessionManager: session,
+})
+
+await graph.invoke('Research and write about AI')
+```
+
+## 커스텀 SnapshotStorage
+
+`SnapshotStorage` 인터페이스를 구현하여 DynamoDB, Redis, Valkey 등에 스냅샷을 저장할 수 있다.
+
+```typescript
+import type {
+  SnapshotStorage,
+  SnapshotLocation,
+  Snapshot,
+} from '@strands-agents/sdk'
+
+class MyStorage implements SnapshotStorage {
+  async saveSnapshot({
+    location,
+    snapshotId,
+    snapshot,
+  }: {
+    location: SnapshotLocation
+    snapshotId: string
+    snapshot: Snapshot
+  }): Promise<void> {
+    // location + snapshotId 조합으로 저장
+  }
+
+  async loadSnapshot({
+    location,
+    snapshotId,
+  }: {
+    location: SnapshotLocation
+    snapshotId?: string
+  }): Promise<Snapshot | null> {
+    return null
+  }
+
+  async listSnapshotIds({
+    location,
+  }: {
+    location: SnapshotLocation
+  }): Promise<string[]> {
+    return []
+  }
+
+  async deleteSession({ sessionId }: { sessionId: string }): Promise<void> {
+    // 전체 세션 데이터 삭제
+  }
+}
+
+const agent = new Agent({
+  sessionManager: new SessionManager({
+    sessionId: 'user-789',
+    storage: { snapshot: new MyStorage() },
+  }),
+})
 ```
 
 ## Structured Output
 
-Structured Output은 Zod 스키마를 사용하여 LLM 응답을 타입 안전하게 추출한다.
-raw 텍스트를 파싱하는 대신, 원하는 구조를 스키마로 정의하면 검증된 응답을 받을 수 있다.
+Zod 스키마를 사용하여 LLM 응답을 타입 안전하게 추출한다.
 
 ### 기본 사용
 
@@ -207,7 +329,6 @@ raw 텍스트를 파싱하는 대신, 원하는 구조를 스키마로 정의하
 import { Agent } from '@strands-agents/sdk'
 import z from 'zod'
 
-// 1) Zod 스키마 정의
 const PersonSchema = z.object({
   name: z.string().describe('Name of the person'),
   age: z.number().describe('Age of the person'),
@@ -216,24 +337,20 @@ const PersonSchema = z.object({
 
 type Person = z.infer<typeof PersonSchema>
 
-// 2) 에이전트에 스키마 전달
-const agent = new Agent({
-  structuredOutputSchema: PersonSchema,
-})
+const agent = new Agent({ structuredOutputSchema: PersonSchema })
 
 const result = await agent.invoke('John Smith is a 30 year-old software engineer')
-
-// 3) structuredOutput에서 검증된 결과 접근
 const person = result.structuredOutput as Person
+
 console.log(`Name: ${person.name}`)       // "John Smith"
-console.log(`Age: ${person.age}`)         // 30
-console.log(`Job: ${person.occupation}`)  // "software engineer"
+console.log(`Age: ${person.age}`)          // 30
+console.log(`Job: ${person.occupation}`)   // "software engineer"
 ```
 
 ### 에러 처리
 
 ```typescript
-import { StructuredOutputError } from '@strands-agents/sdk'
+import { Agent, StructuredOutputError } from '@strands-agents/sdk'
 
 try {
   const result = await agent.invoke('some prompt')
@@ -244,9 +361,7 @@ try {
 }
 ```
 
-### Zod 검증을 활용한 자동 재시도
-
-Zod의 `refine()`으로 커스텀 검증을 추가하면, 검증 실패 시 자동으로 재시도한다:
+### `refine`로 검증 + 자동 재시도
 
 ```typescript
 const NameSchema = z.object({
@@ -257,11 +372,12 @@ const NameSchema = z.object({
 
 const agent = new Agent({ structuredOutputSchema: NameSchema })
 const result = await agent.invoke("What is Aaron's name?")
+// LLM이 검증 실패 메시지를 받고 재시도한다
 ```
 
 ### 스트리밍 + Structured Output
 
-스트리밍 중에도 structured output을 사용할 수 있다. 최종 결과에서 접근:
+스트리밍 중에도 최종 `agentResultEvent`에서 `structuredOutput`을 받을 수 있다.
 
 ```typescript
 const WeatherSchema = z.object({
@@ -272,13 +388,12 @@ const WeatherSchema = z.object({
   windSpeed: z.number(),
   forecastDate: z.string(),
 })
-
 type WeatherForecast = z.infer<typeof WeatherSchema>
 
 const agent = new Agent({ structuredOutputSchema: WeatherSchema })
 
 for await (const event of agent.stream(
-  'Generate a weather forecast for Seattle: 68°F, partly cloudy, 55% humidity, 8 mph winds'
+  'Generate a weather forecast for Seattle: 68°F, partly cloudy, 55% humidity, 8 mph winds',
 )) {
   if (event.type === 'agentResultEvent') {
     const forecast = event.result.structuredOutput as WeatherForecast
@@ -289,9 +404,12 @@ for await (const event of agent.stream(
 
 ### 도구와 결합
 
-도구 실행 결과를 구조화된 형태로 포맷팅:
+도구를 먼저 실행하고 최종 응답만 구조화된 형태로:
 
 ```typescript
+import { Agent, tool } from '@strands-agents/sdk'
+import z from 'zod'
+
 const calculatorTool = tool({
   name: 'calculator',
   description: 'Perform basic arithmetic operations',
@@ -320,7 +438,9 @@ const agent = new Agent({
   tools: [calculatorTool],
   structuredOutputSchema: MathResultSchema,
 })
+
 const result = await agent.invoke('What is 42 + 8')
+console.log(result.structuredOutput)
 ```
 
 ### 대화 히스토리에서 구조화 추출
@@ -335,20 +455,18 @@ const CityInfoSchema = z.object({
 
 const agent = new Agent({ structuredOutputSchema: CityInfoSchema })
 
-// 대화 컨텍스트 구축
 await agent.invoke('What do you know about Paris, France?')
 await agent.invoke('Tell me about the weather there in spring.')
 
-// 대화에서 구조화 정보 추출
+// 대화 기반 구조화 추출
 const result = await agent.invoke(
-  'Extract structured information about Paris from our conversation'
+  'Extract structured information about Paris from our conversation',
 )
-const cityInfo = result.structuredOutput
-console.log(`City: ${cityInfo.city}`) // "Paris"
 ```
 
 ### 베스트 프랙티스
 
-- **스키마를 집중적으로**: 명확한 목적을 가진 구체적인 스키마 정의
-- **설명적 필드명**: `.describe()`로 필드 설명 추가하여 LLM이 정확히 추출하도록 안내
-- **에러 처리**: `StructuredOutputError`를 catch하여 폴백 구현
+- **집중된 스키마** — 큰 스키마는 여러 개로 분할. 한 번에 너무 많은 필드를 요구하면 품질 저하
+- **설명적 필드** — `.describe()`로 각 필드 의도를 기술
+- **에러 처리** — `StructuredOutputError`를 catch하여 폴백 전략 구현
+- **`refine`은 자주 쓰지 않음** — 재시도 비용이 크다. 간단한 검증만

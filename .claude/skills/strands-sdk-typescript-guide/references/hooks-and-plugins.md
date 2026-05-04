@@ -2,36 +2,32 @@
 
 ## 목차
 - [Hooks](#hooks)
+- [Hook 이벤트 카탈로그](#hook-이벤트-카탈로그)
+- [수정 가능한 이벤트 속성 (cancel / retry)](#수정-가능한-이벤트-속성-cancel--retry)
 - [Plugins](#plugins)
-- [대화 관리 (Conversation Manager)](#대화-관리)
+- [Conversation Manager](#conversation-manager)
+- [TypeScript에서 미지원](#typescript에서-미지원)
 
 ## Hooks
 
-에이전트 라이프사이클 이벤트에 콜백을 등록하여 동작을 확장한다.
-Hooks는 composable하고 type-safe한 시스템으로, 이벤트 타입별 다수의 구독자를 지원한다.
+Agent 라이프사이클 이벤트에 콜백을 등록하여 동작을 확장한다. 타입 안전한 discriminated union 기반으로, 이벤트 타입별 다수의 구독자를 지원한다.
 
-### 사용 사례
-- 실행 모니터링 및 로깅
-- 도구 실행 수정/차단
-- 검증 및 에러 처리
-- 메트릭 수집
+사용 사례:
+- 실행 모니터링 / 로깅 / 메트릭 수집
+- 도구 실행 검증, 차단, 재시도
+- 모델 호출 재시도
 
-### addHook으로 개별 콜백 등록
-
-가장 간단한 방법:
+### `addHook`로 콜백 등록
 
 ```typescript
-import { Agent } from '@strands-agents/sdk'
-import { BeforeInvocationEvent, BeforeToolCallEvent } from '@strands-agents/sdk'
+import { Agent, BeforeInvocationEvent, BeforeToolCallEvent } from '@strands-agents/sdk'
 
 const agent = new Agent()
 
-// 개별 콜백 등록
 agent.addHook(BeforeInvocationEvent, (event) => {
-  console.log('Custom callback triggered')
+  console.log('Invocation starting')
 })
 
-// 도구 호출 감시
 agent.addHook(BeforeToolCallEvent, (event) => {
   console.log(`Tool called: ${event.toolUse.name}`)
 })
@@ -39,10 +35,8 @@ agent.addHook(BeforeToolCallEvent, (event) => {
 
 ### Plugin으로 여러 Hook 묶기
 
-관련된 여러 hook을 하나의 Plugin으로 패키징한다:
-
 ```typescript
-import { Agent, Plugin } from '@strands-agents/sdk'
+import { Agent, Plugin, LocalAgent } from '@strands-agents/sdk'
 import { BeforeToolCallEvent, AfterToolCallEvent } from '@strands-agents/sdk'
 
 class LoggingPlugin implements Plugin {
@@ -62,9 +56,7 @@ class LoggingPlugin implements Plugin {
 const agent = new Agent({ plugins: [new LoggingPlugin()] })
 ```
 
-### HookProvider 패턴
-
-HookProvider 인터페이스로 재사용 가능한 hook 컬렉션을 만들 수 있다:
+### HookProvider 패턴 (재사용 가능한 컬렉션)
 
 ```typescript
 import type { HookProvider, HookRegistry } from '@strands-agents/sdk'
@@ -72,9 +64,8 @@ import type { HookProvider, HookRegistry } from '@strands-agents/sdk'
 class ToolInterceptor implements HookProvider {
   registerCallbacks(registry: HookRegistry): void {
     registry.addCallback('beforeToolCall', (ev) => {
-      // 특정 도구 차단
       if (ev.toolUse.name === 'blocked_tool') {
-        ev.cancelTool = 'This tool is not allowed'
+        ev.cancel = 'This tool is not allowed'
       }
     })
   }
@@ -83,9 +74,11 @@ class ToolInterceptor implements HookProvider {
 const agent = new Agent({ hooks: [new ToolInterceptor()] })
 ```
 
-### 도구 호출 제한
+### 도구 호출 횟수 제한 (예)
 
 ```typescript
+import type { HookProvider, HookRegistry } from '@strands-agents/sdk'
+
 class LimitToolCounts implements HookProvider {
   private maxCounts: Record<string, number>
   private counts: Record<string, number> = {}
@@ -102,10 +95,9 @@ class LimitToolCounts implements HookProvider {
     registry.addCallback('beforeToolCall', (ev) => {
       const name = ev.toolUse.name
       this.counts[name] = (this.counts[name] || 0) + 1
-
       const max = this.maxCounts[name]
       if (max && this.counts[name] > max) {
-        ev.cancelTool = `Tool '${name}' limit exceeded`
+        ev.cancel = `Tool '${name}' limit exceeded`
       }
     })
   }
@@ -116,22 +108,46 @@ const agent = new Agent({
 })
 ```
 
-### Hook 이벤트 라이프사이클
+## Hook 이벤트 카탈로그
 
-단일 에이전트 호출 시 이벤트 순서:
-1. `BeforeInvocationEvent` → 호출 시작
-2. `BeforeModelCallEvent` → 모델 호출 전
-3. `AfterModelCallEvent` → 모델 호출 후
-4. `BeforeToolsEvent` → 도구 실행 전 (모델이 도구를 선택한 경우)
-5. `BeforeToolCallEvent` → 개별 도구 호출 전
-6. `AfterToolCallEvent` → 개별 도구 호출 후
-7. `AfterToolsEvent` → 모든 도구 실행 후
-8. (2~7 반복)
-9. `AfterInvocationEvent` → 호출 완료
+### 단일 에이전트 호출
+순서 (도구 호출 시 2~7은 반복):
 
-멀티 에이전트(Graph/Swarm) 오케스트레이터 이벤트:
-- `BeforeNodeCallEvent` → 노드 실행 전
-- `AfterNodeCallEvent` → 노드 실행 후
+| # | 이벤트 | 시점 |
+|---|-------|-----|
+| 0 | `AgentInitializedEvent` | 에이전트 생성 직후 (한번) |
+| 1 | `BeforeInvocationEvent` | `invoke()/stream()` 시작 |
+| 2 | `BeforeModelCallEvent` | 모델 호출 전 |
+| 3 | `ModelStreamUpdateEvent` | 모델이 content block delta 방출 |
+| 4 | `ContentBlockEvent` | content block 조립 완료 |
+| 5 | `ModelMessageEvent` | 모델 메시지 전체 완성 |
+| 6 | `AfterModelCallEvent` | 모델 호출 후 |
+| 7 | `MessageAddedEvent` | 새 메시지가 히스토리에 추가 |
+| 8 | `BeforeToolsEvent` | 도구 배치 실행 전 |
+| 9 | `BeforeToolCallEvent` | 개별 도구 호출 전 |
+| 10 | `ToolStreamUpdateEvent` | 도구가 async generator로 진행 상황 yield |
+| 11 | `ToolResultEvent` | 도구 결과 확정 |
+| 12 | `AfterToolCallEvent` | 개별 도구 호출 후 |
+| 13 | `AfterToolsEvent` | 모든 도구 실행 후 |
+| 14 | `AgentResultEvent` | 최종 `AgentResult` 확정 |
+| 15 | `AfterInvocationEvent` | `invoke()/stream()` 종료 |
+
+### 멀티 에이전트 (Graph / Swarm)
+
+| 이벤트 | 시점 |
+|-------|-----|
+| `MultiAgentInitializedEvent` | 오케스트레이터 초기화 |
+| `BeforeMultiAgentInvocationEvent` | 오케스트레이터 시작 |
+| `BeforeNodeCallEvent` | 노드 실행 전 |
+| `NodeStreamUpdateEvent` | 노드 내부 스트리밍 이벤트 리플레이 |
+| `NodeCancelEvent` | 노드 취소 |
+| `AfterNodeCallEvent` | 노드 실행 후 |
+| `NodeResultEvent` | 노드 결과 확정 |
+| `MultiAgentHandoffEvent` | 노드 간 핸드오프 (Swarm) |
+| `MultiAgentResultEvent` | 오케스트레이터 결과 확정 |
+| `AfterMultiAgentInvocationEvent` | 오케스트레이터 종료 |
+
+### Graph에서 노드 이벤트 구독
 
 ```typescript
 import { BeforeNodeCallEvent, AfterNodeCallEvent } from '@strands-agents/sdk'
@@ -139,72 +155,98 @@ import { BeforeNodeCallEvent, AfterNodeCallEvent } from '@strands-agents/sdk'
 graph.addHook(BeforeNodeCallEvent, (event) => {
   console.log(`Node ${event.nodeId} starting`)
 })
-```
 
-### 수정 가능한 이벤트 속성
-
-대부분의 이벤트 속성은 읽기 전용이지만, 일부는 에이전트 동작을 변경할 수 있다:
-
-| 이벤트 | 속성 | 효과 |
-|--------|------|------|
-| `BeforeToolCallEvent` | `cancelTool` | 도구 실행 차단 (문자열 메시지 또는 true) |
-| `AfterModelCallEvent` | `retry` | true 설정 시 모델 재호출 |
-
-## Plugins
-
-Plugins는 에이전트의 기본 동작을 변경하거나 확장한다.
-Agent의 저수준 프리미티브(model, system_prompt, messages, tools, hooks)에 접근하여 로직을 실행한다.
-
-### Plugin 사용
-
-```typescript
-import { Agent, Plugin } from '@strands-agents/sdk'
-
-const agent = new Agent({
-  tools: [myTool],
-  plugins: [new GuidancePlugin('Guide the agent...')],
+graph.addHook(AfterNodeCallEvent, (event) => {
+  console.log(`Node ${event.nodeId} completed in ${event.duration}ms`)
 })
 ```
 
-### Plugin 작성
+## 수정 가능한 이벤트 속성 (cancel / retry)
 
-Plugin 인터페이스를 구현하여 커스텀 플러그인을 만든다:
+대부분의 이벤트 속성은 읽기 전용이지만, 특정 이벤트는 에이전트 동작을 변경할 수 있다.
+
+| 이벤트 | 속성 | 효과 |
+|--------|------|------|
+| `BeforeInvocationEvent` | `cancel` | 전체 invocation 취소 (문자열/true) |
+| `BeforeModelCallEvent` | `cancel` | 모델 호출 취소 |
+| `BeforeToolsEvent` | `cancel` | 배치 도구 호출 전체 취소 |
+| `BeforeToolCallEvent` | `cancel` | 특정 도구 호출 취소 (LLM에 cancel 메시지 전달) |
+| `AfterModelCallEvent` | `retry` | `true` 설정 시 모델 재호출 |
+| `AfterToolCallEvent` | `retry` | `true` 설정 시 도구 재실행 |
 
 ```typescript
-import { Plugin, LocalAgent } from '@strands-agents/sdk'
+import { BeforeToolCallEvent } from '@strands-agents/sdk'
 
-class MyPlugin implements Plugin {
-  name = 'my-plugin'
+agent.addHook(BeforeToolCallEvent, (event) => {
+  if (event.toolUse.name === 'delete_production') {
+    event.cancel = 'Production deletion is not allowed'
+  }
+})
+```
+
+## Plugins
+
+Plugins는 에이전트의 저수준 프리미티브(model, systemPrompt, messages, tools, hooks, appState)에 접근하여 동작을 확장한다.
+
+### 인터페이스
+
+```typescript
+interface Plugin {
+  name: string
+  initAgent(agent: LocalAgent): void | Promise<void>
+  getTools?(): Tool[]
+}
+```
+
+### 예: 로깅 + 도구 기여
+
+```typescript
+import { Plugin, LocalAgent, Tool } from '@strands-agents/sdk'
+import { BeforeToolCallEvent } from '@strands-agents/sdk'
+
+class LoggingPlugin implements Plugin {
+  name = 'logging-plugin'
 
   initAgent(agent: LocalAgent): void {
-    // 도구 추가
-    agent.tools.push(myCustomTool)
-
-    // Hook 등록
-    agent.addHook(BeforeInvocationEvent, (event) => {
-      console.log('Invocation starting')
+    agent.addHook(BeforeToolCallEvent, (event) => {
+      console.log(`[LOG] Calling: ${event.toolUse.name}`)
     })
+  }
 
-    // 시스템 프롬프트 수정
-    // agent.systemPrompt 접근 가능
+  getTools(): Tool[] {
+    return [debugPrintTool]
+  }
+}
+```
+
+### 예: appState 초기화 + 도구 호출 카운터
+
+```typescript
+class MetricsPlugin implements Plugin {
+  name = 'metrics-plugin'
+
+  initAgent(agent: LocalAgent): void {
+    agent.appState.set('metrics_call_count', 0)
+
+    agent.addHook(BeforeToolCallEvent, () => {
+      const current = agent.appState.get('metrics_call_count') as number
+      agent.appState.set('metrics_call_count', current + 1)
+    })
   }
 }
 ```
 
 ### 내장 Plugin
 
-- **SessionManager**: 에이전트 상태와 대화 영속화 (→ [state-and-sessions.md](state-and-sessions.md) 참조)
+- **SessionManager** — 상태와 대화 영속화 (`state-and-sessions.md`). `sessionManager` 필드는 `plugins` 배열에 전달하는 단축 표기
 
-> **Python 전용 Plugins**: Skills(AgentSkills), Steering(LLMSteeringHandler)는 TypeScript에서 아직 미지원.
+## Conversation Manager
 
-## 대화 관리
-
-컨텍스트 윈도우를 효율적으로 관리하는 Conversation Manager 시스템.
+컨텍스트 윈도우를 효율적으로 관리하는 전략.
 
 ### NullConversationManager
 
-대화 히스토리를 수정하지 않는 가장 단순한 구현.
-짧은 대화, 디버깅, 수동 컨텍스트 관리에 적합하다.
+대화 히스토리를 수정하지 않음. 디버깅, 수동 관리, 짧은 대화에 적합.
 
 ```typescript
 import { Agent, NullConversationManager } from '@strands-agents/sdk'
@@ -216,80 +258,71 @@ const agent = new Agent({
 
 ### SlidingWindowConversationManager (기본값)
 
-최근 N개 메시지를 유지하는 슬라이딩 윈도우 전략.
-Agent의 기본 Conversation Manager이다.
+최근 N개 메시지 유지. 오버플로우 시 오래된 메시지 제거, 불완전한 시퀀스 정리.
 
 ```typescript
 import { Agent, SlidingWindowConversationManager } from '@strands-agents/sdk'
 
 const conversationManager = new SlidingWindowConversationManager({
   windowSize: 40,              // 유지할 최대 메시지 수
-  shouldTruncateResults: true, // 컨텍스트 초과 시 도구 결과 축약
+  shouldTruncateResults: true, // 컨텍스트 초과 시 도구 결과를 플레이스홀더로 축약
 })
 
 const agent = new Agent({ conversationManager })
 ```
 
-주요 기능:
-- **윈도우 크기 관리**: 메시지 수가 제한을 초과하면 오래된 메시지 자동 제거
-- **댕글링 메시지 정리**: 불완전한 메시지 시퀀스 제거
-- **오버플로우 트리밍**: 컨텍스트 윈도우 초과 시 오래된 메시지부터 제거
-- **도구 결과 축약**: `shouldTruncateResults=true`(기본) 시 큰 결과를 플레이스홀더로 교체
+| 필드 | 설명 |
+|-----|------|
+| `windowSize` | 유지할 최대 메시지 수 |
+| `shouldTruncateResults` | 컨텍스트 초과 시 도구 결과 축약 (기본 `true`) |
 
 ### SummarizingConversationManager
 
-오래된 메시지를 지능적으로 요약하여 컨텍스트를 보존하면서 윈도우 크기를 관리한다.
-단순 삭제 대신 핵심 정보를 요약으로 유지하므로, 긴 대화에서 맥락 손실이 적다.
+오래된 메시지를 요약으로 대체하여 맥락 보존.
 
 ```typescript
-import { Agent, SummarizingConversationManager } from '@strands-agents/sdk'
+import {
+  Agent,
+  SummarizingConversationManager,
+  BedrockModel,
+} from '@strands-agents/sdk'
 
-const agent = new Agent({
-  conversationManager: new SummarizingConversationManager(),
-})
-```
-
-커스텀 설정:
-
-```typescript
-import { Agent, SummarizingConversationManager, BedrockModel } from '@strands-agents/sdk'
-
-// 요약용 별도 모델 지정 (선택)
 const summarizationModel = new BedrockModel({
-  modelId: 'anthropic.claude-sonnet-4-20250514-v1:0',
+  modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
 })
 
 const conversationManager = new SummarizingConversationManager({
   model: summarizationModel,     // 요약 전용 모델 (생략 시 에이전트 모델 사용)
-  summaryRatio: 0.3,             // 컨텍스트 축소 시 요약할 메시지 비율 (0.1~0.8)
-  preserveRecentMessages: 10,    // 항상 유지할 최근 메시지 수
+  summaryRatio: 0.3,             // 요약할 메시지 비율 (0.1~0.8, 기본 0.3)
+  preserveRecentMessages: 10,    // 항상 유지할 최근 메시지 수 (기본 10)
+  summarizationSystemPrompt: `You are summarizing a technical conversation.
+Create a concise bullet-point summary that:
+- Focuses on code changes, architectural decisions, and technical solutions
+- Preserves specific function names, file paths, and configuration details`,
 })
 
 const agent = new Agent({ conversationManager })
-```
-
-도메인 특화 요약 시스템 프롬프트:
-
-```typescript
-const conversationManager = new SummarizingConversationManager({
-  summarizationSystemPrompt: `
-You are summarizing a technical conversation.
-Create a concise bullet-point summary that:
-- Focuses on code changes, architectural decisions, and technical solutions
-- Preserves specific function names, file paths, and configuration details
-- Uses technical terminology appropriate for software development
-`,
-})
 ```
 
 ### 대화 히스토리 접근
 
 ```typescript
 const agent = new Agent()
-
 await agent.invoke('My name is Alice')
 await agent.invoke('I work at AWS')
 
-// 전체 메시지 히스토리
-console.log(agent.messages)
+console.log(agent.messages) // 전체 메시지 배열
 ```
+
+## TypeScript에서 미지원
+
+| 기능 | 대안 |
+|-----|-----|
+| **Skills Plugin (AgentSkills)** | Python 전용. 하드코딩된 시스템 프롬프트 사용 |
+| **Steering Plugin (LLMSteeringHandler)** | Python 전용. Hook으로 커스텀 steering 구현 |
+| **ContextOffloader Plugin** | Python 전용. `SummarizingConversationManager` 또는 Session 활용 |
+| **`@hook`/`@tool` 데코레이터 자동 등록** | Python 전용. TypeScript는 `initAgent()`에서 명시적 `agent.addHook()` 호출 필요 |
+| **Retry Strategies (`ModelRetryStrategy`)** | Python 전용. `AfterModelCallEvent.retry = true`로 기본 재시도 가능 |
+| **Interrupts (Human-in-the-loop)** | Python 전용. `BeforeToolCallEvent.cancel`로 부분 대체 |
+
+해당 기능이 필요하면 Python 에이전트를 A2A로 노출하거나 (`multi-agent.md`), `strands-sdk-python-guide` 스킬을 별도 프로젝트에서 사용한다.

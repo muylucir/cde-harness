@@ -85,15 +85,60 @@ const eslintConfig = defineConfig([
       "import/no-cycle": "error",
       "import/no-self-import": "error",
 
-      // ── Cloudscape 개별 임포트 강제 ──
-      // import { Table } from "@cloudscape-design/components" 금지
-      // import Table from "@cloudscape-design/components/table" 사용
+      // ── 제한된 import (Cloudscape 배럴 + Bedrock 직접 호출) ──
+      // 1) Cloudscape: import { Table } from "@cloudscape-design/components" 금지 → 개별 경로 사용
+      // 2) @aws-sdk/client-bedrock-runtime: CLAUDE.md Rule 9 — AI는 @strands-agents/sdk만.
+      //    src/ 전역 차단(화이트리스트 없음). 이중 가드: 파이프라인 게이트는
+      //    .pipeline/scripts/check-bedrock-no-direct-import.mjs가 별도 차단.
       "no-restricted-imports": ["error", {
-        paths: [{
-          name: "@cloudscape-design/components",
-          message: "개별 경로에서 임포트하세요: import Table from '@cloudscape-design/components/table'",
-        }],
+        paths: [
+          {
+            name: "@cloudscape-design/components",
+            message: "개별 경로에서 임포트하세요: import Table from '@cloudscape-design/components/table'",
+          },
+          {
+            name: "@aws-sdk/client-bedrock-runtime",
+            message: "CLAUDE.md Rule 9: AI는 @strands-agents/sdk만 사용. Bedrock 직접 호출 금지.",
+          },
+        ],
       }],
+    },
+  },
+
+  // ── AI 디렉토리 한정: 모델 ID indirect 우회 차단 (CLAUDE.md Rule 13 보강) ──
+  // ai-smoke Check 7/8은 정규식 기반이라 다음 패턴을 못 잡는다:
+  //   - process.env[k] (computed access)
+  //   - ['global','anthropic',...].join('.')
+  //   - 단축 alias 'haiku'/'sonnet'/'opus'를 SDK에 그대로 전달
+  // 이 규칙은 AST 레벨에서 차단한다.
+  {
+    files: [
+      "src/lib/ai/**/*.ts",
+      "src/lib/ai/**/*.tsx",
+      "src/lib/agents/**/*.ts",
+      "src/lib/agents/**/*.tsx",
+      "src/lib/llm/**/*.ts",
+      "src/app/api/chat/**/*.ts",
+      "src/app/api/agents/**/*.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": ["error",
+        {
+          selector: "MemberExpression[object.object.name='process'][object.property.name='env'][computed=true]",
+          message:
+            "process.env[<computed>] 패턴 금지 (CLAUDE.md Rule 13). 모델 ID는 코드에 직접 박는다 — SSOT: .pipeline/scripts/allowed-models.json",
+        },
+        {
+          selector: "CallExpression[callee.property.name='join'][callee.object.type='ArrayExpression']",
+          message:
+            "배열 join으로 모델 ID/엔드포인트 조립 금지 (CLAUDE.md Rule 13). 문자열 리터럴로 직접 명시.",
+        },
+        {
+          selector: "Literal[value='haiku'], Literal[value='sonnet'], Literal[value='opus'], Literal[value='claude']",
+          message:
+            "단축 alias('haiku'/'sonnet'/'opus'/'claude')를 SDK에 그대로 전달 금지 (CLAUDE.md Rule 13). 화이트리스트 모델 ID 전체 문자열 사용. 검사 회피 필요 시 변수명에만 사용하고 SDK에는 전체 ID 전달.",
+        },
+      ],
     },
   },
   globalIgnores([

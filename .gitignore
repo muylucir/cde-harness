@@ -44,6 +44,10 @@ next-env.d.ts
 /.pipeline/input/raw/*
 !/.pipeline/input/raw/.gitkeep
 
+# skill invocation log (PostToolUse hook이 기록 — 일시적 진단용, 커밋 금지)
+/.pipeline/.skill-invocations.jsonl
+/.pipeline/.lock
+
 # test assets (하네스 테스트용, 프로토타입과 무관)
 files/
 

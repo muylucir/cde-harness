@@ -169,7 +169,7 @@ npm run dev
 |--------|------|
 | `/brief` | 다양한 입력 자료에서 customer-brief.md 자동 생성 |
 | `/pipeline` | 전체 파이프라인 실행 (승인 게이트 포함) |
-| `/pipeline auto` | 승인 게이트 없이 전체 자동 실행 (CHECKPOINT는 유지) |
+| `/pipeline --auto` | design phase 승인 게이트 자동 통과 (CHECKPOINT는 유지). `/awsarch`/`cdk destroy`/Circuit Breaker/보안 critical은 절대 우회 불가 |
 | `/iterate` | 고객 피드백 분석 → input 갱신 → requirements부터 파이프라인 재실행 |
 | `/reconcile` | ad-hoc 코드 변경 후 파이프라인 아티팩트 역동기화 (문서만) |
 | `/reconcile --qa` | 아티팩트 역동기화 + QA/리뷰/보안 재실행 |

@@ -26,57 +26,41 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
 - State: `.pipeline/state.json` (스키마는 아래 참조)
 ### state.json 스키마
 
-**단일 소스**: `.pipeline/scripts/checkpoint.mjs`가 이 구조를 작성한다. 문서와 코드가 diverge하면 코드를 신뢰한다.
+**단일 소스 (SSOT)**: `.pipeline/scripts/checkpoint.mjs`가 이 구조를 작성한다. 스키마 정의도 같은 스크립트에서 직접 노출하므로 문서/코드 drift가 원천 차단된다.
 
-```json
-{
-  "current_version": 2,
-  "pipeline_status": "idle | running | completed | halted | failed",
-  "versions": {
-    "1": {
-      "status": "completed | in-progress | halted",
-      "trigger": "pipeline | iterate | reconcile | awsarch | pipeline-from",
-      "started_at": "<ISO-8601>",
-      "completed_at": "<ISO-8601>",
-      "current_stage": "<stage-name | null>",
-      "stages": [
-        {
-          "stage": "<stage-name>",
-          "status": "running | completed | checkpoint-failed",
-          "started_at": "<ISO-8601>",
-          "completed_at": "<ISO-8601 | null>",
-          "duration_ms": 45000,
-          "checkpoint": {
-            "passed": true,
-            "items": [
-              { "check": "file exists: ...", "passed": true }
-            ],
-            "retries": 0,
-            "checked_at": "<ISO-8601>"
-          }
-        }
-      ],
-      "feedback_loops": [
-        { "from": "reviewer", "to": "code-generator-frontend", "iter": 1, "issues": 3 }
-      ],
-      "test_iterations": 1,
-      "review_iterations": 1,
-      "total_code_regens": 0,
-      "identical_error_streak": 0
-    }
-  }
-}
+```bash
+# 사람이 읽기 쉬운 형태
+node .pipeline/scripts/checkpoint.mjs schema
+
+# JSON (자동화/검증용)
+node .pipeline/scripts/checkpoint.mjs schema --json
 ```
 
-**필드 설명**:
+핵심 사실 (전체 정의는 위 명령 출력을 참조):
 - `current_version`: 현재 작업 중인 버전 번호 (정수). 새 `/pipeline`, `/iterate` 실행 시 증가.
-- `versions`: 버전별 전체 이력. 이전 버전은 보존된다.
 - `versions[v].stages[]`: **배열**로 시간순 기록. 동일 스테이지가 재실행될 수 있으므로 마지막 엔트리가 최신.
-- `versions[v].total_code_regens`: 코드 제너레이터 재실행 누적 카운터 (budget 체크에 사용).
-- `versions[v].identical_error_streak`: 동일 에러 반복 카운터. 2 이상이면 halt 권고.
-- `feedback_loops[]`: QA→codegen, reviewer→codegen, security→codegen 루프 기록.
+- `versions[v].total_code_regens` / `identical_error_streak` / `loop_iterations`: 코드(`deriveBudgetCounters`)에서 파생되며, LLM이 직접 쓰지 않는다. 2 이상 streak이면 halt 권고.
+- `feedback_loops[]`: QA→codegen, reviewer→codegen, security→codegen 루프 기록. 단계별 이터레이션 횟수는 `from` 필터로 파생한다 (예: QA 이터레이션 = `feedback_loops.filter(f => f.from === "qa-engineer").length`). **per-stage 집계 필드(`test_iterations`, `review_iterations`)는 추가하지 않는다** — 코드 SSOT가 작성하지 않는 환각 필드였다.
+- `approvals[stageName]`: APPROVAL GATE 통과 기록. `node checkpoint.mjs approve <stage>` 호출 시 기록되고, `require <stage>`가 검증한다. `mode=interactive`(사용자) 또는 `auto`(--auto 모드).
 
-유효 스테이지 이름은 `node .pipeline/scripts/checkpoint.mjs list-stages`로 조회한다 (카탈로그 단일 소스는 `.pipeline/scripts/stages.json`).
+유효 스테이지 이름은 `node .pipeline/scripts/checkpoint.mjs list-stages`로 조회한다. 카탈로그 단일 소스는 `.pipeline/scripts/stages.json`이며, 스크립트가 import 가능한 코드 진입점은 `.pipeline/scripts/stages.mjs`의 `STAGE_NAMES`/`STAGE_BY_NAME` 상수다. `.claude/{commands,agents}/*.md` 본문의 stage 참조 ↔ `stages.json` drift는 `node .pipeline/scripts/check-stages-sync.mjs` (통합 진입점 `check-allowed-models-sync.mjs` sub-check [I])가 차단한다.
+
+### state.json 접근 규칙 (필수)
+
+`.pipeline/state.json`은 **`checkpoint.mjs`만 쓴다**. LLM·에이전트·명령은 직접 수정하지 않는다.
+
+- **합법 진입점**: `node .pipeline/scripts/checkpoint.mjs <subcommand>` (start / check / new-version / approve / require / record-feedback-loop / halt). 새 상태 변경이 필요하면 `checkpoint.mjs`에 서브커맨드를 추가하고, 우회 코드를 작성하지 않는다.
+- **읽기는 자유**: 에이전트가 현재 버전 확인 등의 목적으로 `state.json`을 Read하는 것은 허용. 단 `Edit`/`Write`/`>`/`tee`로 갱신하려는 모든 시도는 `.claude/settings.json`의 PreToolUse hook이 즉시 deny한다.
+- **차단되는 우회 패턴** (FP-011 — `_preamble.md` 금지 패턴 카탈로그):
+  - Write/Edit 도구로 `*.pipeline/state.json` 경로 접근
+  - `node -e`/`-p`/`--eval` (인터프리터로 fs 호출)
+  - `python -c` / `bun -e` / `deno eval` (state.json 경로 접근 시)
+  - 셸 리다이렉트 `> .pipeline/state.json` / `>> .pipeline/state.json`
+  - `tee .pipeline/state.json` / `mv|cp .pipeline/state.json` / `rm .pipeline/state.json`
+  - `sed -i`, `awk -i inplace`, `perl -pi/-i` (인플레이스 수정)
+  - `jq ... | sponge .pipeline/state.json`
+  - 코드 내부의 `fs.writeFileSync('.pipeline/state.json', ...)` 등 직접 호출
+- 일반 코드 작업 중 hook에 의해 차단됐다면, **uncovered 정책 위반**이거나 **잘못된 진입점 사용**이다. checkpoint.mjs 서브커맨드를 사용하거나 새 서브커맨드를 정의한다 — hook을 우회하지 않는다.
 
 - Brief generation: `/brief` → raw 입력에서 brief 자동 생성
 - Trigger: `/pipeline` → full run
@@ -111,11 +95,13 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
 ### Reconcile 흐름 (코드 → 아티팩트 역동기화)
 
 ```
-/reconcile → reconcile-analyzer(analyze) → APPROVAL GATE
-    → git-manager(pre-reconcile) → reconcile/v{N+1} 브랜치
-    → reconcile-analyzer(sync): 생성로그 → 스펙 → 아키텍처 → (요구사항)
-    → reconcile-report.md 생성
-    → git-manager(post-reconcile)
+/reconcile (Phase 0) → git-manager(pre-reconcile) → reconcile/v{N+1} 브랜치
+    → reconcile-analyzer(analyze)  ← 분석 산출물도 브랜치 위에서 생성
+    → APPROVAL GATE
+        ├─ 취소 → git-manager(cancel-reconcile) → 브랜치/분석 폐기, main 보존
+        └─ 승인 → reconcile-analyzer(sync): 생성로그 → 스펙 → 아키텍처 → (요구사항)
+                → reconcile-report.md 생성
+                → git-manager(post-reconcile)
 
 /reconcile --qa → 위 흐름 + [qa-engineer → reviewer → security-auditor-pipeline]
 ```
@@ -150,6 +136,35 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
 10. Run `npm run build` after every code generation cycle
 11. Run `npm run test:e2e` after code generation to verify actual behavior
 12. `DATA_SOURCE` 환경변수로 듀얼 모드 지원: `memory`(기본, InMemoryStore) | `dynamodb`(DynamoDBStore). Repository 패턴의 `createStore()` 팩토리로 추상화. `/awsarch` 실행 후 활성화.
+13. **AI 모델 ID 정책**: `BEDROCK_MODEL_ID` 환경변수 SSOT 패턴은 **폐기**(하네스 단순화). 작업 성격에 따라 아래 **3개 중 하나를 코드에 직접 명시**한다. `process.env.BEDROCK_MODEL_ID ?? '...'` 같은 환경변수 fallback 패턴 사용 금지. spec-writer-ai가 `ai-internals.json`의 각 도구/에이전트에 `model_id` 필드를 명시하고, code-generator-ai가 그 값을 코드 문자열로 그대로 박는다. ai-smoke.mjs Check 7/8 + reviewer 카테고리 10이 이를 강제 검증.
+
+    > **SSOT**: `.pipeline/scripts/allowed-models.json`. 아래 표는 인간 가독성을 위한 사본. 갱신 시 SSOT JSON과 함께 동기화하며, `node .pipeline/scripts/check-allowed-models-sync.mjs`가 drift를 차단한다.
+
+    | 모델 ID | 단축 | 용도 |
+    |---|---|---|
+    | `global.anthropic.claude-haiku-4-5-20251001-v1:0` | haiku | 분류/라우팅/요약/단순 도구(예: 의도 분류, 정형 데이터 추출, 짧은 응답). 빠르고 저렴 |
+    | `global.anthropic.claude-sonnet-4-6` | sonnet | 일반 챗/생성/도구 호출 기본값. 균형 잡힌 비용/품질 |
+    | `global.anthropic.claude-opus-4-7` | opus | 복잡 추론/장기 컨텍스트/멀티스텝 에이전트(예: 코드 분석, 깊은 추론, 까다로운 RAG) |
+
+    **선택 원칙**: 도구의 ground truth가 명확하고 짧으면 haiku, 사용자 대면 일반 챗은 sonnet, 추론이 길어지거나 도메인 지식이 필요하면 opus. 대화 단위가 아니라 **도구/에이전트 단위**로 모델을 다르게 가져갈 수 있다.
+
+    예시:
+    ```typescript
+    const triageAgent = new Agent({
+      model: 'global.anthropic.claude-haiku-4-5-20251001-v1:0', // 의도 분류만
+      tools: [classifyIntent],
+    });
+    const chatAgent = new Agent({
+      model: 'global.anthropic.claude-sonnet-4-6', // 사용자 대면 챗
+      tools: [searchDocs, getOrderStatus],
+    });
+    const planningAgent = new Agent({
+      model: 'global.anthropic.claude-opus-4-7', // 멀티스텝 플래닝
+      tools: [searchDocs, callApi, runCode],
+    });
+    ```
+
+    > **금지**: `process.env.BEDROCK_MODEL_ID ?? '...'` 패턴, `.env.example`에 모델 ID 등록, 단축 이름(`'sonnet'`)을 SDK에 전달, 위 3개 외 다른 모델 ID 사용.
 
 ## API Contract Conventions (BE/FE 공통)
 

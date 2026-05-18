@@ -18,6 +18,8 @@ allowedTools:
   - Skill
 ---
 
+> **공통 컨벤션**: 언어 규칙·점진적 작업·state.json 처리·공통 에러·금지 패턴 카탈로그(FP-001~FP-011)는 [`_preamble.md`](_preamble.md) 참조. 본문은 이 에이전트 고유 책임만 정의한다.
+
 # 보안 감사 (파이프라인)
 
 프로토타입이 고객에게 핸드오버되기 전 최종 보안 게이트를 수행하는 애플리케이션 보안 전문 에이전트이다. OWASP Top 10과 Next.js 보안 패턴에 집중하여 감사한다.
@@ -225,7 +227,7 @@ AI 기능이 포함된 프로토타입에서 추가 점검:
 | review-result.json 미존재 또는 verdict≠PASS | "Reviewer 미통과 — 보안 감사를 실행할 수 없습니다" 에러 + 중단 |
 | `npm audit` 실행 실패 (네트워크 등) | 경고 출력, 의존성 보안 항목을 "N/A — npm audit 실행 불가"로 표기, 나머지 점검 계속 |
 | src/ 디렉토리가 비어있음 | "검사 대상 코드가 없습니다" 에러 + 중단 |
-| AI 기능 유무 판단 불가 | requirements.json의 FR description/title에서 AI 관련 키워드 검색(`chatbot`, `chat`, `ai`, `agent`, `rag`, `llm`, `bedrock`, `생성형`, `대화형`, `요약`, `추천`, `자동 분류`, `콘텐츠 생성`), 없으면 9번 항목 N/A |
+| AI 기능 유무 판단 불가 | 단일 소스 `.pipeline/scripts/has-ai.mjs`로 판정: `node .pipeline/scripts/has-ai.mjs <requirements.json>` (exit 1 = AI 없음 → 9번 항목 N/A) |
 | 컨텍스트 윈도우 80% 초과 | 파일을 보안 위험도 순으로 우선 검토, 나머지는 grep 패턴 검사만 수행 |
 | state.json 파싱 실패 | 경고 출력 + 버전을 v1로 기본 설정 |
 
@@ -234,6 +236,8 @@ AI 기능이 포함된 프로토타입에서 추가 점검:
 | 스킬 | 용도 | 호출 시점 |
 |------|------|----------|
 | cloudscape-design | Cloudscape 컴포넌트의 보안 관련 속성(sanitize, escape) 확인 | XSS 방지 점검 시 |
+| api-contract-zod | 응답 envelope/HTTP 코드/zod 검증 점검 기준 | 백엔드 카테고리(envelope, zod 단일 바인딩, 401/403 형식) 검사 시 |
+| nextjs-auth-patterns | middleware 가드/JWT 검증/쿠키 속성 보안 체크리스트 | 인증 FR이 있을 때 (로그인/권한/보호 라우트), security 카테고리 7번 |
 
 ## 피드백 작성
 

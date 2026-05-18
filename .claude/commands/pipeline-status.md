@@ -10,18 +10,26 @@ Display the current state of the prototype pipeline.
 
 1. **Read state**: Load `.pipeline/state.json`
    - If not found: report "No pipeline has been started. Run `/pipeline` to begin."
-   - state.json 스키마는 CLAUDE.md "state.json 스키마" 섹션 참조
+   - state.json 스키마 SSOT는 `checkpoint.mjs schema`다 (CLAUDE.md "state.json 스키마" 섹션 참조).
+     ```bash
+     # 스키마 SSOT 출력 — 사용자가 `/pipeline-status --schema`로 요청 시 표시
+     node .pipeline/scripts/checkpoint.mjs schema
+     ```
+     `--schema` 플래그가 없으면 본 절차는 schema 출력을 생략하고 2단계로 진행한다.
 
 2. **Display overall status**:
 
 ```
 Pipeline v{current_version} — {pipeline_status}
+Progress: {completed_count} / {total_count} stages ({pct}%)
 Versions: {총 버전 수}   Current stage: {versions[v].current_stage}
 ```
 
+> `total_count`는 stages.json에서 현재 모드(파이프라인/awsarch/handover)에 해당하는 스테이지 수. AI 미사용이면 spec-writer-ai/code-generator-ai는 분모/분자 모두에서 제외(skipped는 분모에 포함하지 않는다).
+
 3. **Display stage table (current version)**:
 
-`versions[current_version].stages[]` 배열을 시간순으로 렌더링한다. 동일 스테이지가 재실행됐다면 최신 엔트리를 표시하고 재실행 횟수를 비고에 기록한다.
+`versions[current_version].stages[]` 배열을 시간순으로 렌더링한다. 동일 스테이지가 재실행됐다면 최신 엔트리를 표시하고 재실행 횟수를 비고에 기록한다. # 컬럼은 stages.json `order` 값.
 
 ```
 | # | Stage                       | Status        | Duration  | Notes                   |
@@ -33,8 +41,11 @@ Versions: {총 버전 수}   Current stage: {versions[v].current_stage}
 | 4 | spec-writer-ai              | ⏩ skipped    | -         | (No AI FR)              |
 | 5 | spec-writer-frontend        | ✅ completed  | 1m 05s    |                         |
 | 6 | code-generator-backend      | ✅ completed  | 2m 30s    | build PASS              |
+| 7 | code-generator-ai           | ⏩ skipped    | -         | (No AI FR)              |
 | 8 | code-generator-frontend     | 🔄 running    | -         | iter 2/3                |
 | 9 | qa-engineer                 | ⏳ pending    | -         | -                       |
+| 10| reviewer                    | ⏳ pending    | -         | -                       |
+| 11| security-auditor-pipeline   | ⏳ pending    | -         | -                       |
 ```
 
 4. **Show feedback loops** (현재 버전의 `feedback_loops[]`):
@@ -49,8 +60,13 @@ Feedback Loops (v{current_version}):
 Budgets:
   total_code_regens:       3 / 8
   identical_error_streak:  0 / 2
-  test_iterations:         1    review_iterations: 0
+  loop:qa-code             1 / 3   (qa-engineer → codegen)
+  loop:review-code         0 / 2   (reviewer → codegen)
+  loop:security-code       0 / 1   (security-auditor → codegen)
 ```
+
+루프별 한도는 `stages.json.loops` 정의 기반이며 `checkpoint.mjs`가 자동 파생한다. 한도 초과 시 halt 권고.
+
 budget 명령을 참고: `node .pipeline/scripts/checkpoint.mjs budget <stage>`
 
 6. **Show artifact summary** (현재 버전 디렉토리):
@@ -59,7 +75,7 @@ budget 명령을 참고: `node .pipeline/scripts/checkpoint.mjs budget <stage>`
    - architecture: routes + components count
    - specs: spec file count, api-contract.json 존재 여부
    - codegen: build pass/fail, file count
-   - review: verdict + 9 카테고리 점수
+   - review: verdict + 10 카테고리 점수
    - security: verdict + finding counts
 
 7. **Show version history** (이전 버전이 있을 때):

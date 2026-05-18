@@ -36,6 +36,49 @@ Strands Agents SDK는 AI 에이전트를 빠르게 구축, 관리, 배포할 수
 **CDE 파이프라인 필수 런타임**: CLAUDE.md Rule 9에 따라 파이프라인의 AI 기능은 `@strands-agents/sdk`(TypeScript)로만 구현한다.
 `@aws-sdk/client-bedrock-runtime` 직접 호출이나 다른 AI SDK는 금지. 단순 Q&A/요약이라도 `new Agent()` 패턴을 사용한다.
 
+## ⚠️ 모델 ID 정책 (CLAUDE.md Rule 13)
+
+> **SSOT**: `.pipeline/scripts/allowed-models.json`. 갱신 시 CLAUDE.md Rule 13 표를 함께 동기화하며, `node .pipeline/scripts/check-allowed-models-sync.mjs`가 drift를 차단한다. 이 박스의 존재 자체는 `node .pipeline/scripts/check-strands-rule13.mjs`가 검증한다 (3 라운드 연속 미반영 회귀 차단).
+
+`new Agent({ model: '...' })`에 전달할 수 있는 모델 ID는 다음 **3개**뿐이다. 다른 ID/단축 alias 사용 금지.
+
+| 모델 ID | 단축 (변수명/문서용) | 용도 | cost |
+|---|---|---|---|
+| `global.anthropic.claude-haiku-4-5-20251001-v1:0` | haiku | 분류/라우팅/요약/단순 도구 | low |
+| `global.anthropic.claude-sonnet-4-6` | sonnet | 일반 챗/생성/도구 호출 기본값 | medium |
+| `global.anthropic.claude-opus-4-7` | opus | 복잡 추론/멀티스텝 에이전트 | high |
+
+**금지 패턴** (ai-smoke Check 7/8 + ESLint `no-restricted-syntax`가 차단):
+
+```typescript
+// ✗ 단축 alias를 SDK에 전달
+new Agent({ model: 'sonnet' })
+
+// ✗ 환경변수 fallback (Rule 13: SSOT 패턴 폐기)
+new Agent({ model: process.env.BEDROCK_MODEL_ID ?? '...' })
+
+// ✗ indirect 접근 / 문자열 조립
+const k = 'BEDROCK_' + 'MODEL_ID';
+new Agent({ model: process.env[k] })
+new Agent({ model: ['global', 'anthropic', 'claude-sonnet-4-6'].join('.') })
+```
+
+**올바른 패턴**:
+
+```typescript
+// ✓ 전체 ID 문자열을 코드에 직접 박는다 (도구/에이전트 단위로 다르게)
+const triageAgent = new Agent({
+  model: 'global.anthropic.claude-haiku-4-5-20251001-v1:0', // 의도 분류
+  tools: [classifyIntent],
+});
+const chatAgent = new Agent({
+  model: 'global.anthropic.claude-sonnet-4-6', // 사용자 대면
+  tools: [searchDocs, getOrderStatus],
+});
+```
+
+**선택 원칙**: 도구 ground truth가 짧고 결정적이면 haiku, 사용자 대면 일반 챗은 sonnet, 추론·도메인 지식 필요하면 opus. **대화 단위가 아니라 도구/에이전트 단위로 모델을 다르게** 가져갈 수 있다.
+
 ## 핵심 개념
 
 ### Agent Loop
@@ -152,7 +195,7 @@ TypeScript SDK는 Python SDK와 기능 범위가 다르다. 주요 격차:
 | Skills / Steering / Context-Offloader Plugins | - | O |
 | Evals SDK | - | O |
 
-Python 전용 기능이 필요하면 `strands-sdk-python-guide` 스킬을 참고한다. 단 CDE 파이프라인은 Python SDK를 사용하지 않는다.
+Python 전용 기능은 CDE 파이프라인에서 지원하지 않는다. CDE는 TypeScript SDK 단일 가이드만 유지한다.
 
 ## 베스트 프랙티스 요약
 

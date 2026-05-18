@@ -288,7 +288,7 @@ import {
 } from '@strands-agents/sdk'
 
 const summarizationModel = new BedrockModel({
-  modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+  modelId: 'global.anthropic.claude-sonnet-4-6',
 })
 
 const conversationManager = new SummarizingConversationManager({
@@ -325,4 +325,4 @@ console.log(agent.messages) // 전체 메시지 배열
 | **Retry Strategies (`ModelRetryStrategy`)** | Python 전용. `AfterModelCallEvent.retry = true`로 기본 재시도 가능 |
 | **Interrupts (Human-in-the-loop)** | Python 전용. `BeforeToolCallEvent.cancel`로 부분 대체 |
 
-해당 기능이 필요하면 Python 에이전트를 A2A로 노출하거나 (`multi-agent.md`), `strands-sdk-python-guide` 스킬을 별도 프로젝트에서 사용한다.
+해당 기능이 필요하면 Python 에이전트를 A2A로 노출하는 우회(`multi-agent.md`)를 사용한다. CDE 하네스는 Python SDK 가이드를 포함하지 않는다.

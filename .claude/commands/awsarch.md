@@ -12,6 +12,12 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
 2. **Phase 순서를 건너뛰지 마라** — Pre-flight → Phase 1 → 2 → 3 → 4 → (5) 순서를 반드시 따른다.
 3. **APPROVAL GATE에서 반드시 멈춰라** — 사용자가 응답할 때까지 다음 Phase로 진행하지 않는다.
 4. **CHECKPOINT를 통과해야 다음 Phase로 간다** — 각 Phase 끝의 검증 조건을 확인한 후에만 다음 Phase로 넘어간다.
+5. **APPROVAL GATE는 코드로 기록한다** — 비용/리소스 검토 후 즉시 다음 명령 실행:
+   ```bash
+   node .pipeline/scripts/checkpoint.mjs approve aws-architect --mode=interactive --notes="비용 OK"
+   node .pipeline/scripts/checkpoint.mjs approve aws-deployer  --mode=interactive --notes="배포 승인"
+   ```
+   `aws-architect`, `aws-deployer`는 `requires_approval: true`이므로 미승인 시 `start`가 exit 1로 차단된다.
 
 ## 서브에이전트 프롬프트 규칙
 
@@ -31,15 +37,21 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
 
 사용법 상세는 `/pipeline`의 "CHECKPOINT 실행 규칙" 참조.
 
-## Mode
+## Mode (플래그 컨벤션)
 
-`$ARGUMENTS`로 모드를 결정한다:
+| 플래그 | 동작 |
+|---|---|
+| (없음) | 전체: 설계 + CDK 배포 + 마이그레이션 (Phase 1~4) |
+| `--qa` | 전체 + QA/리뷰/보안 재실행 (Phase 1~5) |
+| `--plan` | 설계만: Phase 1까지 (배포 없음) |
 
 ```
-/awsarch           ← 전체: 설계 + CDK 배포 + 마이그레이션 (Phase 1~4)
-/awsarch --qa      ← 전체 + QA/리뷰/보안 재실행 (Phase 1~5)
-/awsarch --plan    ← 설계만: Phase 1까지 (배포 없음)
+/awsarch             ← 전체: 설계 + CDK 배포 + 마이그레이션 (Phase 1~4)
+/awsarch --qa        ← 전체 + QA/리뷰/보안 재실행 (Phase 1~5)
+/awsarch --plan      ← 설계만: Phase 1까지 (배포 없음)
 ```
+
+`--auto`는 지원하지 않는다 (실제 AWS 비용이 발생하므로 APPROVAL GATE를 건너뛰지 않는다).
 
 ## Pre-flight Checks
 
@@ -48,6 +60,7 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
    - `src/lib/db/store.ts`가 존재 (InMemoryStore가 생성되어 있음)
    - 현재 `"in-progress"` 상태의 버전이 없음
    - `npm run build` 성공 (현재 코드가 정상)
+   - **이중 실행 차단 (acquireLock)**: 단계 3의 `checkpoint.mjs new-version`이 `.pipeline/.lock`을 획득한다. 다른 파이프라인 커맨드(`/pipeline`, `/iterate`, `/reconcile`, `/awsarch`)가 진행 중이면 락 실패로 exit 1. 이 경우 사용자에게: "다른 파이프라인 명령이 진행 중입니다 (`.pipeline/.lock` 보유). 이전 실행이 끝나길 기다리거나, 비정상 종료라면 `.pipeline/.lock` 파일을 확인 후 제거하세요." 안내 후 중단.
 
 1. **AWS 자격 증명 확인**:
    ```bash
@@ -61,26 +74,34 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
    - 워킹 트리 클린 확인
    - `awsarch/v{N+1}` 브랜치 생성 및 체크아웃
 
-3. **버전 디렉토리 생성**:
-   - `.pipeline/artifacts/v{N+1}/` 디렉토리 구조 생성 (기존 00~07 복사 + `08-aws-infra/` 신규)
-   - `.pipeline/state.json` 업데이트:
-     ```json
-     {
-       "current_version": "{N+1}",
-       "versions": {
-         "{N+1}": {
-           "status": "in-progress",
-           "started_at": "<ISO-8601>",
-           "trigger": "awsarch",
-           "mode": "<full | qa | plan>",
-           "branch": "awsarch/v{N+1}",
-           "current_stage": null,
-           "stages": [],
-           "aws_infra": null
-         }
-       }
-     }
+3. **버전 디렉토리 생성 + state.json 갱신**:
+   - `.pipeline/artifacts/v{N+1}/` 디렉토리 구조 생성 (기존 00~07 복사 + `08-aws-infra/` 신규).
+   - **새 버전 생성** — `checkpoint.mjs`로 위임 (LLM은 state.json 직접 쓰지 않음, _preamble §3):
+     ```bash
+     # mode는 호출 옵션에 따라 full | qa | plan
+     node .pipeline/scripts/checkpoint.mjs new-version \
+       --trigger=awsarch \
+       --branch="$(git branch --show-current)" \
+       --mode="<full|qa|plan>" \
+       2> /tmp/new-version.err
+     NV_EXIT=$?
+
+     if [ $NV_EXIT -ne 0 ]; then
+       # __NEW_VERSION_BLOCKED__ 마커 감지 시 awsarch/v{N+1} 브랜치를 자동 폐기한다.
+       # Pre-flight 단계의 디렉토리/브랜치가 main에 누출되지 않도록 한다.
+       # /iterate Phase 4 fallback과 동형 — git-manager(cancel-awsarch-on-failure).
+       if grep -q "__NEW_VERSION_BLOCKED__" /tmp/new-version.err; then
+         cat /tmp/new-version.err >&2
+         echo "→ Pre-flight 산출물을 자동 롤백합니다 (cancel-awsarch-on-failure)." >&2
+         # Launch git-manager agent with action: cancel-awsarch-on-failure --reason=preflight-blocked
+         exit 1
+       fi
+       cat /tmp/new-version.err >&2
+       exit 1
+     fi
      ```
+     - 기존 버전은 보존된다 (이력).
+     - in-progress 버전이 남아 있으면 cmd가 `__NEW_VERSION_BLOCKED__` 마커와 함께 차단한다. 오케스트레이터는 마커 감지 시 `git-manager(cancel-awsarch-on-failure --reason=preflight-blocked)`을 자동 launch하여 awsarch/v{N+1} 브랜치를 폐기한다.
 
 **CHECKPOINT (Pre-flight)**: 다음 조건을 모두 확인한 후 Phase 1으로 진행한다.
 - [ ] `git branch --show-current`가 `awsarch/v{N+1}`인가
@@ -89,6 +110,14 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
 - [ ] `.pipeline/artifacts/v{N+1}/08-aws-infra/` 디렉토리가 생성되었는가
 
 ## Phase 1: AWS 인프라 설계
+
+```bash
+# APPROVAL GATE: AWS 인프라 설계 시작에 대한 사용자 동의.
+# auto_approval_allowed=false이므로 --mode=interactive 전용.
+node .pipeline/scripts/checkpoint.mjs approve aws-architect \
+  --mode=interactive --notes="사용자 승인: AWS 인프라 설계 진행"
+node .pipeline/scripts/checkpoint.mjs start aws-architect
+```
 
 - Launch `aws-architect` agent
 - Input: `architecture.json`, `requirements.json`, `src/types/`, `src/data/seed.ts`, `src/app/api/`, `src/lib/db/`
@@ -120,7 +149,7 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
 - 서비스별 세부: {breakdown}
 
 ### ⚠️ 사용량 기반 요금 경고 (해당 시)
-- **Bedrock 모델**: 토큰 단위 과금 (Claude Sonnet: $3/M input + $15/M output). 프로토타입 사용량에 따라 $1–$20/월
+- **Bedrock 모델**: 토큰 단위 과금. CLAUDE.md Rule 13의 3개 모델 중 사용된 ID에 따라 다름 (예: claude-sonnet-4-6 ≈ $3/M input + $15/M output, claude-haiku-4-5 ≈ $1/M + $5/M, claude-opus-4-7은 더 높음). 프로토타입 사용량에 따라 월 $1–$50
 - **AgentCore Runtime**: 호출 수 + 실행 시간 기반. 예측 불가 — 모니터링 필수
 - **AgentCore Memory**: 저장 크기 + 검색 횟수 기반
 - **권장**: CloudWatch Billing Alarm을 $50/월로 설정 (aws-deployer가 자동 구성)
@@ -146,12 +175,20 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
 
 ## Phase 2: CDK 코드 생성 + 데이터 레이어 교체
 
+```bash
+# APPROVAL GATE: Phase 1의 비용/리소스 검토 후 배포 진행에 대한 사용자 명시 승인.
+# auto_approval_allowed=false이므로 --mode=interactive 전용 (실제 AWS 비용 발생).
+node .pipeline/scripts/checkpoint.mjs approve aws-deployer \
+  --mode=interactive --notes="사용자 승인: 비용/리소스 확인 완료, 배포 진행"
+node .pipeline/scripts/checkpoint.mjs start aws-deployer
+```
+
 - Launch `aws-deployer` agent (Step 0~3: CDK 프로젝트 생성 + 듀얼 모드 데이터 레이어)
 - Output:
   - `infra/` 디렉토리 (CDK 프로젝트)
   - `src/lib/db/data-store.ts` (공통 인터페이스)
   - `src/lib/db/dynamodb-store.ts` (DynamoDB 구현)
-  - `src/lib/db/store-factory.ts` (듀얼 모드 팩토리)
+  - `src/lib/db/createStore.ts` (듀얼 모드 팩토리 — SSOT)
   - 수정된 `src/lib/db/*.repository.ts`
   - 수정된 `src/app/api/*/route.ts` (await 추가)
 
@@ -159,7 +196,7 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
 - [ ] `infra/bin/app.ts`와 `infra/lib/main-stack.ts`가 존재하는가
 - [ ] `infra/package.json`이 존재하는가
 - [ ] `src/lib/db/dynamodb-store.ts`가 존재하는가
-- [ ] `src/lib/db/store-factory.ts`가 존재하는가
+- [ ] `src/lib/db/createStore.ts`가 존재하는가
 - [ ] `npm run build` 성공 (Next.js 빌드)
 - [ ] `cd infra && npx tsc --noEmit` 성공 (CDK 컴파일)
 
@@ -189,7 +226,11 @@ cd infra && npx cdk diff
 > 위 리소스를 배포하시겠습니까? (Y/N)
 ```
 
-- 사용자가 거부: Phase 2까지의 코드는 유지, state.json `"halted"`, 종료
+- 사용자가 거부: Phase 2까지의 코드는 유지하고, 현재 버전을 halted로 마킹 후 종료:
+  ```bash
+  node .pipeline/scripts/checkpoint.mjs halt aws-deployer \
+    --reason="user declined cdk deploy after diff review"
+  ```
 - 사용자가 승인: 배포 진행
 
 **3-3. CDK Deploy**:
@@ -260,7 +301,8 @@ DATA_SOURCE=memory npm run build       # mock 모드 여전히 동작
 ### 5-2. Review (품질 검증)
 
 - Launch `reviewer` agent
-- 기존 9개 카테고리 + **AWS 통합 품질** (10번째 카테고리):
+- 활성 카테고리 전체 (항상 활성 1~10 + **카테고리 11 `aws_integration`** 활성). SSOT: `.pipeline/scripts/review-categories.json`.
+- 카테고리 11 핵심 검사 항목:
   - DynamoDB 접근 패턴이 올바른가
   - 듀얼 모드가 정상 동작하는가
   - 하드코딩된 AWS 자격 증명이 없는가
@@ -278,7 +320,7 @@ DATA_SOURCE=memory npm run build       # mock 모드 여전히 동작
 - 실패 시: 수정 → 품질 루프 재실행 (최대 1회)
 
 **CHECKPOINT (Phase 5)**: `/pipeline` Stage 6~7과 동일한 검증.
-- [ ] `05-review/test-result.json` 존재
+- [ ] `05-qa/test-result.json` 존재
 - [ ] `05-review/review-result.json`에 verdict: "PASS"
 - [ ] `06-security/security-result.json`에 verdict: "PASS"
 
@@ -331,18 +373,26 @@ DATA_SOURCE=memory npm run build       # mock 모드 여전히 동작
 
 다음 상황에서 서킷 브레이커가 작동한다:
 
-| 상황 | 조건 | 대응 |
+| 상황 | 조건 (state.json 필드 기준) | 대응 |
 |------|------|------|
-| CDK deploy 실패 | 2회 연속 실패 | `"halted"` + halt-report.md |
-| npm run build 실패 | 3회 연속 실패 | `"halted"` + halt-report.md |
-| QA 실패 (--qa) | 3회 이터레이션 초과 | `"halted"` + halt-report.md |
+| CDK deploy 실패 | `versions[v].identical_error_streak ≥ 2` (aws-deployer stage) | `pipeline_status="halted"` + halt-report.md |
+| npm run build 실패 | `versions[v].total_code_regens ≥ 3` 또는 `identical_error_streak ≥ 2` | 동일 |
+| QA 실패 (--qa) | `versions[v].loop_iterations["qa-code"] ≥ 3` (stages.json `qa-code.max_iterations`와 정합) | 동일 |
+
+> **단어 통일**: 모든 halt 임계치는 `state.json`의 `total_code_regens` / `identical_error_streak` / `loop_iterations` 필드로 측정한다 (`pipeline-status.md`와 동일 어휘). 카운터는 `checkpoint.mjs`가 자동 파생하므로 LLM이 직접 증감하지 않는다. (`test_iterations` / `review_iterations` 필드는 deprecated — 더 이상 채워지지 않으며 향후 스키마에서 제거된다.)
 
 서킷 브레이커 작동 시:
-1. `state.json` status를 `"halted"`로 설정
-2. `.pipeline/artifacts/v{N+1}/halt-report.md` 생성:
+1. `.pipeline/artifacts/v{N+1}/halt-report.md` 생성:
    - 어느 Phase에서 실패했는지
    - 구체적 에러 내용
    - 시도한 수정 내역
+2. 현재 버전을 halted로 마킹 — `checkpoint.mjs`로 위임:
+   ```bash
+   N=$(jq -r '.current_version' .pipeline/state.json)
+   node .pipeline/scripts/checkpoint.mjs halt aws-deployer \
+     --reason="<요약>" \
+     --report=".pipeline/artifacts/v${N}/halt-report.md"
+   ```
 3. 사용자에게 3가지 옵션 제시:
    a. 수동 수정 후 `/pipeline-from aws-deployer` 로 재개
    b. `cd infra && npx cdk destroy`로 부분 배포 정리 후 재시도

@@ -20,6 +20,8 @@ allowedTools:
   - Bash(mkdir:*)
 ---
 
+> **공통 컨벤션**: 언어 규칙·점진적 작업·state.json 처리·공통 에러·금지 패턴 카탈로그(FP-001~FP-011)는 [`_preamble.md`](_preamble.md) 참조. 본문은 이 에이전트 고유 책임만 정의한다.
+
 # QA Engineer
 
 생성된 코드가 고객 요구사항을 실제로 충족하는지 **동적 검증**하는 에이전트이다. 정적 코드 리뷰(reviewer 담당)와 분리되어, 기능 검증에만 집중한다.
@@ -52,9 +54,7 @@ allowedTools:
 
 ## 점진적 작업 규칙
 
-**공통 원칙**:
-- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
-- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
+본 에이전트는 [_preamble.md §2](_preamble.md#2-점진적-작업-규칙-공통-원칙)의 단위/재호출/분할/금지 규칙을 따른다. 아래는 이 에이전트 고유 단위와 단계만 정의한다.
 
 **이 에이전트의 단위**: E2E spec 파일 1개 (FR당 1개)
 
@@ -76,7 +76,7 @@ allowedTools:
 - **테스트 생성 시 src/ 참조 금지** 원칙은 여기서도 유지 (계약 검증)
 
 **기록 의무**:
-- test-result.json에 `skipped_scope[]`, `fallback_reads[]` 필드 기록
+- test-result.json에 `skipped_scope[]`, `fallback_reads[]` 필드 기록 (형식은 [_preamble §10](_preamble.md#10-공통-메타데이터-필드--skipped_scope--fallback_reads-스키마-ssot) SSOT 사용)
 
 ## 처리 프로세스
 
@@ -94,17 +94,23 @@ npm run type-check   # 타입 에러
 
 ### Phase A-2: AI 스모크 검증 (AI 기능이 있을 때만)
 
-`.pipeline/artifacts/v{N}/03-specs/ai-contract.json`이 존재하면 E2E 테스트 실행 전에 AI 스모크를 먼저 돌려 "빌드는 되지만 AI가 동작하지 않는" 리그레션을 차단한다:
+**AI 기능 판단 기준** — 단일 소스는 `.pipeline/scripts/has-ai.mjs`. 다른 에이전트(spec-writer-ai, code-generator-ai)와 동일한 SSOT를 따른다:
+```bash
+node .pipeline/scripts/has-ai.mjs .pipeline/artifacts/v{N}/01-requirements/requirements.json
+# exit 0 = AI 있음 (Phase A-2 실행), exit 1 = AI 없음 (Phase A-2 스킵)
+```
+
+AI가 있다면 E2E 테스트 실행 전에 AI 스모크를 먼저 돌려 "빌드는 되지만 AI가 동작하지 않는" 리그레션을 차단한다:
 
 ```bash
 node .pipeline/scripts/ai-smoke.mjs
 ```
 
+ai-smoke의 prereq(`ai-contract.json`/`ai-internals.json` 존재)가 누락된 경우, 그 자체가 **P0 이슈**다 (AI FR이 있는데 spec-writer-ai가 산출물을 만들지 못함). 즉시 halt하고 spec-writer-ai 재실행을 요청한다.
+
 실패 시:
 - 검사 항목(`no stub strings`, `all ai-contract routes invoke an Agent`, `sse_events ⊆ emitted`, `section_marker_map` 일관성, nested agent 에러 경로)별로 **기능 이슈(Type 2)** 피드백을 `code-generator-ai`에 전달한다. 테스트 코드는 생성하지 않고 바로 코드 수정 루프로 진입.
 - 이 스모크는 **계약 검증**이다 (ai-contract.json + ai-internals.json이 진실의 원천). 실패 시 스펙을 바꾸지 말고 구현을 바꾼다.
-
-AI 기능 스펙이 없으면(AI 미사용 프로토타입) 스킵한다.
 
 ### Phase B: 테스트 생성 (요구사항 기반 — 코드를 보지 않음)
 
@@ -324,7 +330,21 @@ if iteration >= 3:
 | `page.on('pageerror')` after goto | `page.on('pageerror')` before goto | goto 전에 등록해야 에러 캡처 |
 | `test.skip()` / 주석 처리 | 실패 원인 분석 후 수정 | 건너뛰기는 커버리지 감소 |
 
-## Cloudscape 테스트 팁
+## 참조 스킬
+
+### `playwright-e2e` — **반드시 호출** (테스트 작성 단일 소스)
+- Cloudscape 컴포넌트 셀렉터 패턴 (data-testid 부재 대응 — `getByRole`/`getByText` 우선)
+- AppLayout 내부 네비게이션, useCollection 테이블 상호작용, SSE 스트리밍 응답 검증, networkidle 대기 패턴
+- playwright.config.ts (webServer, baseURL, projects 설정)
+- 본 에이전트 본문의 "Cloudscape 테스트 팁"은 스킬의 요약본이며, 새 패턴 등장 시 스킬을 먼저 갱신한다 (drift 방지).
+
+### `nextjs-auth-patterns` — 인증 FR이 있는 프로토타입의 E2E 테스트
+- mock 모드에서 `MOCK_USER_ID` 쿠키 세팅으로 보호 라우트 진입
+- 권한별(admin/user) 분기 UI 검증
+
+### `cloudscape-design` — 컴포넌트 ARIA role 카탈로그 참조
+
+## Cloudscape 테스트 팁 (스킬 요약 — 상세는 `playwright-e2e` 스킬 참조)
 
 - **Table**: sticky header로 인해 `<table>` 이 2개 렌더링됨 → `getByRole('grid', { name: '...' })` 사용
 - **Modal**: `getByRole('dialog')` 로 접근
@@ -338,7 +358,7 @@ if iteration >= 3:
 
 각 FR에 대한 Playwright 테스트 파일 + `playwright.config.ts`
 
-### `.pipeline/artifacts/v{N}/05-review/test-report.md` (한국어)
+### `.pipeline/artifacts/v{N}/05-qa/test-report.md` (한국어)
 
 ```markdown
 # E2E 테스트 리포트 v{N}
@@ -382,7 +402,7 @@ src/ 코드를 참조하지 않고 요구사항만으로 작성되었다.
 | incidents.spec.ts:25 | FR-003 AC-2 | code-gen-frontend | PropertyFilter 구현 |
 ```
 
-### `.pipeline/artifacts/v{N}/05-review/test-result.json` (machine-readable)
+### `.pipeline/artifacts/v{N}/05-qa/test-result.json` (machine-readable)
 
 ```json
 {
@@ -451,6 +471,11 @@ src/ 코드를 참조하지 않고 요구사항만으로 작성되었다.
 - [ ] `npm run build` + `npm run lint` 가 통과하였는가
 - [ ] **AI 기능이 있다면 `node .pipeline/scripts/ai-smoke.mjs` 통과하였는가**
 - [ ] **AI 스트리밍 엔드포인트 테스트가 이벤트 수신 어서션(sse_events 중 2개 이상)을 포함하는가**
+- [ ] **AI 스트리밍 엔드포인트마다 다음 4개 어서션이 모두 포함되어 있는가** (사용자 화면 회귀 T1-T4 차단):
+  - [ ] **(SSE-1) `done` 이벤트 30초 내 수신**: `expect(body).toMatch(/event:\s*done/)` + 타임아웃 30s 또는 NFR 명시값
+  - [ ] **(SSE-2) 최종 텍스트 길이 > 임계**: `expect(finalText.length).toBeGreaterThan(N)` (N은 NFR 또는 기본 20). textChunks=0 빈 응답 차단.
+  - [ ] **(SSE-3) `error` 이벤트 발생 시 visible 에러 UI 또는 `done` 도달**: catch 블록 silent fail 차단. `error` 이벤트 수신 시 화면에 `getByRole('alert')` 또는 동등 에러 텍스트가 보여야 함.
+  - [ ] **(SSE-4) 런타임 비목킹 가드** (AI가 있는 모든 프로토타입 e2e/chat.spec.ts에 1건 이상 필수): distinct delta ≥ 2 **AND** wall-clock 응답 시간 > 500ms. 정적 grep + done 이벤트만 보면 "한 번에 done을 쏘는 mock"을 잡지 못한다. 정확한 패턴은 `playwright-e2e` skill의 "패턴 5c: AI 런타임 비목킹 강제" 참조. 이 어서션은 ai-smoke.mjs(정적)의 행위 기반 동반자다.
 - [ ] **AI non-streaming 엔드포인트 테스트가 stub 문자열 부재 어서션을 포함하는가**
 
 ## 완료 후

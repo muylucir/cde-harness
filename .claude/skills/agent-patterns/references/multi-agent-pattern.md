@@ -91,39 +91,72 @@ Orchestrator Agent (관리자)
 
 #### 구현 예시
 
-```python
-# Strands Agents - Agents as Tools
-from strands import Agent, tool
+```typescript
+// Strands Agents TypeScript SDK - Agents as Tools
+// 가장 단순한 방법: Agent 객체를 직접 tools 배열에 전달하면 SDK가 자동으로 도구로 변환한다.
+// 도구 이름/설명 커스터마이즈가 필요할 때만 .asTool() 또는 tool()을 사용한다.
+import { Agent, tool } from '@strands-agents/sdk';
+import { z } from 'zod';
 
-# 전문 에이전트들을 도구로 정의
-@tool
-def research_agent(query: str) -> str:
-    """Research Agent: 주제 조사 담당"""
-    agent = Agent(system_prompt="당신은 리서치 전문가입니다...")
-    return agent(query).message['content'][0]['text']
+// 전문 에이전트 정의 (각 에이전트의 name + description은 라우팅 결정에 사용된다)
+const researchAgent = new Agent({
+  name: 'research_agent',
+  description: '주제 조사 담당. 쿼리에 대해 사실 기반의 정보를 출처와 함께 제공한다.',
+  systemPrompt: '당신은 리서치 전문가입니다. 사실에 근거한 정보를 출처와 함께 제공하세요.',
+  // 도구별 모델 정책 (CLAUDE.md Rule 13): 정형 조사라면 haiku, 깊은 분석이 필요하면 opus.
+  model: 'global.anthropic.claude-sonnet-4-6',
+});
 
-@tool
-def analysis_agent(data: str) -> str:
-    """Analysis Agent: 데이터 분석 담당"""
-    agent = Agent(system_prompt="당신은 데이터 분석 전문가입니다...")
-    return agent(data).message['content'][0]['text']
+const analysisAgent = new Agent({
+  name: 'analysis_agent',
+  description: '데이터 분석 담당. 수집된 데이터에서 인사이트를 도출한다.',
+  systemPrompt: '당신은 데이터 분석 전문가입니다. 수치/패턴/이상치를 식별하세요.',
+  model: 'global.anthropic.claude-sonnet-4-6',
+});
 
-@tool
-def writer_agent(content: str) -> str:
-    """Writer Agent: 문서 작성 담당"""
-    agent = Agent(system_prompt="당신은 콘텐츠 작성 전문가입니다...")
-    return agent(content).message['content'][0]['text']
+const writerAgent = new Agent({
+  name: 'writer_agent',
+  description: '문서 작성 담당. 분석 결과를 보고서 형태로 가공한다.',
+  systemPrompt: '당신은 콘텐츠 작성 전문가입니다. 명료하고 구조화된 문서를 작성하세요.',
+  model: 'global.anthropic.claude-sonnet-4-6',
+});
 
-# Orchestrator Agent
-orchestrator = Agent(
-    system_prompt="""당신은 프로젝트 관리자입니다.
-    다음 전문가들을 활용하여 작업을 완료하세요:
-    - research_agent: 주제 조사
-    - analysis_agent: 데이터 분석
-    - writer_agent: 문서 작성
-    """,
-    tools=[research_agent, analysis_agent, writer_agent]
-)
+// Orchestrator: tools 배열에 Agent를 직접 넘기면 자동으로 도구로 래핑된다.
+const orchestrator = new Agent({
+  systemPrompt: `당신은 프로젝트 관리자입니다.
+다음 전문가들을 활용하여 작업을 완료하세요:
+- research_agent: 주제 조사
+- analysis_agent: 데이터 분석
+- writer_agent: 문서 작성
+요청을 가장 적합한 도구로 라우팅하고, 결과를 종합하세요.`,
+  tools: [researchAgent, analysisAgent, writerAgent],
+  model: 'global.anthropic.claude-opus-4-7', // 멀티스텝 라우팅·종합은 opus
+});
+
+// 컨텍스트 보존이 필요할 때는 .asTool()로 명시:
+//   tools: [researchAgent.asTool({ preserveContext: true })]
+
+// 커스텀 전/후처리·다중 입력이 필요한 경우, tool()로 직접 래핑한다.
+const tripPlanningAssistant = tool({
+  name: 'trip_planning_assistant',
+  description: '여행 일정/조언을 생성한다.',
+  inputSchema: z.object({
+    query: z.string().describe('여행지/선호도가 포함된 요청'),
+  }),
+  callback: async (input) => {
+    const travelAgent = new Agent({
+      systemPrompt: '당신은 여행 계획 전문가입니다. 상세한 일정을 작성하세요.',
+      model: 'global.anthropic.claude-sonnet-4-6',
+    });
+    const response = await travelAgent.invoke(input.query);
+    return response.lastMessage.content
+      .map((block) => ('text' in block ? block.text : ''))
+      .join('');
+  },
+});
+
+// 실행
+const result = await orchestrator.invoke('AI 트렌드 분석 보고서 작성');
 ```
 
 #### 실행 흐름
@@ -173,50 +206,54 @@ Agent C ←→ Agent D
 
 #### 구현 예시
 
-```python
-# Strands Agents - Swarm Pattern
-from strands import Agent
+```typescript
+// Strands Agents TypeScript SDK - Swarm Pattern
+// TS SDK의 Swarm은 structured output 기반 핸드오프를 사용한다.
+// 각 에이전트가 { agentId, message, context }를 반환하면 swarm이 다음 에이전트로 라우팅하고,
+// agentId가 없으면 message가 최종 응답이 된다. description 필드가 라우팅 판단에 사용된다.
+import { Agent, Swarm } from '@strands-agents/sdk';
 
-def create_swarm_agents():
-    # 아이디어 생성 에이전트
-    idea_generator = Agent(
-        system_prompt="""당신은 창의적 아이디어 생성자입니다.
-        주제에 대해 혁신적인 아이디어를 제안하세요.
-        다른 에이전트의 피드백을 받으면 아이디어를 발전시키세요."""
-    )
+const ideaGenerator = new Agent({
+  id: 'idea_generator',
+  description: '주제에 대한 혁신적 아이디어를 생성하거나, 피드백을 반영해 발전시킨다.',
+  systemPrompt: `당신은 창의적 아이디어 생성자입니다.
+주제에 대해 혁신적인 아이디어를 제안하세요.
+다른 에이전트의 피드백을 받으면 아이디어를 발전시키세요.`,
+  model: 'global.anthropic.claude-sonnet-4-6',
+});
 
-    # 비평 에이전트
-    critic = Agent(
-        system_prompt="""당신은 건설적 비평가입니다.
-        아이디어의 장점과 개선점을 제시하세요.
-        비판적이지만 건설적으로 피드백하세요."""
-    )
+const critic = new Agent({
+  id: 'critic',
+  description: '아이디어의 장점·개선점을 식별하고 generator에게 피드백을 반환한다.',
+  systemPrompt: `당신은 건설적 비평가입니다.
+아이디어의 장점과 개선점을 제시하세요. 비판적이지만 건설적으로 피드백하세요.`,
+  model: 'global.anthropic.claude-sonnet-4-6',
+});
 
-    # 정제 에이전트
-    refiner = Agent(
-        system_prompt="""당신은 아이디어 정제 전문가입니다.
-        피드백을 반영하여 최종 아이디어를 완성하세요."""
-    )
+const refiner = new Agent({
+  id: 'refiner',
+  description: '충분히 다듬어진 아이디어를 최종 정제하여 응답을 마무리한다.',
+  systemPrompt: `당신은 아이디어 정제 전문가입니다.
+피드백을 반영하여 최종 아이디어를 완성하세요. 마무리 단계에서 호출됩니다.`,
+  model: 'global.anthropic.claude-opus-4-7', // 최종 종합은 opus
+});
 
-    return idea_generator, critic, refiner
+const swarm = new Swarm({
+  nodes: [ideaGenerator, critic, refiner],
+  start: 'idea_generator', // 첫 핸들러
+  maxSteps: 10,            // 무한 핸드오프 방지 (Python의 max_handoffs/max_iterations 통합)
+});
 
-# Swarm 실행 (handoff 기반)
-def run_swarm(topic: str, rounds: int = 3):
-    generator, critic, refiner = create_swarm_agents()
-
-    # 초기 아이디어 생성
-    idea = generator(f"주제: {topic}").message['content'][0]['text']
-
-    for _ in range(rounds):
-        # Critic에게 handoff
-        feedback = critic(f"아이디어: {idea}").message['content'][0]['text']
-        # Generator에게 다시 handoff
-        idea = generator(f"피드백 반영: {feedback}").message['content'][0]['text']
-
-    # 최종 정제
-    final = refiner(f"최종 정제: {idea}").message['content'][0]['text']
-    return final
+// 실행
+const result = await swarm.invoke('새로운 마케팅 캠페인 아이디어');
+console.log('Status:', result.status);
+console.log('Handoff history:', result.results.map((r) => r.nodeId).join(' -> '));
 ```
+
+> **Python ↔ TypeScript 차이점**:
+> - 핸드오프는 SDK가 주입한 도구가 아니라 **Zod 기반 structured output**(`{ agentId, message, context }`)으로 결정된다. 라우팅 로직이 도구 콜백이 아닌 오케스트레이터에 머문다.
+> - 컨텍스트는 변경 가능한 SharedContext 대신 직렬화된 JSON 텍스트 블록으로 전달된다.
+> - `max_handoffs` + `max_iterations` 두 파라미터가 단일 `maxSteps`로 통합된다. `maxSteps` 초과 시 예외 발생(Python은 FAILED 결과 반환).
 
 #### 실행 흐름
 
@@ -317,44 +354,96 @@ Draft Writer → Reviewer → {Needs Revision? → Draft Writer | Approved → P
 
 #### 구현 예시
 
-```python
-# Strands Agents - Graph Pattern (GraphBuilder API)
-from strands import Agent
-from strands.multiagent.graph import GraphBuilder
+```typescript
+// Strands Agents TypeScript SDK - Graph Pattern
+// TS SDK는 Python의 GraphBuilder fluent API 대신 선언적 { nodes, edges } 생성자를 사용한다.
+// 조건부 엣지는 EdgeHandler 함수로 표현한다.
+import { Agent, Graph, type EdgeHandler } from '@strands-agents/sdk';
 
-# 에이전트 정의
-validator = Agent(system_prompt="문서 유효성을 검증하세요. 결과에 '유효' 또는 '무효'를 포함하세요.")
-legal_review = Agent(system_prompt="법률 관점에서 문서를 검토하세요.")
-finance_review = Agent(system_prompt="재무 관점에서 문서를 검토하세요. 결과에 '승인' 또는 '반려'를 포함하세요.")
-final_approver = Agent(system_prompt="최종 승인을 처리하세요.")
-rejector = Agent(system_prompt="반려 사유를 정리하세요.")
+// 에이전트 정의 (각 에이전트의 id가 그래프 노드 식별자가 된다)
+const validator = new Agent({
+  id: 'validator',
+  systemPrompt: "문서 유효성을 검증하세요. 결과에 '유효' 또는 '무효'를 포함하세요.",
+  model: 'global.anthropic.claude-haiku-4-5-20251001-v1:0', // 단순 분류는 haiku
+});
 
-# GraphBuilder로 그래프 구성
-graph = (
-    GraphBuilder()
-    .add_node("validator", validator)
-    .add_node("legal_review", legal_review)
-    .add_node("finance_review", finance_review)
-    .add_node("final_approver", final_approver)
-    .add_node("rejector", rejector)
-    .set_entry_point("validator")
-    # 조건부 엣지: validator 결과에 따라 분기
-    .add_edge("validator", "legal_review", condition=lambda result: "유효" in str(result))
-    .add_edge("validator", "rejector", condition=lambda result: "무효" in str(result))
-    .add_edge("legal_review", "finance_review")
-    # 조건부 엣지: finance_review 결과에 따라 분기
-    .add_edge("finance_review", "final_approver", condition=lambda result: "승인" in str(result))
-    .add_edge("finance_review", "rejector", condition=lambda result: "반려" in str(result))
-    # 실행 안전장치
-    .set_max_node_executions(20)
-    .set_execution_timeout(300)
-    .build()
-)
+const legalReview = new Agent({
+  id: 'legal_review',
+  systemPrompt: '법률 관점에서 문서를 검토하세요.',
+  model: 'global.anthropic.claude-sonnet-4-6',
+});
 
-# 실행
-result = graph("계약서 검토 요청: ...")
-print(result.status)           # COMPLETED / FAILED
-print(result.execution_order)  # ['validator', 'legal_review', ...]
+const financeReview = new Agent({
+  id: 'finance_review',
+  systemPrompt: "재무 관점에서 문서를 검토하세요. 결과에 '승인' 또는 '반려'를 포함하세요.",
+  model: 'global.anthropic.claude-sonnet-4-6',
+});
+
+const finalApprover = new Agent({
+  id: 'final_approver',
+  systemPrompt: '최종 승인을 처리하세요.',
+  model: 'global.anthropic.claude-haiku-4-5-20251001-v1:0',
+});
+
+const rejector = new Agent({
+  id: 'rejector',
+  systemPrompt: '반려 사유를 정리하세요.',
+  model: 'global.anthropic.claude-haiku-4-5-20251001-v1:0',
+});
+
+// 조건부 엣지 핸들러 (Python의 condition lambda에 대응)
+const isValid: EdgeHandler = (state) => {
+  const text = state
+    .node('validator')!
+    .content.map((b) => ('text' in b ? b.text : ''))
+    .join('');
+  return text.includes('유효') && !text.includes('무효');
+};
+
+const isInvalid: EdgeHandler = (state) => {
+  const text = state
+    .node('validator')!
+    .content.map((b) => ('text' in b ? b.text : ''))
+    .join('');
+  return text.includes('무효');
+};
+
+const isApproved: EdgeHandler = (state) => {
+  const text = state
+    .node('finance_review')!
+    .content.map((b) => ('text' in b ? b.text : ''))
+    .join('');
+  return text.includes('승인') && !text.includes('반려');
+};
+
+const isRejected: EdgeHandler = (state) => {
+  const text = state
+    .node('finance_review')!
+    .content.map((b) => ('text' in b ? b.text : ''))
+    .join('');
+  return text.includes('반려');
+};
+
+const graph = new Graph({
+  nodes: [validator, legalReview, financeReview, finalApprover, rejector],
+  edges: [
+    // 조건부 엣지: validator 결과에 따라 분기
+    { source: 'validator', target: 'legal_review', handler: isValid },
+    { source: 'validator', target: 'rejector', handler: isInvalid },
+    // 무조건 엣지는 [source, target] 튜플
+    ['legal_review', 'finance_review'],
+    // 조건부 엣지: finance_review 결과에 따라 분기
+    { source: 'finance_review', target: 'final_approver', handler: isApproved },
+    { source: 'finance_review', target: 'rejector', handler: isRejected },
+  ],
+  sources: ['validator'],  // 진입점 (생략 시 incoming 엣지가 없는 노드들이 자동 진입점)
+  maxSteps: 20,            // 순환 그래프 무한 루프 방지
+});
+
+// 실행
+const result = await graph.invoke('계약서 검토 요청: ...');
+console.log('Status:', result.status); // COMPLETED / FAILED
+console.log('Execution order:', result.results.map((r) => r.nodeId).join(' -> '));
 ```
 
 #### 실행 흐름
@@ -414,68 +503,93 @@ Step1 → Step2 → Step3 → Step4 (순차 실행)
 
 #### 구현 예시
 
-```python
-# Strands Agents - Workflow Pattern
-from strands import Agent
-from typing import List, Callable
+```typescript
+// Strands Agents TypeScript SDK - Workflow Pattern
+// TS SDK는 별도의 Workflow 클래스 대신 두 가지 구현 방식을 제공한다:
+//   (A) 가벼운 순차 파이프라인: 단순 함수로 Agent를 직접 체인.
+//   (B) 의존성/병렬화/조건부 분기가 필요하면 Graph(선형 엣지)를 사용 — 동일한 결과를 얻는다.
 
-class AgentWorkflow:
-    def __init__(self):
-        self.steps: List[tuple] = []
+// (A) 함수형 sequential pipeline — pre/post 훅과 진행 콜백 포함
+import { Agent } from '@strands-agents/sdk';
 
-    def add_step(self, name: str, agent: Agent,
-                 pre_hook: Callable = None,
-                 post_hook: Callable = None):
-        self.steps.append((name, agent, pre_hook, post_hook))
+interface WorkflowStep {
+  name: string;
+  agent: Agent;
+  pre?: (input: string) => string | Promise<string>;
+  post?: (output: string) => string | Promise<string>;
+}
 
-    def execute(self, input_data: str,
-                on_progress: Callable = None) -> str:
-        result = input_data
-        total = len(self.steps)
+interface WorkflowOptions {
+  steps: ReadonlyArray<WorkflowStep>;
+  onProgress?: (name: string, current: number, total: number) => void;
+}
 
-        for i, (name, agent, pre_hook, post_hook) in enumerate(self.steps):
-            # Progress 콜백
-            if on_progress:
-                on_progress(name, i + 1, total)
+/** 순차 워크플로우를 실행하고 최종 텍스트 결과를 반환한다. */
+async function runWorkflow(
+  inputData: string,
+  options: WorkflowOptions
+): Promise<string> {
+  let result = inputData;
+  const total = options.steps.length;
 
-            # Pre-hook
-            if pre_hook:
-                result = pre_hook(result)
+  for (let i = 0; i < total; i += 1) {
+    const { name, agent, pre, post } = options.steps[i];
+    options.onProgress?.(name, i + 1, total);
 
-            # Agent 실행
-            result = agent(result).message['content'][0]['text']
+    if (pre) result = await pre(result);
 
-            # Post-hook (체크포인트 저장 등)
-            if post_hook:
-                result = post_hook(result)
+    const response = await agent.invoke(result);
+    result = response.lastMessage.content
+      .map((block) => ('text' in block ? block.text : ''))
+      .join('');
 
-        return result
+    if (post) result = await post(result);
+  }
+  return result;
+}
 
-# Workflow 구성 예시: 데이터 처리 파이프라인
-workflow = AgentWorkflow()
+// 구성: 데이터 처리 파이프라인
+const extractAgent = new Agent({
+  systemPrompt: '데이터 추출 전문가. 원본 데이터에서 필요한 정보를 추출하세요.',
+  model: 'global.anthropic.claude-haiku-4-5-20251001-v1:0',
+});
+const transformAgent = new Agent({
+  systemPrompt: '데이터 변환 전문가. 추출된 데이터를 분석 가능한 형태로 변환하세요.',
+  model: 'global.anthropic.claude-sonnet-4-6',
+});
+const analyzeAgent = new Agent({
+  systemPrompt: '데이터 분석 전문가. 변환된 데이터에서 인사이트를 도출하세요.',
+  model: 'global.anthropic.claude-sonnet-4-6',
+});
+const reportAgent = new Agent({
+  systemPrompt: '보고서 작성 전문가. 분석 결과를 보고서 형태로 작성하세요.',
+  model: 'global.anthropic.claude-opus-4-7', // 최종 종합은 opus
+});
 
-workflow.add_step(
-    "extract",
-    Agent(system_prompt="데이터 추출 전문가. 원본 데이터에서 필요한 정보 추출...")
-)
-workflow.add_step(
-    "transform",
-    Agent(system_prompt="데이터 변환 전문가. 추출된 데이터를 분석 가능한 형태로 변환...")
-)
-workflow.add_step(
-    "analyze",
-    Agent(system_prompt="데이터 분석 전문가. 변환된 데이터에서 인사이트 도출...")
-)
-workflow.add_step(
-    "report",
-    Agent(system_prompt="보고서 작성 전문가. 분석 결과를 보고서 형태로 작성...")
-)
+const result = await runWorkflow('원본 데이터...', {
+  steps: [
+    { name: 'extract', agent: extractAgent },
+    { name: 'transform', agent: transformAgent },
+    { name: 'analyze', agent: analyzeAgent },
+    { name: 'report', agent: reportAgent },
+  ],
+  onProgress: (name, current, total) => {
+    console.log(`[${current}/${total}] ${name}`);
+  },
+});
 
-# 실행
-result = workflow.execute(
-    input_data="원본 데이터...",
-    on_progress=lambda name, current, total: print(f"[{current}/{total}] {name}")
-)
+// (B) 동일 흐름을 Graph로 구현하면 향후 분기·병렬화 확장이 쉬워진다.
+//     edges에 [source, target] 튜플만 사용하면 곧 Sequential Pipeline.
+//
+// const pipeline = new Graph({
+//   nodes: [extractAgent, transformAgent, analyzeAgent, reportAgent],
+//   edges: [
+//     ['extract', 'transform'],
+//     ['transform', 'analyze'],
+//     ['analyze', 'report'],
+//   ],
+// });
+// const result = await pipeline.invoke('원본 데이터...');
 ```
 
 #### 실행 흐름

@@ -426,7 +426,9 @@ const reportWorker = new NodejsFunction(this, 'ReportWorker', {
   timeout: cdk.Duration.minutes(2), // SQS Visibility Timeout(15분) 내
   environment: {
     TABLE_NAME: table.tableName,
-    MODEL_ID: 'anthropic.claude-sonnet-4-6-20250514-v1:0',
+    // 모델 ID는 코드에 직접 명시 (CLAUDE.md Rule 13).
+    // 작업 성격에 맞게 haiku-4-5/sonnet-4-6/opus-4-7 중 하나를 선택.
+    MODEL_ID: 'global.anthropic.claude-sonnet-4-6',
   },
   bundling: { minify: true, sourceMap: true },
 });

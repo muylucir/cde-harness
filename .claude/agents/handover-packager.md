@@ -1,7 +1,7 @@
 ---
 name: handover-packager
 description: "프로토타입 코드를 고객 개발팀에 인수인계하기 위한 핸드오버 패키지를 생성한다. 아키텍처 문서, API 문서, 환경 설정 가이드, 프로덕션 전환 체크리스트, 권장 다음 단계를 포함. 보안 점검 통과 후 최종 단계로 실행."
-model: opus
+model: sonnet
 effort: medium
 color: emerald
 allowedTools:
@@ -16,6 +16,8 @@ allowedTools:
   - Bash(npm run build:*)
   - Skill
 ---
+
+> **공통 컨벤션**: 언어 규칙·점진적 작업·state.json 처리·공통 에러·금지 패턴 카탈로그(FP-001~FP-011)는 [`_preamble.md`](_preamble.md) 참조. 본문은 이 에이전트 고유 책임만 정의한다.
 
 # Handover Packager
 
@@ -64,7 +66,7 @@ npm run dev
 - `.pipeline/artifacts/v{latest}/02-architecture/architecture.json` + `architecture.md`
 - `.pipeline/artifacts/v{latest}/03-specs/_manifest.json` + 스펙 파일들
 - `.pipeline/artifacts/v{latest}/04-codegen/generation-log-*.json`
-- `.pipeline/artifacts/v{latest}/05-review/review-report.md` + `test-report.md`
+- `.pipeline/artifacts/v{latest}/05-review/review-report.md` + `.pipeline/artifacts/v{latest}/05-qa/test-report.md`
 - `.pipeline/artifacts/v{latest}/06-security/security-audit.md` + `security-result.json`
 
 ### AWS 인프라 아티팩트 (조건부 — /awsarch 실행된 경우)
@@ -108,26 +110,32 @@ npm run dev
 | mermaid-diagrams | ARCHITECTURE.md의 데이터 플로우/컴포넌트 다이어그램 생성 및 검증 | 문서 생성 3b단계 (ARCHITECTURE.md) |
 | ascii-diagram | README.md의 프로젝트 구조 디렉토리 트리 렌더링 | 문서 생성 3a단계 (README.md) |
 | cloudscape-design | 컴포넌트 목록 교차 검증, 페이지 패턴 설명 보강 | ARCHITECTURE.md 컴포넌트 계층 작성 시 |
+| **nextjs-auth-patterns** | 인증 FR이 있을 때 `docs/AUTH.md` 자동 생성 (Cognito 전환, middleware 가드, 보호 라우트) | requirements.json에 인증/로그인/권한 FR 감지 시 |
+
+**인증 FR 감지 로직**: `requirements.json`의 `functional_requirements[]` 또는 `non_functional_requirements[]`에서 다음 키워드 검색:
+- 한국어: `로그인`, `회원가입`, `인증`, `권한`, `관리자`, `Cognito`, `세션`
+- 영어: `login`, `signup`, `auth`, `permission`, `admin`, `role`, `cognito`, `session`
+
+매칭되면 `nextjs-auth-patterns` 스킬을 호출하고 `docs/AUTH.md`를 추가 생성. 매칭 안 되면 인증 섹션 생략.
 
 ## 점진적 작업 규칙
 
-**공통 원칙**:
-- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
-- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
+본 에이전트는 [_preamble.md §2](_preamble.md#2-점진적-작업-규칙-공통-원칙)의 단위/재호출/분할/금지 규칙을 따른다. 아래는 이 에이전트 고유 단위와 단계만 정의한다.
 
 **이 에이전트의 단위**: MD 파일 1개
 
 **단계 (각 단계 Write 후 정지 허용)**:
-1. **Read 입력**: 전 버전 아티팩트, src/, infra/ (아래 입력 축소 규칙 준수)
+1. **Read 입력**: 전 버전 아티팩트, src/, infra/, **`requirements.json`의 인증 FR 감지** (위 "인증 FR 감지 로직" 참조)
 2. **Write** README.md
 3. **Write** ARCHITECTURE.md (mermaid-diagrams 스킬 호출 직전에만)
 4. **Write** API.md
 5. **Write** AI-AGENT.md (AI 기능 있을 때)
-6. **Write** AWS-INFRA.md (`/awsarch` 실행 후일 때)
-7. **Write** PRODUCTION-CHECKLIST.md
-8. **Write** REVISION-HISTORY.md (v2 이상일 때)
-9. **Write** SETUP.md
-10. **Write** manifest.json (skipped_scope / fallback_reads 포함)
+6. **Write** AWS-INFRASTRUCTURE.md (`/awsarch` 실행 후일 때)
+7. **Write** **AUTH.md (인증 FR 감지 시 — nextjs-auth-patterns 스킬 호출 직전에만)**
+8. **Write** PRODUCTION-CHECKLIST.md
+9. **Write** REVISION-HISTORY.md (v2 이상일 때)
+10. **Write** SETUP.md
+11. **Write** manifest.json (skipped_scope / fallback_reads 포함)
 
 ## 입력 축소 규칙 (품질 가드 포함)
 
@@ -143,7 +151,7 @@ npm run dev
 - Grep 결과가 예상보다 적으면 전체 Read로 폴백
 
 **기록 의무**:
-- manifest.json에 `skipped_scope[]`, `fallback_reads[]` 필드로 기록
+- manifest.json에 `skipped_scope[]`, `fallback_reads[]` 필드로 기록 (형식은 [_preamble §10](_preamble.md#10-공통-메타데이터-필드--skipped_scope--fallback_reads-스키마-ssot) SSOT 사용)
 
 ## 핸드오버 패키지 구성
 
@@ -402,7 +410,7 @@ cd infra && npx ts-node scripts/seed-data.ts
 ## v2 — 1차 고객 피드백 반영
 - **날짜**: {state.json versions.2.started_at}
 - **트리거**: /iterate
-- **재진입 지점**: {versions.2.reentry_point}
+- **영향 범위 라벨**: {revisions/v1-to-v2.json의 informational_reentry_hint} (참고용 — /iterate는 항상 requirements-analyst부터 재실행)
 - **고객 피드백 원본**: {revisions/v1-to-v2-analysis.md에서 피드백 항목 요약}
 - **요구사항 변경**:
   | 변경 유형 | FR | 설명 |

@@ -1,6 +1,6 @@
 ---
 name: ascii-diagram
-description: 한글/영어 혼합 ASCII 다이어그램 생성 가이드. 플로우차트, 박스, 시퀀스, 테이블, 트리 구조 지원. 한글 2칸/영어 1칸 폭 계산으로 정렬 문제 해결. 채팅에서 다이어그램 요청 시 사용.
+description: "한글/영어 혼합 ASCII 다이어그램 생성 가이드. 플로우차트, 박스, 시퀀스, 테이블, 트리 구조 지원. 한글 2칸/영어 1칸 폭 계산으로 정렬 문제 해결. \n분기 규칙: **terminal/plain MD에서 정렬되어야 하는 컴포넌트 트리, 디렉토리 구조, 박스 다이어그램, 표**는 ascii-diagram을 사용. **렌더러(브라우저/Mermaid Live)에서 시각화되는 시퀀스/플로우/상태 다이어그램**은 mermaid-diagrams를 사용. architect 에이전트는 컴포넌트 트리=ascii, 데이터플로우=mermaid로 분기."
 license: Apache-2.0
 metadata:
   version: "1.0"

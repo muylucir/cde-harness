@@ -16,6 +16,8 @@ allowedTools:
   - Bash(mkdir:*)
 ---
 
+> **공통 컨벤션**: 언어 규칙·점진적 작업·state.json 처리·공통 에러·금지 패턴 카탈로그(FP-001~FP-011)는 [`_preamble.md`](_preamble.md) 참조. 본문은 이 에이전트 고유 책임만 정의한다.
+
 # Spec Writer — Backend
 
 아키텍처 문서에서 백엔드 구현 스펙을 작성하는 에이전트. 타입 정의, zod 검증, 시드 데이터, repository, API 라우트, 미들웨어를 포함하는 상세 스펙을 생성한다.
@@ -57,20 +59,16 @@ allowedTools:
 | data | `kpis` | 시드 데이터의 상태 분포를 `typical_target` 범위에 맞게 조정 (예: 가동률 85-95% 목표 → 차량 90%를 in-operation으로) |
 | db | `data_model_hints.common_relationships` | 관계형 조회 메서드 추가 (예: "Vehicle hasMany MaintenanceRecords" → `findByVehicleId()`) |
 
-## 핵심 계약 규칙 (BE/FE 공통 — CLAUDE.md 참조)
+## 핵심 계약 규칙 (BE/FE 공통)
 
-- 모든 엔드포인트는 `{ items, total, nextToken? }` / `{ item }` / `{ success: true }` / `{ error }` envelope을 따른다
-- 동적 세그먼트는 항상 `[id]` (`[vehicleId]` 등 변형 금지)
-- 쿼리는 camelCase (`pageSize`, `sortBy`)
-- **요청 타입은 반드시 `z.infer<typeof XxxSchema>`로 도출** — 별도 interface 선언 금지. 예: `export const createVehicleSchema = z.object({...}); export type CreateVehicleRequest = z.infer<typeof createVehicleSchema>;`
+**단일 소스**: `CLAUDE.md > API Contract Conventions`. 본 에이전트는 그 규칙을 그대로 따른다 (envelope, HTTP 코드, 경로/쿼리 네이밍, zod ↔ TS 바인딩). 위반 시 reviewer가 P0로 반려한다. 아래 항목은 운영 시 자주 누락되는 핵심만 강조한다:
+
 - 응답 타입(`ListVehiclesResponse`, `GetVehicleResponse` 등)은 `src/types/`에 명시적으로 export
+- `api-contract.json`의 `envelope` 필드는 CLAUDE.md 정의를 그대로 인용한다 (drift 시 CLAUDE.md를 신뢰)
 
 ## 점진적 작업 규칙
 
-**공통 원칙**:
-- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
-- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
-- **JSON 분할** 시 최상위 키 + 빈 배열 스켈레톤을 먼저 Write한 뒤 각 섹션을 Edit로 채운다.
+본 에이전트는 [_preamble.md §2](_preamble.md#2-점진적-작업-규칙-공통-원칙)의 단위/재호출/분할/금지 규칙을 따른다. 아래는 이 에이전트 고유 단위와 단계만 정의한다.
 
 **이 에이전트의 단위**: 파일 1개 (또는 JSON 내부 섹션 단위 분할)
 
@@ -171,6 +169,15 @@ allowedTools:
 `generator: "backend"`, `specs[]` (component, file_path, type, requirements, endpoints[], validation_schema, dependencies, imports), `types[]` (name, file_path, fields), `seed_data[]` (file_path, type, count), `generation_order`.
 
 ## 참조 스킬
+
+### `api-contract-zod` — **반드시 호출** (drift 차단)
+- `api-contract.json` 작성 시 envelope 형식, HTTP 상태 코드, 경로/쿼리 네이밍, zod ↔ TypeScript 단일 바인딩(`z.infer`) 규칙을 강제
+- typeBindings는 이 스킬의 명명 컨벤션을 따른다 (예: `CreateXxxRequest`, `ListXxxResponse`)
+- spec 작성 단계에서 호출하지 않으면 code-generator-backend가 잘못된 envelope/네이밍으로 구현하고 reviewer cat 6이 critical로 반려
+
+### `nextjs-auth-patterns` — 인증 FR이 있을 때 호출
+- `requirements.json`에 로그인/회원가입/권한 FR이 있으면 `middleware.ts`, `/api/auth/*` 라우트 스펙을 이 스킬의 패턴으로 작성
+- mock 모드(`AUTH_PROVIDER=mock`) 기본 + Cognito 전환 가이드
 
 ### `mermaid-diagrams` — API 시퀀스 다이어그램
 - 요청 흐름이 복잡한 경우 (예: 인증 → 검증 → 비즈니스 로직 → 응답) Mermaid Sequence Diagram을 포함

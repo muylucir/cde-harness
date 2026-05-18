@@ -16,6 +16,8 @@ allowedTools:
   - Bash(mkdir:*)
 ---
 
+> **공통 컨벤션**: 언어 규칙·점진적 작업·state.json 처리·공통 에러·금지 패턴 카탈로그(FP-001~FP-011)는 [`_preamble.md`](_preamble.md) 참조. 본문은 이 에이전트 고유 책임만 정의한다.
+
 # Spec Writer — Frontend
 
 아키텍처 문서에서 프론트엔드 구현 스펙을 작성하는 에이전트. Cloudscape 컴포넌트 매핑, 커스텀 훅, 페이지 구성, 레이아웃을 포함하는 상세 스펙을 생성한다. 백엔드 스펙(+ AI 스펙)을 참조하여 타입과 API 엔드포인트를 확인한다.
@@ -35,6 +37,11 @@ allowedTools:
 - `.pipeline/artifacts/v{N}/03-specs/backend-spec.json` — BE 타입/API 참조 (보조)
 - `.pipeline/artifacts/v{N}/03-specs/api-contract.json` — **BE/FE 공통 계약. 훅 스펙의 `endpoint_id`는 이 파일의 `endpoints[].id`를 참조한다.**
 - `.pipeline/artifacts/v{N}/03-specs/ai-contract.json` — AI 외부 계약 (있을 때, FE는 이 파일만 참조. endpoints/sse_events를 훅 타입에 반영)
+
+> **AI 스펙 분할 — Read 권한 경계 (강제)**:
+> - **읽기 허용**: `ai-contract.json` (외부 계약 — endpoints, sse_events, section_marker_map, error_events, request/response schemas)
+> - **읽기 금지**: `ai-internals.json` (내부 구현 — system_prompt, tools, rag, agent_topology, model_id). 이 파일은 `code-generator-ai`만 참조한다. FE 훅이 시스템 프롬프트나 모델 ID를 알 필요가 없으며, 알면 캡슐화 위반이다.
+> - 위반 사례: FE 훅 타입에 `system_prompt`나 `model_id` 노출, frontend-spec.md에 내부 프롬프트 인용. reviewer 카테고리 7에서 P0 반려.
 - `.pipeline/artifacts/v{N}/00-domain/domain-context.json` (있으면)
 
 피드백이 있으면:
@@ -63,15 +70,12 @@ allowedTools:
 
 ## 점진적 작업 규칙
 
-**공통 원칙**:
-- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
-- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
-- **JSON 분할** 시 최상위 키 + 빈 배열 스켈레톤을 먼저 Write하여 파싱 가능 상태를 유지한다.
+본 에이전트는 [_preamble.md §2](_preamble.md#2-점진적-작업-규칙-공통-원칙)의 단위/재호출/분할/금지 규칙을 따른다. 아래는 이 에이전트 고유 단위와 단계만 정의한다.
 
 **이 에이전트의 단위**: 파일 1개
 
 **단계**:
-1. **Read**: requirements.json, architecture.json, backend-spec.json, `ai-contract.json` (있으면, AI 엔드포인트/SSE 이벤트 계약만 참조), domain-context.json (있으면)
+1. **Read**: requirements.json, architecture.json, backend-spec.json, `ai-contract.json` (있으면, AI 엔드포인트/SSE 이벤트 계약만 참조 — `ai-internals.json` Read 금지), domain-context.json (있으면)
 2. **Write**: `frontend-spec.json` — 스켈레톤 먼저 → hooks → contexts → layout → shared → feature → pages 순서로 Edit
 3. **Write**: `frontend-spec.md`
 4. **Write**: `specs-summary.md` + `_manifest.json`
@@ -81,7 +85,7 @@ allowedTools:
 ## 처리 프로세스
 
 1. 입력 파일에서 프론트엔드 관련 FR/컴포넌트 파악
-2. `has_ai` 판정: `requirements.json`의 `functional_requirements[].title` 또는 `description`에 AI 키워드(`chatbot`, `chat`, `ai`, `agent`, `rag`, `llm`, `bedrock`, `생성형`, `대화형`, `요약`, `추천`, `자동 분류`, `콘텐츠 생성`) 포함 여부로 결정. `domain-context.json` → 도메인 보강. 병행 확인: `has_ai:true`인데 `ai-contract.json`이 없으면 에러(spec-writer-ai 누락). 있으면 `endpoints`/`sse_events`를 FE 훅 타입에 반영.
+2. `has_ai` 판정: **단일 소스는 `.pipeline/scripts/has-ai.mjs`**. `node .pipeline/scripts/has-ai.mjs <requirements.json>`의 stdout `{has_ai, matched[]}` 결과를 그대로 사용한다 (키워드 리스트를 이 에이전트에서 재정의하지 않는다). `domain-context.json` → 도메인 보강. 병행 확인: `has_ai:true`인데 `ai-contract.json`이 없으면 에러(spec-writer-ai 누락). 있으면 `endpoints`/`sse_events`를 FE 훅 타입에 반영.
 3. 담당 범위 6개(hooks → contexts → layout → shared → feature → page) 순서로 스펙 작성
 4. 이중 출력: json → md → summary → manifest 순서
 
@@ -114,11 +118,75 @@ allowedTools:
 
 **`hooks[].endpoint_id`**: `api-contract.json`의 `endpoints[].id` 값과 일치해야 한다. code-generator-frontend는 이 id로 매니페스트의 실제 responseType/requestType을 조회하여 훅 제네릭에 바인딩한다.
 
+### 출력 예시 (다운스트림 파싱 기준 — 이 형태를 그대로 따른다)
+
+```json
+{
+  "generator": "frontend",
+  "metadata": {
+    "created": "2026-05-17T10:00:00Z",
+    "based_on": ".pipeline/artifacts/v1/02-architecture/architecture.json"
+  },
+  "specs": [
+    {
+      "component": "VehicleTable",
+      "file_path": "src/components/vehicles/VehicleTable.tsx",
+      "type": "feature",
+      "requirements": ["FR-001"],
+      "cloudscape_components": ["Table", "TextFilter", "Pagination", "Header"],
+      "props_interface": {
+        "name": "VehicleTableProps",
+        "fields": [
+          { "name": "initialData", "type": "Vehicle[]", "required": false },
+          { "name": "onRowClick", "type": "(vehicle: Vehicle) => void", "required": false }
+        ]
+      },
+      "use_collection": true,
+      "state": "local",
+      "dependencies": ["useVehicles", "StatusBadge"],
+      "imports": [
+        "import Table from '@cloudscape-design/components/table'",
+        "import { useCollection } from '@cloudscape-design/collection-hooks'",
+        "import type { Vehicle } from '@/types/vehicle'"
+      ]
+    }
+  ],
+  "hooks": [
+    {
+      "name": "useVehicles",
+      "file_path": "src/hooks/useVehicles.ts",
+      "endpoint_id": "vehicles.list",
+      "api_endpoint": "/api/vehicles",
+      "return_type": "{ items: Vehicle[]; total: number; isLoading: boolean; error?: Error }",
+      "request_type": "VehiclesListQuery"
+    }
+  ],
+  "generation_order": [
+    { "phase": 1, "step": "shared", "files": ["src/components/shared/StatusBadge.tsx"] },
+    { "phase": 2, "step": "hooks", "files": ["src/hooks/useVehicles.ts"] },
+    { "phase": 3, "step": "feature", "files": ["src/components/vehicles/VehicleTable.tsx"] },
+    { "phase": 4, "step": "page", "files": ["src/app/vehicles/page.tsx"] }
+  ]
+}
+```
+
+**파싱 규약**:
+- `specs[].props_interface`는 **객체** (`{ name, fields[] }`). architect.json은 string으로 받지만 spec-writer-frontend가 객체로 확장한다.
+- `specs[].imports[]`는 실제 코드에 들어갈 import 문자열 (개별 경로 강제).
+- `specs[].use_collection`은 Table/Cards 컴포넌트만 `true`, 나머지는 `false`.
+- `hooks[].endpoint_id`는 `api-contract.json.endpoints[].id`와 정확히 일치해야 한다 (drift 시 code-generator-frontend가 에러).
+- `generation_order[]`는 **`phase` 오름차순으로 정렬**. shared → hooks → feature → page 의존 순서.
+
 ## 매니페스트 (_manifest.json)
 
 backend-spec.json + ai-contract.json(있으면) + frontend-spec.json을 읽고 집계한다. `has_ai`는 requirements.json의 FR 키워드 스캔 결과를 정수로 사용한다(파일 존재 여부가 아님).
 
-구조: `metadata` (created, total/backend/ai/frontend_specs, has_ai), `requirements_coverage` (FR별 backend/ai/frontend 컴포넌트), `uncovered_requirements[]`, `generation_order[]` (phase, generator, file — BE phases → AI phases → FE phases 순서), `output_files` (machine_readable[], human_readable[]).
+구조:
+- `metadata` (created, total/backend/ai/frontend_specs, has_ai)
+- `requirements_coverage` — **단일 소스**. FR_id별로 다음 형태로 집계: `{ pages: string[], components: string[], api_routes: string[], hooks: string[], user_stories: string[], backend: string[], ai: string[], frontend: string[] }`. architect.json의 `pages[].component_tree[].requirements_mapped[]`와 `api_routes[].requirements_mapped[]`를 역색인하여 채운다.
+- `uncovered_requirements[]`
+- `generation_order[]` (phase, generator, file — BE phases → AI phases → FE phases 순서)
+- `output_files` (machine_readable[], human_readable[]).
 
 AI 기능이 없으면 `ai_specs: 0`, `has_ai: false`로 설정하고, generation_order에서 ai-* phase를 제외한다.
 
@@ -132,6 +200,14 @@ AI 기능이 없으면 `ai_specs: 0`, `has_ai: false`로 설정하고, generatio
 ### `ascii-diagram` — 컴포넌트 구조도
 - 복합 컴포넌트의 내부 구조를 ASCII로 시각화 (예: Dashboard 페이지의 위젯 배치)
 - 한국어/영어 혼용 정렬: 우측 테두리 금지, 최대 폭 60자
+
+### `nextjs-auth-patterns` — 인증 FR이 있을 때 호출 (BE 스펙과 대칭)
+- `requirements.json`에 로그인/회원가입/권한 FR이 있으면 호출
+- 보호 라우트 그룹 `(protected)` 레이아웃 패턴 spec
+- `AdminOnly`, `AuthenticatedOnly` 같은 역할 기반 UI 분기 컴포넌트 spec
+- `/login`, `/forbidden` 페이지 spec
+- middleware가 세팅한 `x-user-id`/`x-user-roles` 헤더를 RootLayout에서 React Context로 전달하는 hook spec
+- spec-writer-backend의 nextjs-auth-patterns 호출과 대칭 (FE/BE 동일 패턴 강제)
 
 ## 스펙에 적용할 Cloudscape 규칙
 

@@ -3,11 +3,31 @@
   "description": "파이프라인 스테이지 카탈로그 단일 소스. /pipeline-from, /pipeline-status, checkpoint.mjs가 참조한다.",
   "stages": [
     {
+      "name": "brief-composer",
+      "order": -1,
+      "group": "input",
+      "phase": "pre-design",
+      "optional": true,
+      "trigger": "/brief|/iterate",
+      "requires_approval": false,
+      "description": "raw 입력 + clarifications에서 customer-brief.md / source-analysis.md / manifest.json 생성·갱신",
+      "prerequisites": [".pipeline/input/raw/"],
+      "outputs": [
+        ".pipeline/input/customer-brief.md",
+        ".pipeline/input/source-analysis.md",
+        ".pipeline/input/manifest.json"
+      ],
+      "resume_via": "/brief"
+    },
+    {
       "name": "domain-researcher",
       "order": 0,
       "group": "research",
       "phase": "pre-design",
       "optional": true,
+      "requires_approval": true,
+      "auto_approval_allowed": true,
+      "approval_reason": "도메인 컨텍스트 검토(업계 표준/KPI/규제) 후 진행 여부 결정",
       "description": "업계 워크플로우/KPI/유사 제품 리서치",
       "prerequisites": [".pipeline/input/customer-brief.md"],
       "outputs": [
@@ -22,12 +42,21 @@
       "group": "design",
       "phase": "design",
       "optional": false,
+      "requires_approval": true,
+      "auto_approval_allowed": true,
+      "approval_reason": "FR/NFR/데이터 모델 검토 후 아키텍처 진행 여부 결정",
       "description": "고객 브리프/도메인 컨텍스트에서 FR/NFR/페르소나/데이터모델 도출",
       "prerequisites": [".pipeline/input/customer-brief.md"],
       "outputs": [
         ".pipeline/artifacts/v{N}/01-requirements/requirements.json",
         ".pipeline/artifacts/v{N}/01-requirements/requirements.md"
       ],
+      "checkpoint": [
+        "cmd:node .pipeline/scripts/check-allowed-models-sync.mjs",
+        "file:.pipeline/artifacts/v{N}/01-requirements/requirements.json",
+        "file:.pipeline/artifacts/v{N}/01-requirements/requirements.md"
+      ],
+      "checkpoint_notes": "정책 SSOT 통합 검증(check-allowed-models-sync.mjs)을 첫 stage에서 실행하여 모델 ID / store naming / strands Rule 13 / agent models drift를 파이프라인 시작 시점에 차단. AI 없는 프로토타입에서도 모든 SSOT가 동기화되도록 보장.",
       "resume_via": "/pipeline-from requirements-analyst"
     },
     {
@@ -36,6 +65,9 @@
       "group": "design",
       "phase": "design",
       "optional": false,
+      "requires_approval": true,
+      "auto_approval_allowed": true,
+      "approval_reason": "페이지/컴포넌트 트리 검토 후 스펙 작성 진행 여부 결정",
       "description": "페이지/라우트/컴포넌트 트리/데이터 플로우 설계",
       "prerequisites": [".pipeline/artifacts/v{N}/01-requirements/requirements.json"],
       "outputs": [
@@ -69,6 +101,7 @@
       "phase": "spec",
       "optional": true,
       "optional_condition": "requirements.json has AI-related FR",
+      "optional_gate_cmd": "node .pipeline/scripts/has-ai.mjs .pipeline/artifacts/v{N}/01-requirements/requirements.json",
       "description": "AI 에이전트 스펙(ai-contract.json 계약 + ai-internals.json 내부 구현)",
       "prerequisites": [
         ".pipeline/artifacts/v{N}/01-requirements/requirements.json",
@@ -80,6 +113,12 @@
         ".pipeline/artifacts/v{N}/03-specs/ai-internals.json",
         ".pipeline/artifacts/v{N}/03-specs/ai-spec.md"
       ],
+      "checkpoint": [
+        "json:.pipeline/artifacts/v{N}/03-specs/ai-contract.json",
+        "json:.pipeline/artifacts/v{N}/03-specs/ai-internals.json",
+        "cmd:node .pipeline/scripts/check-spec-model-id.mjs"
+      ],
+      "checkpoint_notes": "ai-internals.json의 모든 model_id 필드를 SSOT(allowed-models.json)와 비교. 코드 합성 전에 spec 단계에서 위반을 차단하여 wasted run 방지.",
       "resume_via": "/pipeline-from spec-writer-ai"
     },
     {
@@ -123,6 +162,13 @@
         ".pipeline/artifacts/v{N}/04-codegen/api-manifest.json",
         ".pipeline/artifacts/v{N}/04-codegen/generation-log-backend.json"
       ],
+      "checkpoint": [
+        "cmd:npm run build",
+        "cmd:npm run lint",
+        "json:.pipeline/artifacts/v{N}/04-codegen/api-manifest.json"
+      ],
+      "checkpoint_timeout_ms": 600000,
+      "checkpoint_notes": "빌드/린트 게이트를 데이터로 강제. LLM이 check 인자를 빠뜨려도 stages.json 단일 소스에서 enforce된다. pipeline.md Stage 5a checkpoint.mjs check 커맨드와 동일해야 한다. 빌드는 Next 16 Turbopack 기준 최대 10분 허용.",
       "resume_via": "/pipeline-from code-generator-backend"
     },
     {
@@ -132,6 +178,7 @@
       "phase": "codegen",
       "optional": true,
       "optional_condition": "requirements.json has AI-related FR",
+      "optional_gate_cmd": "node .pipeline/scripts/has-ai.mjs .pipeline/artifacts/v{N}/01-requirements/requirements.json",
       "description": "Strands SDK 기반 AI 에이전트 구현 + 스트리밍 라우트",
       "prerequisites": [
         ".pipeline/artifacts/v{N}/03-specs/ai-contract.json",
@@ -144,11 +191,13 @@
         ".pipeline/artifacts/v{N}/04-codegen/generation-log-ai.json"
       ],
       "checkpoint": [
+        "cmd:node .pipeline/scripts/check-allowed-models-sync.mjs",
         "cmd:npm run build",
         "cmd:npm run lint",
         "cmd:node .pipeline/scripts/ai-smoke.mjs"
       ],
-      "checkpoint_notes": "ai-smoke는 빌드 성공 후에도 남는 AI 런타임 결함(stub 문자열, Agent 호출 누락, SSE 이벤트명 drift, Bedrock 직접 import, nested agent silent fail)을 차단한다. stages.json의 체크 항목은 pipeline.md Stage 5b의 checkpoint.mjs check 커맨드와 동일해야 한다.",
+      "checkpoint_timeout_ms": 600000,
+      "checkpoint_notes": "check-allowed-models-sync는 SSOT(allowed-models.json) ↔ CLAUDE.md Rule 13 표 drift를 차단. ai-smoke는 빌드 성공 후에도 남는 AI 런타임 결함(stub 문자열, Agent 호출 누락, SSE 이벤트명 drift, Bedrock 직접 import, nested agent silent fail, 모델 ID 위반)을 차단한다. stages.json의 체크 항목은 pipeline.md Stage 5b의 checkpoint.mjs check 커맨드와 동일해야 한다.",
       "resume_via": "/pipeline-from code-generator-ai"
     },
     {
@@ -169,6 +218,14 @@
         "src/app/",
         ".pipeline/artifacts/v{N}/04-codegen/generation-log-frontend.json"
       ],
+      "checkpoint": [
+        "cmd:npm run build",
+        "cmd:npm run lint",
+        "no-match:src/components/ src/app/ --include=*.tsx:fetch(",
+        "cmd:node .pipeline/scripts/cross-check-endpoints.mjs --version=v{N}"
+      ],
+      "checkpoint_timeout_ms": 600000,
+      "checkpoint_notes": "빌드/린트 + 클라이언트 fetch 직접 호출 차단 + cross-check (FE 훅 endpoint_id ↔ api-contract, api-contract ↔ api-manifest 라우트, ai-contract sse_events ↔ 라우트 emit, _manifest FR ↔ architecture 매핑). cross-check 실패는 빌드 통과 + 런타임 404/타입 미스매치 회귀를 차단한다. pipeline.md Stage 5c checkpoint.mjs check 커맨드와 동일해야 한다.",
       "resume_via": "/pipeline-from code-generator-frontend"
     },
     {
@@ -187,8 +244,8 @@
       ],
       "outputs": [
         "e2e/",
-        ".pipeline/artifacts/v{N}/05-review/test-result.json",
-        ".pipeline/artifacts/v{N}/05-review/test-report.md"
+        ".pipeline/artifacts/v{N}/05-qa/test-result.json",
+        ".pipeline/artifacts/v{N}/05-qa/test-report.md"
       ],
       "resume_via": "/pipeline-from qa-engineer"
     },
@@ -200,9 +257,9 @@
       "optional": false,
       "loops_to": ["code-generator-backend", "code-generator-ai", "code-generator-frontend"],
       "loop_limit": 2,
-      "description": "9카테고리 정적 품질 리뷰",
+      "description": "10카테고리 정적 품질 리뷰 (+1 awsarch 조건부: AWS 통합 품질)",
       "prerequisites": [
-        ".pipeline/artifacts/v{N}/05-review/test-result.json",
+        ".pipeline/artifacts/v{N}/05-qa/test-result.json",
         ".pipeline/artifacts/v{N}/04-codegen/generation-log-backend.json",
         ".pipeline/artifacts/v{N}/04-codegen/generation-log-frontend.json"
       ],
@@ -210,6 +267,11 @@
         ".pipeline/artifacts/v{N}/05-review/review-report.md",
         ".pipeline/artifacts/v{N}/05-review/review-result.json"
       ],
+      "checkpoint": [
+        "json:.pipeline/artifacts/v{N}/05-review/review-result.json",
+        "cmd:node .pipeline/scripts/check-reviewer-skills.mjs"
+      ],
+      "checkpoint_notes": "reviewer가 cloudscape/nextjs16/api-contract-zod/strands-sdk(AI) 4개 스킬을 실제 호출했는지 review-result.json.skills_used[]로 강제. 호출 누락 시 reviewer 직후 차단(회귀 누적 방지). 동일 검사가 sync sub-check [G]로 매 design stage에서도 실행되어 이중 가드.",
       "resume_via": "/pipeline-from reviewer"
     },
     {
@@ -229,12 +291,53 @@
       "resume_via": "/pipeline-from security-auditor-pipeline"
     },
     {
+      "name": "ai-smoke",
+      "order": 12,
+      "group": "quality",
+      "phase": "quality",
+      "optional": true,
+      "optional_condition": "requirements.json has AI-related FR",
+      "optional_gate_cmd": "node .pipeline/scripts/has-ai.mjs .pipeline/artifacts/v{N}/01-requirements/requirements.json",
+      "description": "AI 런타임 스모크 검증 (stub/모델 ID/Agent 호출/SSE 종결 정적 검사) — 정식 stage로 등록되어 budget/state machine 안에서 실행된다.",
+      "prerequisites": [
+        ".pipeline/artifacts/v{N}/03-specs/ai-internals.json"
+      ],
+      "outputs": [],
+      "checkpoint": [
+        "cmd:node .pipeline/scripts/ai-smoke.mjs"
+      ],
+      "checkpoint_timeout_ms": 120000,
+      "checkpoint_notes": "/iterate, /reconcile, /handover에서 inline으로 호출되던 ai-smoke를 정식 stage로 승격. start/check 래핑을 통해 budget(loop_iterations.qa-code 등)과 flip-flop counter 안에 들어가 무한 재시도 차단 및 관찰 가능성 확보.",
+      "resume_via": "/pipeline-from ai-smoke"
+    },
+    {
+      "name": "reconcile-analyzer",
+      "order": 50,
+      "group": "reconcile",
+      "phase": "reconcile",
+      "optional": true,
+      "trigger": "/reconcile",
+      "requires_approval": true,
+      "auto_approval_allowed": false,
+      "approval_reason": "ad-hoc 코드 변경의 영향 분석 결과 검토 후 아티팩트 역동기화 진행 여부 결정",
+      "description": "src/ 코드 변경을 감지하고 아티팩트(요구사항/아키텍처/스펙/생성로그)를 역방향 동기화",
+      "prerequisites": ["src/", ".pipeline/artifacts/"],
+      "outputs": [
+        ".pipeline/revisions/code-to-vN+1.json",
+        ".pipeline/artifacts/v{N+1}/reconcile-report.md"
+      ],
+      "resume_via": "/reconcile"
+    },
+    {
       "name": "aws-architect",
       "order": 100,
       "group": "aws",
       "phase": "aws-infra",
       "optional": true,
       "trigger": "/awsarch",
+      "requires_approval": true,
+      "auto_approval_allowed": false,
+      "approval_reason": "AWS 인프라 비용/리소스 검토 후 배포 진행 여부 결정 (auto-safety-gates.md #1: 비가역 비용)",
       "description": "mock→AWS 전환용 인프라 설계 (DynamoDB/Aurora/S3/Cognito)",
       "prerequisites": [
         ".pipeline/artifacts/v{N}/02-architecture/architecture.json",
@@ -254,6 +357,9 @@
       "phase": "aws-infra",
       "optional": true,
       "trigger": "/awsarch",
+      "requires_approval": true,
+      "auto_approval_allowed": false,
+      "approval_reason": "실제 AWS 배포 직전 최종 비용/리소스 확인 (auto-safety-gates.md #1: 비가역 비용)",
       "description": "CDK TypeScript 생성 + 배포 + 데이터 레이어 듀얼 모드 + 시드 마이그레이션",
       "prerequisites": [
         ".pipeline/artifacts/v{N}/08-aws-infra/aws-architecture.json",
@@ -264,6 +370,26 @@
         ".pipeline/artifacts/v{N}/08-aws-infra/deployment-log.json"
       ],
       "resume_via": "/pipeline-from aws-deployer"
+    },
+    {
+      "name": "handover-preflight",
+      "order": 199,
+      "group": "handover",
+      "phase": "handover",
+      "optional": true,
+      "trigger": "/handover",
+      "description": "핸드오버 사전 조건(보안 PASS, AI smoke PASS, 워킹 트리 클린, .gitignore의 .env.local) 검증을 정식 stage로 래핑하여 state.json 이력에 기록한다.",
+      "prerequisites": [
+        ".pipeline/artifacts/v{N}/06-security/security-result.json"
+      ],
+      "outputs": [],
+      "checkpoint": [
+        "json-key:.pipeline/artifacts/v{N}/06-security/security-result.json:verdict",
+        "cmd:node .pipeline/scripts/ai-smoke.mjs"
+      ],
+      "checkpoint_timeout_ms": 120000,
+      "checkpoint_notes": "ai-smoke는 has-ai 게이트가 false면 자체적으로 exit 0이므로 AI 없는 프로토타입에서도 통과한다. 보안 verdict 키 존재만 확인하고, 실제 PASS/FAIL 판단은 handover-packager 본문에서 수행. /handover read-only 사전 검사를 stage로 승격하여 audit trail을 완전화.",
+      "resume_via": "/handover"
     },
     {
       "name": "handover-packager",
@@ -277,18 +403,21 @@
         ".pipeline/artifacts/v{N}/06-security/security-result.json"
       ],
       "outputs": [
-        ".pipeline/artifacts/v{N}/07-handover/"
+        ".pipeline/artifacts/v{N}/07-handover/README.md",
+        ".pipeline/artifacts/v{N}/07-handover/HANDOVER.md"
       ],
       "resume_via": "/handover"
     }
   ],
   "groups": {
+    "input": "고객 브리프 생성 (/brief, /iterate)",
     "research": "도메인 리서치",
     "design": "요구사항/아키텍처 설계",
     "spec": "구현 스펙 작성",
     "codegen": "코드 생성",
     "quality": "기능/품질 검증 루프",
     "security": "보안 감사",
+    "reconcile": "ad-hoc 변경 역동기화 (/reconcile)",
     "aws": "AWS 인프라 전환 (/awsarch 시)",
     "handover": "핸드오버 패키지 (/handover 시)"
   },
@@ -315,6 +444,7 @@
   "budgets": {
     "total_code_regens": 8,
     "identical_error_streak": 2,
-    "notes": "total_code_regens는 루프 합산 상한. identical_error_streak는 동일 에러 반복 시 halt 기준."
+    "flip_flop_max": 4,
+    "notes": "total_code_regens는 루프 합산 상한. identical_error_streak는 동일 에러 반복 시 halt 기준. flip_flop_max는 같은 stage의 PASS↔FAIL 인접 전이가 이 값 이상이면 halt (플래키 테스트 무한 진동 차단)."
   }
 }

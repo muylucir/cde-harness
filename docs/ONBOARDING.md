@@ -35,10 +35,45 @@ aws sts get-caller-identity
 # expect: Account, UserId 출력. 에러면 AWS_PROFILE/AWS_REGION 재설정
 
 # (4) Bedrock 모델 활성화 확인 (AI 기능 있는 프로토타입에만 필수)
-aws bedrock list-foundation-models --region us-east-1 \
-  --query "modelSummaries[?modelId=='anthropic.claude-opus-4-7-20250514-v1:0'].modelLifecycle.status" \
-  --output text
-# expect: ACTIVE. 비어있거나 LEGACY면 Bedrock 콘솔에서 모델 액세스 요청
+# SSOT: .pipeline/scripts/allowed-models.json. CLAUDE.md Rule 13 화이트리스트 3개 중 사용 예정 모델만 enable.
+# 권한/리전/미활성 3분기 진단으로 NOT_FOUND를 모델 미활성으로 오인하는 사고 방지.
+
+REGION="${AWS_REGION:-us-east-1}"
+
+# 4-a) 권한/리전 사전 확인 (실패 원인 분리)
+echo "▶ list-foundation-models 권한 / 리전 확인 (region=${REGION})"
+PROBE=$(aws bedrock list-foundation-models --region "${REGION}" --max-items 1 --output text 2>&1)
+if echo "${PROBE}" | grep -q "AccessDenied\|UnauthorizedOperation\|not authorized"; then
+  echo "  ✗ IAM 권한 부족: bedrock:ListFoundationModels 정책을 user/role에 부여 후 재시도"
+  exit 1
+elif echo "${PROBE}" | grep -q "endpoint\|ResolvingEndpoint\|InvalidRegionError"; then
+  echo "  ✗ Bedrock 미제공 리전: ${REGION}. AWS_REGION을 us-east-1/us-west-2 등 Bedrock 제공 리전으로 변경"
+  exit 1
+elif [ -z "${PROBE}" ]; then
+  echo "  ✗ list-foundation-models 응답이 비었음: 권한/리전 확인 후 재시도"
+  exit 1
+else
+  echo "  ✓ 권한 OK, 리전 OK"
+fi
+
+# 4-b) 화이트리스트 3개 모델 활성화 상태 (SSOT에서 ID 도출)
+if ! command -v jq >/dev/null 2>&1; then
+  echo "  jq 미설치 — SSOT 파싱 불가. 'sudo yum install -y jq' 후 재시도"
+  exit 1
+fi
+jq -r '.allowed_model_ids[].id' .pipeline/scripts/allowed-models.json | while read MODEL_ID; do
+  STATUS=$(aws bedrock list-foundation-models --region "${REGION}" \
+    --query "modelSummaries[?modelId=='${MODEL_ID}'].modelLifecycle.status" \
+    --output text 2>/dev/null)
+  if [ -z "${STATUS}" ]; then
+    echo "  ⚠ ${MODEL_ID}: 콘솔에서 모델 액세스 요청 필요"
+  elif [ "${STATUS}" = "ACTIVE" ]; then
+    echo "  ✓ ${MODEL_ID}: ACTIVE"
+  else
+    echo "  ⚠ ${MODEL_ID}: ${STATUS} (LEGACY/EOL — 다른 ID 사용 권장)"
+  fi
+done
+# 사용 예정 모델만 ACTIVE면 충분. Rule 13 외 모델은 ai-smoke/reviewer가 차단한다.
 
 # (5) 하네스 레포 템플릿에서 새 프로젝트 생성
 gh repo create my-prototype --template muylucir/cde-harness --clone --private
@@ -107,7 +142,7 @@ cp ~/Downloads/아키텍처_스케치.png .pipeline/input/raw/
 - Stage 6B (Reviewer): 3-5분
 - Stage 7 (Security): 3-5분
 
-**빨리 돌리고 싶으면** `/pipeline auto`로 APPROVAL GATE 생략. 단, 요구사항이 벗어나도 못 잡는다.
+**빨리 돌리고 싶으면** `/pipeline --auto`로 design phase APPROVAL GATE를 자동 통과. 단, 요구사항이 벗어나도 못 잡는다. **`/awsarch` 비용 게이트 / `cdk destroy` 가드 / Circuit Breaker / 보안 critical**은 `--auto`로 우회 불가능 — pipeline.md "안전 게이트" 표 참조.
 
 ### [5분] 프로토타입 확인
 
@@ -270,16 +305,29 @@ npx playwright test e2e/specific-test.spec.ts --headed
 
 | 모드 | 시간 절감 | 리스크 |
 |---|---|---|
-| `/pipeline auto` | 승인 대기 제거 (-15분) | 요구사항 범위 팽창 잡지 못함 |
+| `/pipeline --auto` | design 승인 대기 제거 (-15분) | 요구사항 범위 팽창 잡지 못함 |
 | `/pipeline` | 승인 3회 (+15분) | 범위 제어 가능 |
 
-**추천**: 첫 실행은 표준. 2-3회 경험 후 유사 도메인은 `auto`.
+**추천**: 첫 실행은 표준. 2-3회 경험 후 유사 도메인은 `--auto`.
+
+#### `--auto`라도 절대 우회 불가능한 안전 게이트 (5종)
+
+상세 정의는 SSOT 참조: [`.claude/policies/auto-safety-gates.md`](../.claude/policies/auto-safety-gates.md).
+
+요약 — `--auto`는 design phase 승인만 자동 통과하고 다음은 항상 사용자 동의 필요:
+1. `/awsarch` 비용/배포 (별도 명시 호출 필요)
+2. `cdk destroy` 가드 (스택명 재입력 등 4단계)
+3. `/iterate` 모든 게이트 (`--auto` 미지원)
+4. Circuit Breaker halt (budget 초과 / identical_error_streak)
+5. 보안 critical 발견
+
+처음 사용 SA가 가장 자주 놀라는 지점 — auto 켜놓고 자리를 비웠는데 `/awsarch`에서 멈춰있는 경우.
 
 ### 데모 당일 시간 없을 때 최소 실행 전략
 
 **3시간 남음**:
 ```
-/pipeline auto
+/pipeline --auto
 ```
 완료 후 결과물만 빠르게 검토.
 

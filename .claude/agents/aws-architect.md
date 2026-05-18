@@ -19,6 +19,8 @@ allowedTools:
   - mcp__aws-knowledge-mcp-server__aws___recommend
 ---
 
+> **공통 컨벤션**: 언어 규칙·점진적 작업·state.json 처리·공통 에러·금지 패턴 카탈로그(FP-001~FP-011)는 [`_preamble.md`](_preamble.md) 참조. 본문은 이 에이전트 고유 책임만 정의한다.
+
 # AWS Architect
 
 프로토타입의 InMemoryStore 기반 데이터 모델과 API를 분석하여, 데이터 특성에 맞는 최적의 AWS 서비스를 선택하고 인프라를 설계하는 에이전트이다. CDK TypeScript 코드 생성을 위한 블루프린트를 산출한다.
@@ -42,12 +44,18 @@ allowedTools:
 - `agentcore deploy` CLI 워크플로우
 - `BedrockAgentCoreApp` 코드 템플릿
 
-### `strands-sdk-guide` — AI 기능이 있으면 호출
+### `strands-sdk-typescript-guide` — AI 기능이 있으면 호출
 - AgentCore Runtime에 배포될 Strands 에이전트 구조 이해
 - Session Management, Agent State, Hooks 파악 → 메모리 필요 여부 결정
 
 ### `mermaid-diagrams` — aws-architecture.md 다이어그램 작성
 - **핵심 규칙: HTML 태그 금지, 특수문자(`>=`, `>`, `&`) 반드시 따옴표 처리**
+
+### `nextjs-auth-patterns` — 인증 FR이 있고 Cognito User Pool을 추가할 때 호출
+- Cognito User Pool + Hosted UI + Identity Pool 설계 패턴
+- middleware.ts ↔ Cognito JWT 검증 통합
+- aws-deployer가 CDK로 Cognito User Pool/Client/Domain을 생성할 때 reference
+- AgentCore Identity와의 분리: 사용자 인증=Cognito, 워크로드 인증=AgentCore Identity
 
 ### MCP 도구 — AWS 서비스 문서 참조
 - `mcp__aws-knowledge-mcp-server__aws___search_documentation` — AWS 서비스별 CDK 문서 검색
@@ -218,7 +226,7 @@ allowedTools:
       "browser": { "enabled": false }
     },
 
-    "bedrock": { "enabled": true/false, "models": ["anthropic.claude-sonnet-4-6-20250514-v1:0"] }
+    "bedrock": { "enabled": true/false, "models": ["global.anthropic.claude-sonnet-4-6"] }
   },
   "iam_policies": [...],
   "environment_variables": {...},

@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CDE AI Harness — Rapid Prototype Pipeline</title>
+</head>
+<body style="margin:0; padding:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Noto Sans KR',sans-serif; background:#f2f3f3; color:#16191f; line-height:1.55;">
+
+<!-- HEADER -->
+<header style="background:linear-gradient(135deg,#0f1b2d 0%,#16213e 50%,#1b3358 100%); color:#fff; padding:48px 32px; border-bottom:4px solid #ff9900;">
+  <div style="max-width:1200px; margin:0 auto;">
+    <div style="display:inline-block; background:rgba(255,153,0,0.15); border:1px solid #ff9900; color:#ffb84d; padding:4px 12px; border-radius:16px; font-size:12px; font-weight:600; letter-spacing:0.5px; margin-bottom:16px;">CDE · CUSTOMER DEPLOYED ENGINEER</div>
+    <h1 style="margin:0 0 12px 0; font-size:42px; font-weight:700; letter-spacing:-0.5px;">CDE AI Harness</h1>
+    <p style="margin:0; font-size:18px; color:#c5cad1; max-width:800px;">고객 고충 사항(Pain Point)에서 시작해 Next.js 16 + Cloudscape 프로토타입까지, 서브에이전트 파이프라인이 자동으로 생성·검증·배포한다.</p>
+    <div style="margin-top:24px; display:flex; gap:24px; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:8px;"><span style="width:8px; height:8px; background:#1ec9a3; border-radius:50%;"></span><span style="font-size:13px; color:#c5cad1;">19 Sub-Agents</span></div>
+      <div style="display:flex; align-items:center; gap:8px;"><span style="width:8px; height:8px; background:#5294ff; border-radius:50%;"></span><span style="font-size:13px; color:#c5cad1;">8 Slash Commands</span></div>
+      <div style="display:flex; align-items:center; gap:8px;"><span style="width:8px; height:8px; background:#ff9900; border-radius:50%;"></span><span style="font-size:13px; color:#c5cad1;">9 Skills</span></div>
+      <div style="display:flex; align-items:center; gap:8px;"><span style="width:8px; height:8px; background:#d63384; border-radius:50%;"></span><span style="font-size:13px; color:#c5cad1;">Strands SDK + Bedrock</span></div>
+    </div>
+  </div>
+</header>
+
+<main style="max-width:1200px; margin:0 auto; padding:48px 32px;">
+
+<!-- WHAT IS IT -->
+<section style="margin-bottom:56px;">
+  <h2 style="font-size:28px; margin:0 0 16px 0; color:#0f1b2d; border-left:4px solid #ff9900; padding-left:12px;">하네스란?</h2>
+  <p style="font-size:16px; color:#414750; margin:0 0 16px 0;">CDE AI Harness는 AWS Solutions Architect가 고객 데모용 프로토타입을 빠르게 만들 수 있도록 설계된 Claude Code 기반 자동화 프레임워크다. 회의록·요구사항 문서·다이어그램 같은 비정형 입력을 받아, 도메인 리서치 → 요구사항 분석 → 아키텍처 설계 → 스펙 작성 → 코드 생성 → QA → 보안 감사 → 인수인계까지 단계별 서브에이전트가 순차적으로 실행된다.</p>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; margin-top:24px;">
+    <div style="background:#fff; border:1px solid #e9ebed; border-radius:8px; padding:20px;">
+      <div style="font-size:24px; margin-bottom:8px;">🎯</div>
+      <h3 style="margin:0 0 8px 0; font-size:16px; color:#0f1b2d;">목표</h3>
+      <p style="margin:0; font-size:14px; color:#5f6b7a;">고객 Pain Point → 동작하는 프로토타입까지의 거리를 시간 단위로 단축</p>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ebed; border-radius:8px; padding:20px;">
+      <div style="font-size:24px; margin-bottom:8px;">⚙️</div>
+      <h3 style="margin:0 0 8px 0; font-size:16px; color:#0f1b2d;">기술 스택</h3>
+      <p style="margin:0; font-size:14px; color:#5f6b7a;">Next.js 16 App Router · Cloudscape v3+ · TypeScript Strict · Strands SDK · Amazon Bedrock</p>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ebed; border-radius:8px; padding:20px;">
+      <div style="font-size:24px; margin-bottom:8px;">🔁</div>
+      <h3 style="margin:0 0 8px 0; font-size:16px; color:#0f1b2d;">반복 가능</h3>
+      <p style="margin:0; font-size:14px; color:#5f6b7a;">/iterate · /reconcile · /awsarch 로 피드백 → 개선 → 실서비스 전환</p>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ebed; border-radius:8px; padding:20px;">
+      <div style="font-size:24px; margin-bottom:8px;">🛡️</div>
+      <h3 style="margin:0 0 8px 0; font-size:16px; color:#0f1b2d;">품질 보장</h3>
+      <p style="margin:0; font-size:14px; color:#5f6b7a;">QA → Reviewer → Security Auditor 자동 루프, OWASP 점검 후 핸드오버</p>
+    </div>
+  </div>
+</section>
+
+<!-- PIPELINE FLOW -->
+<section style="margin-bottom:56px;">
+  <h2 style="font-size:28px; margin:0 0 24px 0; color:#0f1b2d; border-left:4px solid #ff9900; padding-left:12px;">파이프라인 흐름</h2>
+  <div style="background:#fff; border:1px solid #e9ebed; border-radius:8px; padding:32px; overflow-x:auto;">
+    <pre style="margin:0; font-family:'SF Mono',Consolas,Monaco,monospace; font-size:13px; line-height:1.7; color:#16191f; white-space:pre;">
+  ┌──────────────┐
+  │ Raw Input    │  회의록 · 다이어그램 · 요구사항 문서 · 이메일 · 스크린샷
+  └──────┬───────┘
+         ↓
+  ┌──────────────────┐
+  │ brief-composer   │  (선택) /brief — customer-brief.md 자동 생성
+  └──────┬───────────┘
+         ↓
+  ┌──────────────────────┐    ┌────────────────────────┐
+  │ domain-researcher    │ →  │ requirements-analyst   │  업계 표준 · 용어 · KPI · 규제 · FR/NFR
+  └──────────────────────┘    └──────┬─────────────────┘
+                                     ↓
+                            ┌────────────────┐
+                            │ architect      │  컴포넌트 트리 · 페이지 · 데이터 플로우
+                            └──────┬─────────┘
+                                   ↓
+            ┌───────────────────┬──┴──┬─────────────────────┐
+            ↓                   ↓     ↓                     ↓
+  ┌──────────────────┐  ┌──────────────┐  ┌────────────────────────┐
+  │ spec-writer-be   │  │ spec-ai*     │  │ spec-writer-frontend   │
+  └────────┬─────────┘  └──────┬───────┘  └────────────┬───────────┘
+           ↓                   ↓                       ↓
+  ┌──────────────────┐  ┌──────────────┐  ┌────────────────────────┐
+  │ code-gen-backend │ →│ code-gen-ai* │ →│ code-gen-frontend      │
+  └──────────────────┘  └──────────────┘  └────────────┬───────────┘
+                                                       ↓
+                                       ┌─────────────────────────┐
+                                       │ qa-engineer (Playwright)│ ←┐
+                                       └────────────┬────────────┘  │ 실패 시
+                                                    ↓               │ 코드 수정 루프
+                                       ┌─────────────────────────┐  │
+                                       │ reviewer (9 categories) │ ─┘
+                                       └────────────┬────────────┘
+                                                    ↓
+                                       ┌─────────────────────────┐
+                                       │ security-auditor (OWASP)│
+                                       └────────────┬────────────┘
+                                                    ↓
+                                          ┌──────────────────┐
+                                          │  Handover-Ready  │
+                                          └──────────────────┘
+
+  * AI 기능이 요구사항에 포함된 경우에만 실행
+    </pre>
+  </div>
+</section>
+
+<!-- AGENTS -->
+<section style="margin-bottom:56px;">
+  <h2 style="font-size:28px; margin:0 0 8px 0; color:#0f1b2d; border-left:4px solid #ff9900; padding-left:12px;">서브에이전트 (19개)</h2>
+  <p style="font-size:14px; color:#5f6b7a; margin:0 0 24px 0;">각 에이전트는 단일 책임을 갖고, 정의된 입력 아티팩트를 읽어 표준 출력 아티팩트를 생성한다.</p>
+
+  <h3 style="font-size:18px; color:#0f1b2d; margin:32px 0 12px 0;">1. 입력 처리 & 분석</h3>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px;">
+    <div style="background:#fff; border-left:4px solid #6366f1; border:1px solid #e9ebed; border-left:4px solid #6366f1; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">brief-composer</div>
+      <div style="font-size:13px; color:#5f6b7a;">비정형 입력 → 표준 customer-brief.md 자동 생성</div>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #0ea5e9; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">domain-researcher</div>
+      <div style="font-size:13px; color:#5f6b7a;">산업/도메인 워크플로우 · 용어 · KPI · 규제 리서치</div>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #3b82f6; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">requirements-analyst</div>
+      <div style="font-size:13px; color:#5f6b7a;">FR/NFR · 페르소나 · 사용자 스토리 도출</div>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #f59e0b; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">feedback-analyzer</div>
+      <div style="font-size:13px; color:#5f6b7a;">고객 피드백 영향 범위 분석, 최소 재진입 지점 산출</div>
+    </div>
+  </div>
+
+  <h3 style="font-size:18px; color:#0f1b2d; margin:32px 0 12px 0;">2. 설계 & 스펙</h3>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px;">
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #10b981; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">architect</div>
+      <div style="font-size:13px; color:#5f6b7a;">Next.js 컴포넌트 트리 · 페이지 구조 · Cloudscape 패턴 매핑</div>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #a855f7; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">spec-writer-backend</div>
+      <div style="font-size:13px; color:#5f6b7a;">API · zod · Repository · 미들웨어 스펙</div>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #a855f7; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">spec-writer-frontend</div>
+      <div style="font-size:13px; color:#5f6b7a;">Cloudscape 컴포넌트 · 훅 · 레이아웃 스펙</div>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #d946ef; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">spec-writer-ai</div>
+      <div style="font-size:13px; color:#5f6b7a;">ai-contract.json (외부) + ai-internals.json (내부) 분리 출력</div>
+    </div>
+  </div>
+
+  <h3 style="font-size:18px; color:#0f1b2d; margin:32px 0 12px 0;">3. 코드 생성</h3>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px;">
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #14b8a6; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">code-generator-backend</div>
+      <div style="font-size:13px; color:#5f6b7a;">API Route · 데이터 레이어 · 미들웨어 · 시드 데이터</div>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #06b6d4; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">code-generator-frontend</div>
+      <div style="font-size:13px; color:#5f6b7a;">Cloudscape UI · 페이지 · 클라이언트 상태</div>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #ec4899; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">code-generator-ai</div>
+      <div style="font-size:13px; color:#5f6b7a;">Strands SDK 기반 챗봇·RAG·도구 호출·멀티에이전트 구현 (Mocking 금지)</div>
+    </div>
+  </div>
+
+  <h3 style="font-size:18px; color:#0f1b2d; margin:32px 0 12px 0;">4. 품질 보증</h3>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px;">
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #84cc16; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">qa-engineer</div>
+      <div style="font-size:13px; color:#5f6b7a;">요구사항 기반 Playwright E2E 생성·실행, 실패 시 코드 수정 피드백</div>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #eab308; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">reviewer</div>
+      <div style="font-size:13px; color:#5f6b7a;">9개 카테고리 정적 품질 리뷰 (구조 · 타입 · 보안 · 접근성 등)</div>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #f97316; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">security-auditor-pipeline</div>
+      <div style="font-size:13px; color:#5f6b7a;">OWASP Top 10 · XSS · 인젝션 · CSRF · 시크릿 누출 점검</div>
+    </div>
+  </div>
+
+  <h3 style="font-size:18px; color:#0f1b2d; margin:32px 0 12px 0;">5. AWS 전환 & 운영</h3>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px;">
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #ef4444; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">aws-architect</div>
+      <div style="font-size:13px; color:#5f6b7a;">DynamoDB · Aurora · S3 · Cognito · Bedrock AgentCore 인프라 설계</div>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #f43f5e; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">aws-deployer</div>
+      <div style="font-size:13px; color:#5f6b7a;">CDK TypeScript 코드 생성 + 배포 + 듀얼 모드 데이터 레이어 + 시드 마이그레이션</div>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #f43f5e; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">reconcile-analyzer</div>
+      <div style="font-size:13px; color:#5f6b7a;">바이브코딩 후 코드 → 아티팩트 역동기화</div>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #6b7280; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">git-manager</div>
+      <div style="font-size:13px; color:#5f6b7a;">파이프라인 git 작업 전담 (브랜치 · 커밋 · 머지 · 워킹트리 검증)</div>
+    </div>
+    <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #10b981; padding:16px; border-radius:6px;">
+      <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">handover-packager</div>
+      <div style="font-size:13px; color:#5f6b7a;">아키텍처 문서 · API · 환경 설정 · 프로덕션 전환 체크리스트 패키징</div>
+    </div>
+  </div>
+</section>
+
+<!-- COMMANDS -->
+<section style="margin-bottom:56px;">
+  <h2 style="font-size:28px; margin:0 0 8px 0; color:#0f1b2d; border-left:4px solid #ff9900; padding-left:12px;">슬래시 커맨드 (8개)</h2>
+  <p style="font-size:14px; color:#5f6b7a; margin:0 0 24px 0;">사용자가 Claude Code에서 직접 실행하는 진입점. 각 커맨드는 Phase 게이트와 APPROVAL GATE를 따라 단계별로 진행한다.</p>
+
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); gap:16px;">
+
+    <div style="background:linear-gradient(135deg,#fff 0%,#f8fafc 100%); border:1px solid #e9ebed; border-radius:8px; padding:24px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <code style="background:#0f1b2d; color:#ff9900; padding:4px 10px; border-radius:4px; font-size:13px; font-family:'SF Mono',Consolas,monospace;">/brief</code>
+        <span style="font-size:11px; background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:10px;">PRE-PIPELINE</span>
+      </div>
+      <p style="margin:0; font-size:14px; color:#414750;">.pipeline/input/raw/ 안의 회의록·다이어그램·문서를 분석해 표준 customer-brief.md 자동 생성</p>
+    </div>
+
+    <div style="background:linear-gradient(135deg,#fff 0%,#fef3c7 100%); border:1px solid #e9ebed; border-radius:8px; padding:24px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <code style="background:#0f1b2d; color:#ff9900; padding:4px 10px; border-radius:4px; font-size:13px; font-family:'SF Mono',Consolas,monospace;">/pipeline</code>
+        <span style="font-size:11px; background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:10px;">FULL RUN</span>
+      </div>
+      <p style="margin:0; font-size:14px; color:#414750;">customer-brief.md 부터 핸드오버 직전까지 전체 파이프라인 실행 (Stage 1 → 6b)</p>
+    </div>
+
+    <div style="background:linear-gradient(135deg,#fff 0%,#dbeafe 100%); border:1px solid #e9ebed; border-radius:8px; padding:24px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <code style="background:#0f1b2d; color:#ff9900; padding:4px 10px; border-radius:4px; font-size:13px; font-family:'SF Mono',Consolas,monospace;">/iterate</code>
+        <span style="font-size:11px; background:#dbeafe; color:#1e40af; padding:2px 8px; border-radius:10px;">FEEDBACK LOOP</span>
+      </div>
+      <p style="margin:0; font-size:14px; color:#414750;">고객 피드백 영향 범위 분석 + 최소 재생성. iterate/v{N+1} 브랜치 위에서 진행</p>
+    </div>
+
+    <div style="background:linear-gradient(135deg,#fff 0%,#fce7f3 100%); border:1px solid #e9ebed; border-radius:8px; padding:24px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <code style="background:#0f1b2d; color:#ff9900; padding:4px 10px; border-radius:4px; font-size:13px; font-family:'SF Mono',Consolas,monospace;">/reconcile</code>
+        <span style="font-size:11px; background:#fce7f3; color:#9d174d; padding:2px 8px; border-radius:10px;">REVERSE SYNC</span>
+      </div>
+      <p style="margin:0; font-size:14px; color:#414750;">바이브코딩·버그픽스 후 src/ 코드 → 아티팩트 역동기화. <code style="font-size:12px; background:#f3f4f6; padding:1px 4px; border-radius:3px;">--qa</code> 옵션으로 품질 루프 재실행</p>
+    </div>
+
+    <div style="background:linear-gradient(135deg,#fff 0%,#fee2e2 100%); border:1px solid #e9ebed; border-radius:8px; padding:24px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <code style="background:#0f1b2d; color:#ff9900; padding:4px 10px; border-radius:4px; font-size:13px; font-family:'SF Mono',Consolas,monospace;">/awsarch</code>
+        <span style="font-size:11px; background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:10px;">MOCK → AWS</span>
+      </div>
+      <p style="margin:0; font-size:14px; color:#414750;">InMemoryStore 프로토타입을 실제 AWS(DynamoDB · S3 · Cognito)로 전환. CDK 인프라 + 데이터 레이어 교체</p>
+    </div>
+
+    <div style="background:linear-gradient(135deg,#fff 0%,#d1fae5 100%); border:1px solid #e9ebed; border-radius:8px; padding:24px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <code style="background:#0f1b2d; color:#ff9900; padding:4px 10px; border-radius:4px; font-size:13px; font-family:'SF Mono',Consolas,monospace;">/handover</code>
+        <span style="font-size:11px; background:#d1fae5; color:#065f46; padding:2px 8px; border-radius:10px;">FINAL</span>
+      </div>
+      <p style="margin:0; font-size:14px; color:#414750;">고객 개발팀 인수인계용 패키지 (아키텍처 문서 · API · 환경 설정 · 프로덕션 전환 체크리스트)</p>
+    </div>
+
+    <div style="background:linear-gradient(135deg,#fff 0%,#f1f5f9 100%); border:1px solid #e9ebed; border-radius:8px; padding:24px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <code style="background:#0f1b2d; color:#ff9900; padding:4px 10px; border-radius:4px; font-size:13px; font-family:'SF Mono',Consolas,monospace;">/pipeline-from</code>
+        <span style="font-size:11px; background:#f1f5f9; color:#475569; padding:2px 8px; border-radius:10px;">RESUME</span>
+      </div>
+      <p style="margin:0; font-size:14px; color:#414750;">특정 스테이지부터 파이프라인 재개. 이전 아티팩트는 그대로 활용</p>
+    </div>
+
+    <div style="background:linear-gradient(135deg,#fff 0%,#f1f5f9 100%); border:1px solid #e9ebed; border-radius:8px; padding:24px; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <code style="background:#0f1b2d; color:#ff9900; padding:4px 10px; border-radius:4px; font-size:13px; font-family:'SF Mono',Consolas,monospace;">/pipeline-status</code>
+        <span style="font-size:11px; background:#f1f5f9; color:#475569; padding:2px 8px; border-radius:10px;">INSPECT</span>
+      </div>
+      <p style="margin:0; font-size:14px; color:#414750;">현재 파이프라인 진행 상태 · 버전 · 아티팩트 요약 표시</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ITERATE vs RECONCILE -->
+<section style="margin-bottom:56px;">
+  <h2 style="font-size:28px; margin:0 0 8px 0; color:#0f1b2d; border-left:4px solid #ff9900; padding-left:12px;">/iterate vs /reconcile — 두 가지 변경 흐름</h2>
+  <p style="font-size:14px; color:#5f6b7a; margin:0 0 24px 0;">프로토타입은 만들어진 후에도 계속 변한다. 변화의 출발점이 <strong>고객 피드백(요구사항)</strong>이냐, 아니면 <strong>SA의 직접 코드 변경</strong>이냐에 따라 두 갈래의 흐름이 존재한다.</p>
+
+  <!-- Direction comparison -->
+  <div style="background:#fff; border:1px solid #e9ebed; border-radius:8px; padding:24px; margin-bottom:32px;">
+    <h3 style="font-size:18px; margin:0 0 16px 0; color:#0f1b2d;">방향성 비교</h3>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+      <div style="background:linear-gradient(135deg,#dbeafe 0%,#eff6ff 100%); padding:20px; border-radius:6px; border:1px solid #bfdbfe;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+          <code style="background:#0f1b2d; color:#ff9900; padding:4px 10px; border-radius:4px; font-size:13px; font-family:'SF Mono',monospace;">/iterate</code>
+          <span style="font-size:11px; background:#1e40af; color:#fff; padding:2px 8px; border-radius:10px;">TOP-DOWN</span>
+        </div>
+        <div style="font-size:13px; color:#1e3a8a; font-weight:600; margin-bottom:8px;">고객 피드백(입력) → 코드</div>
+        <div style="font-size:13px; color:#1e40af; line-height:1.6;">회의록·이메일·새 요구사항이 raw/에 추가되면, 영향 범위를 분석한 뒤 requirements-analyst부터 파이프라인을 다시 흐른다.</div>
+      </div>
+      <div style="background:linear-gradient(135deg,#fce7f3 0%,#fdf2f8 100%); padding:20px; border-radius:6px; border:1px solid #fbcfe8;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+          <code style="background:#0f1b2d; color:#ff9900; padding:4px 10px; border-radius:4px; font-size:13px; font-family:'SF Mono',monospace;">/reconcile</code>
+          <span style="font-size:11px; background:#9d174d; color:#fff; padding:2px 8px; border-radius:10px;">BOTTOM-UP</span>
+        </div>
+        <div style="font-size:13px; color:#831843; font-weight:600; margin-bottom:8px;">코드 변경 → 아티팩트</div>
+        <div style="font-size:13px; color:#9d174d; line-height:1.6;">SA가 src/를 직접 손본 후(바이브코딩·버그픽스), 변경된 코드를 기준으로 스펙·아키텍처·요구사항을 역동기화한다.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- /iterate detail -->
+  <div style="background:#fff; border:1px solid #e9ebed; border-radius:8px; padding:32px; margin-bottom:32px;">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+      <code style="background:#0f1b2d; color:#ff9900; padding:6px 14px; border-radius:4px; font-size:16px; font-family:'SF Mono',monospace; font-weight:600;">/iterate</code>
+      <span style="font-size:12px; color:#5f6b7a;">고객 피드백 기반 반복 개선</span>
+    </div>
+    <p style="font-size:14px; color:#414750; margin:8px 0 24px 0;">새로운 피드백·요구사항을 <code style="background:#f1f5f9; padding:1px 4px; border-radius:3px;">.pipeline/input/raw/</code>에 추가한 뒤 실행한다. 영향 범위 분석 → 모호한 부분 질의 → brief 갱신 → 파이프라인 재실행까지 한 번에 처리한다.</p>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">Phase 흐름</h4>
+    <div style="display:grid; gap:8px; margin-bottom:24px;">
+      <div style="display:grid; grid-template-columns:80px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #6366f1;">
+        <div style="font-weight:700; color:#4338ca; font-size:13px;">Phase 0</div>
+        <div style="font-size:13px; color:#414750;"><strong>브랜치 선행 생성</strong> — 분석 산출물이 main에 남지 않도록 <code style="background:#e0e7ff; padding:1px 4px; border-radius:3px;">iterate/v{N+1}</code> 브랜치를 먼저 만든다. (git-manager · pre-iterate)</div>
+      </div>
+      <div style="display:grid; grid-template-columns:80px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #3b82f6;">
+        <div style="font-weight:700; color:#1d4ed8; font-size:13px;">Phase 1</div>
+        <div style="font-size:13px; color:#414750;"><strong>변경 감지 + 영향 분석 + clarifications 생성</strong> — feedback-analyzer가 raw/ 새 파일과 기존 아티팩트(요구사항·아키텍처·스펙·코드)를 비교하여 영향 범위를 산출. 모호한 피드백은 <code style="background:#dbeafe; padding:1px 4px; border-radius:3px;">clarifications.md</code>에 질문 형태로 자동 작성. <strong style="color:#dc2626;">APPROVAL GATE</strong>.</div>
+      </div>
+      <div style="display:grid; grid-template-columns:80px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #06b6d4;">
+        <div style="font-weight:700; color:#0e7490; font-size:13px;">Phase 2</div>
+        <div style="font-size:13px; color:#414750;"><strong>clarifications 답변 대기</strong> (조건부) — clarifications.md가 생성된 경우만 실행. 사용자가 답변을 채우거나 "추론값으로 진행"을 선택할 때까지 대기. 답변이 없으면 brief-composer가 <code style="background:#cffafe; padding:1px 4px; border-radius:3px;">## Assumptions</code>로 추론 근거를 기록.</div>
+      </div>
+      <div style="display:grid; grid-template-columns:80px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #10b981;">
+        <div style="font-weight:700; color:#047857; font-size:13px;">Phase 3</div>
+        <div style="font-size:13px; color:#414750;"><strong>입력 파일 갱신</strong> — brief-composer가 customer-brief.md / source-analysis.md / manifest.json 3개 파일을 갱신. 기존 요구사항은 보존하고 변경/추가분만 통합.</div>
+      </div>
+      <div style="display:grid; grid-template-columns:80px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #f59e0b;">
+        <div style="font-weight:700; color:#b45309; font-size:13px;">Phase 4</div>
+        <div style="font-size:13px; color:#414750;"><strong>state.json 버전 추가 + 아티팩트 디렉토리 생성</strong> — v{N+1} 엔트리 추가. v{N}의 <code style="background:#fef3c7; padding:1px 4px; border-radius:3px;">00-domain/</code>은 도메인 지식이 변하지 않으므로 그대로 복사.</div>
+      </div>
+      <div style="display:grid; grid-template-columns:80px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #ef4444;">
+        <div style="font-weight:700; color:#b91c1c; font-size:13px;">Phase 5</div>
+        <div style="font-size:13px; color:#414750;"><strong>파이프라인 재실행 (requirements-analyst부터)</strong> — domain-researcher는 건너뛰고 Stage 2~7을 순차 실행. 영향이 작아도 항상 requirements부터 시작해 FR → 아키텍처 → 스펙 → 코드 추적 체인을 유지.</div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+      <div style="background:#fef3c7; border-left:3px solid #f59e0b; padding:12px 16px; border-radius:4px;">
+        <div style="font-size:12px; font-weight:600; color:#92400e; margin-bottom:4px;">⚠️ 핵심 설계 의도</div>
+        <div style="font-size:12px; color:#78350f; line-height:1.5;">feedback-analyzer가 <code style="background:#fde68a; padding:1px 3px; border-radius:2px;">recommended_reentry</code>를 산출해도 <strong>항상 requirements부터 재실행</strong>. 중간 문서를 건너뛰면 추적성이 끊어진다.</div>
+      </div>
+      <div style="background:#dbeafe; border-left:3px solid #3b82f6; padding:12px 16px; border-radius:4px;">
+        <div style="font-size:12px; font-weight:600; color:#1e40af; margin-bottom:4px;">🔄 Quality Loop</div>
+        <div style="font-size:12px; color:#1e3a8a; line-height:1.5;">Phase 5의 QA(3회) → Review(2회) → Security(1회) 루프 한도 초과 시 <code style="background:#bfdbfe; padding:1px 3px; border-radius:2px;">halted</code> 상태로 진입. halt-report.md와 함께 3가지 복구 옵션 제시.</div>
+      </div>
+    </div>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:24px 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">전형적인 사용 시나리오</h4>
+    <ul style="margin:0; padding-left:20px; font-size:13px; color:#414750; line-height:1.7;">
+      <li>고객 데모 후 받은 피드백 메일을 raw/feedback-2026-05-17.md로 저장 → <code style="background:#f1f5f9; padding:1px 4px; border-radius:3px;">/iterate</code></li>
+      <li>새 페이지·기능 추가 요청을 회의록으로 정리 → raw/에 투입 → <code style="background:#f1f5f9; padding:1px 4px; border-radius:3px;">/iterate</code></li>
+      <li>기존 요구사항의 우선순위 변경, NFR 강화(접근성·성능 등) 반영</li>
+    </ul>
+  </div>
+
+  <!-- /reconcile detail -->
+  <div style="background:#fff; border:1px solid #e9ebed; border-radius:8px; padding:32px;">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+      <code style="background:#0f1b2d; color:#ff9900; padding:6px 14px; border-radius:4px; font-size:16px; font-family:'SF Mono',monospace; font-weight:600;">/reconcile</code>
+      <span style="font-size:12px; color:#5f6b7a;">코드 변경 후 아티팩트 역동기화</span>
+    </div>
+    <p style="font-size:14px; color:#414750; margin:8px 0 24px 0;">SA가 파이프라인 밖에서 src/를 직접 수정한 뒤(바이브코딩·긴급 버그픽스·실험적 변경) 실행한다. 변경된 코드를 분석하여 요구사항·아키텍처·스펙·생성 로그를 코드 현재 상태에 맞춰 갱신한다.</p>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">두 가지 모드</h4>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;">
+      <div style="background:#f8fafc; border:1px solid #e9ebed; padding:16px; border-radius:6px;">
+        <code style="background:#0f1b2d; color:#ff9900; padding:3px 8px; border-radius:3px; font-size:12px; font-family:'SF Mono',monospace;">/reconcile</code>
+        <div style="font-size:12px; color:#1e40af; font-weight:600; margin:8px 0 4px 0;">docs-only · 경량</div>
+        <div style="font-size:13px; color:#414750;">Phase 1~5만 실행. 아티팩트만 동기화. src/ 코드는 절대 수정 안 함.</div>
+      </div>
+      <div style="background:#f8fafc; border:1px solid #e9ebed; padding:16px; border-radius:6px;">
+        <code style="background:#0f1b2d; color:#ff9900; padding:3px 8px; border-radius:3px; font-size:12px; font-family:'SF Mono',monospace;">/reconcile --qa</code>
+        <div style="font-size:12px; color:#9d174d; font-weight:600; margin:8px 0 4px 0;">docs-qa · 전체</div>
+        <div style="font-size:13px; color:#414750;">Phase 1~6 실행. 동기화 후 QA/Review/Security 재실행. 품질 루프 실패 시에만 코드 수정 허용.</div>
+      </div>
+    </div>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">Phase 흐름</h4>
+    <div style="display:grid; gap:8px; margin-bottom:24px;">
+      <div style="display:grid; grid-template-columns:80px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #f43f5e;">
+        <div style="font-weight:700; color:#be123c; font-size:13px;">Phase 1</div>
+        <div style="font-size:13px; color:#414750;"><strong>변경 감지 + 역방향 영향 분석 (읽기 전용)</strong> — reconcile-analyzer(analyze)가 git 이력과 src/ 현재 상태를 비교하여 변경을 분류(<code style="background:#fee2e2; padding:1px 4px; border-radius:3px;">structural</code> 또는 <code style="background:#fee2e2; padding:1px 4px; border-radius:3px;">refinement</code>). 영향받는 아티팩트 목록 산출. <strong style="color:#dc2626;">APPROVAL GATE</strong>.</div>
+      </div>
+      <div style="display:grid; grid-template-columns:80px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #6366f1;">
+        <div style="font-weight:700; color:#4338ca; font-size:13px;">Phase 2</div>
+        <div style="font-size:13px; color:#414750;"><strong>브랜치 생성</strong> — git-manager(pre-reconcile)가 <code style="background:#e0e7ff; padding:1px 4px; border-radius:3px;">reconcile/v{N+1}</code> 브랜치 생성. Phase 1의 revisions 산출물을 먼저 커밋한 후 분리.</div>
+      </div>
+      <div style="display:grid; grid-template-columns:80px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #10b981;">
+        <div style="font-weight:700; color:#047857; font-size:13px;">Phase 3</div>
+        <div style="font-size:13px; color:#414750;"><strong>아티팩트 동기화</strong> — 4개 sub-phase로 나누어 코드 → 아티팩트 역방향 갱신.
+          <div style="margin-top:8px; padding-left:12px; border-left:2px solid #d1fae5; font-size:12px; color:#5f6b7a; line-height:1.7;">
+            <div><strong style="color:#047857;">3a. 생성 로그 (04-codegen/)</strong> — ad-hoc 파일에 <code style="background:#d1fae5; padding:1px 3px; border-radius:2px;">"origin": "ad-hoc"</code>, 수정된 파일에 <code style="background:#d1fae5; padding:1px 3px; border-radius:2px;">"status": "reconciled"</code> 마커</div>
+            <div><strong style="color:#047857;">3b. 스펙 (03-specs/)</strong> — backend-spec.json, frontend-spec.json, _manifest.json의 requirements_coverage 갱신</div>
+            <div><strong style="color:#047857;">3c. 아키텍처 (02-architecture/)</strong> — src/ 디렉토리 스캔으로 architecture.json 갱신, FR 역매핑</div>
+            <div><strong style="color:#047857;">3d. 요구사항 (01-requirements/)</strong> — <code style="background:#d1fae5; padding:1px 3px; border-radius:2px;">structural</code> 변경일 때만. 새 FR에 <code style="background:#d1fae5; padding:1px 3px; border-radius:2px;">"origin": "reconcile"</code> 마커</div>
+          </div>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:80px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #f59e0b;">
+        <div style="font-weight:700; color:#b45309; font-size:13px;">Phase 4</div>
+        <div style="font-size:13px; color:#414750;"><strong>state.json 갱신 + reconcile-report.md 생성</strong> — baseline_commit/head_commit, change_classification, 갱신 아티팩트 목록을 한국어 리포트로 작성.</div>
+      </div>
+      <div style="display:grid; grid-template-columns:80px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #6b7280;">
+        <div style="font-weight:700; color:#374151; font-size:13px;">Phase 5</div>
+        <div style="font-size:13px; color:#414750;"><strong>완료 (docs-only) 또는 QA 진행 (--qa)</strong> — git-manager(post-reconcile)로 아티팩트와 리포트만 커밋. <strong>src/ 코드는 커밋하지 않는다</strong> (이미 사용자가 ad-hoc으로 커밋했기 때문).</div>
+      </div>
+      <div style="display:grid; grid-template-columns:80px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #ec4899;">
+        <div style="font-weight:700; color:#9d174d; font-size:13px;">Phase 6</div>
+        <div style="font-size:13px; color:#414750;"><strong>QA + Review + Security (--qa 전용)</strong> — 갱신된 requirements/architecture를 기준으로 현재 코드를 검증. 이때만 code-generator-* 에이전트의 코드 수정이 허용된다.</div>
+      </div>
+    </div>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">변경 분류 로직</h4>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;">
+      <div style="background:#fef2f2; border:1px solid #fecaca; padding:16px; border-radius:6px;">
+        <div style="font-weight:600; color:#991b1b; margin-bottom:8px; font-size:13px;">structural</div>
+        <div style="font-size:12px; color:#7f1d1d; line-height:1.6;">새 페이지/API/도메인 모델 추가, 기존 컴포넌트 분리·통합, 데이터 흐름 변경 → 요구사항(01-requirements/)까지 전부 갱신</div>
+      </div>
+      <div style="background:#f0fdf4; border:1px solid #bbf7d0; padding:16px; border-radius:6px;">
+        <div style="font-weight:600; color:#166534; margin-bottom:8px; font-size:13px;">refinement</div>
+        <div style="font-size:12px; color:#14532d; line-height:1.6;">버그 픽스, 스타일 조정, 성능 개선, 리팩토링 → 요구사항은 v{N}에서 그대로 복사하고 스펙·아키텍처만 갱신</div>
+      </div>
+    </div>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">전형적인 사용 시나리오</h4>
+    <ul style="margin:0; padding-left:20px; font-size:13px; color:#414750; line-height:1.7;">
+      <li>데모 직전 긴급 버그픽스로 src/components/VehicleTable.tsx를 직접 수정 → <code style="background:#f1f5f9; padding:1px 4px; border-radius:3px;">/reconcile</code></li>
+      <li>실험적으로 새 페이지를 바이브코딩으로 추가 → 검증 필요 시 <code style="background:#f1f5f9; padding:1px 4px; border-radius:3px;">/reconcile --qa</code></li>
+      <li>코드 리팩토링 후 스펙 문서가 어긋나는 경우 동기화</li>
+    </ul>
+  </div>
+
+  <!-- Decision matrix -->
+  <div style="background:#0f1b2d; color:#fff; border-radius:8px; padding:32px; margin-top:32px;">
+    <h3 style="margin:0 0 16px 0; font-size:18px; color:#ff9900;">언제 무엇을 쓸까?</h3>
+    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+      <thead>
+        <tr style="border-bottom:1px solid #334155;">
+          <th style="text-align:left; padding:10px 12px; color:#cbd5e1; font-weight:600;">상황</th>
+          <th style="text-align:center; padding:10px 12px; color:#cbd5e1; font-weight:600; width:140px;">/iterate</th>
+          <th style="text-align:center; padding:10px 12px; color:#cbd5e1; font-weight:600; width:140px;">/reconcile</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:10px 12px; color:#e2e8f0;">고객이 새 요구사항을 메일로 보냈다</td>
+          <td style="text-align:center; padding:10px 12px; color:#1ec9a3; font-weight:700;">✓</td>
+          <td style="text-align:center; padding:10px 12px; color:#475569;">—</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:10px 12px; color:#e2e8f0;">데모 직전 코드를 직접 패치했다</td>
+          <td style="text-align:center; padding:10px 12px; color:#475569;">—</td>
+          <td style="text-align:center; padding:10px 12px; color:#1ec9a3; font-weight:700;">✓</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:10px 12px; color:#e2e8f0;">기존 페이지의 동작 방식을 바꿔달라는 피드백</td>
+          <td style="text-align:center; padding:10px 12px; color:#1ec9a3; font-weight:700;">✓</td>
+          <td style="text-align:center; padding:10px 12px; color:#475569;">—</td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:10px 12px; color:#e2e8f0;">바이브코딩으로 추가한 기능을 정식 자산화</td>
+          <td style="text-align:center; padding:10px 12px; color:#475569;">—</td>
+          <td style="text-align:center; padding:10px 12px; color:#1ec9a3; font-weight:700;">✓ <span style="font-size:11px; color:#94a3b8;">--qa</span></td>
+        </tr>
+        <tr style="border-bottom:1px solid #1e293b;">
+          <td style="padding:10px 12px; color:#e2e8f0;">고객 피드백 + 직접 수정이 함께 있음</td>
+          <td colspan="2" style="text-align:center; padding:10px 12px; color:#ffb84d; font-weight:600;">먼저 /reconcile → 그 다음 /iterate (하단 순서 주의)</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px; color:#e2e8f0;">실패 시 main 브랜치 보호</td>
+          <td style="text-align:center; padding:10px 12px; color:#1ec9a3; font-weight:700;">iterate/v{N+1}</td>
+          <td style="text-align:center; padding:10px 12px; color:#1ec9a3; font-weight:700;">reconcile/v{N+1}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- AWSARCH & HANDOVER -->
+<section style="margin-bottom:56px;">
+  <h2 style="font-size:28px; margin:0 0 8px 0; color:#0f1b2d; border-left:4px solid #ff9900; padding-left:12px;">/awsarch & /handover — 실서비스 전환 & 인수인계</h2>
+  <p style="font-size:14px; color:#5f6b7a; margin:0 0 24px 0;">프로토타입이 충분히 무르익으면 실제 AWS 리소스로 전환하고(<code>/awsarch</code>), 고객 개발팀에 인수인계할 문서 패키지를 만든다(<code>/handover</code>).</p>
+
+  <!-- /awsarch detail -->
+  <div style="background:#fff; border:1px solid #e9ebed; border-radius:8px; padding:32px; margin-bottom:32px;">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+      <code style="background:#0f1b2d; color:#ff9900; padding:6px 14px; border-radius:4px; font-size:16px; font-family:'SF Mono',monospace; font-weight:600;">/awsarch</code>
+      <span style="font-size:12px; color:#5f6b7a;">Mock 프로토타입 → 실제 AWS 리소스 전환</span>
+    </div>
+    <p style="font-size:14px; color:#414750; margin:8px 0 24px 0;">InMemoryStore 기반 프로토타입을 실제 AWS(DynamoDB · Aurora · S3 · Cognito · Bedrock AgentCore)로 전환한다. CDK TypeScript 인프라를 생성하고, <strong>듀얼 모드 데이터 레이어</strong>를 구현하여 <code style="background:#fef3c7; padding:1px 4px; border-radius:3px;">DATA_SOURCE</code> 환경 변수만으로 mock/real을 전환할 수 있게 한다.</p>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">세 가지 모드</h4>
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:24px;">
+      <div style="background:#f8fafc; border:1px solid #e9ebed; padding:16px; border-radius:6px;">
+        <code style="background:#0f1b2d; color:#ff9900; padding:3px 8px; border-radius:3px; font-size:12px; font-family:'SF Mono',monospace;">/awsarch --plan</code>
+        <div style="font-size:12px; color:#475569; font-weight:600; margin:8px 0 4px 0;">설계만 · 배포 없음</div>
+        <div style="font-size:13px; color:#414750;">Phase 1까지만. aws-architecture.json + 비용 추정 산출. 의사결정 자료로 활용.</div>
+      </div>
+      <div style="background:#f8fafc; border:1px solid #e9ebed; padding:16px; border-radius:6px;">
+        <code style="background:#0f1b2d; color:#ff9900; padding:3px 8px; border-radius:3px; font-size:12px; font-family:'SF Mono',monospace;">/awsarch</code>
+        <div style="font-size:12px; color:#be123c; font-weight:600; margin:8px 0 4px 0;">전체 · 기본</div>
+        <div style="font-size:13px; color:#414750;">Phase 1~4. 설계 + CDK 배포 + 데이터 레이어 교체 + 시드 마이그레이션.</div>
+      </div>
+      <div style="background:#f8fafc; border:1px solid #e9ebed; padding:16px; border-radius:6px;">
+        <code style="background:#0f1b2d; color:#ff9900; padding:3px 8px; border-radius:3px; font-size:12px; font-family:'SF Mono',monospace;">/awsarch --qa</code>
+        <div style="font-size:12px; color:#9d174d; font-weight:600; margin:8px 0 4px 0;">전체 + 품질 검증</div>
+        <div style="font-size:13px; color:#414750;">Phase 1~5. AWS 통합 후 QA/리뷰/보안 재실행. AWS 특화 보안 점검 포함.</div>
+      </div>
+    </div>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">Phase 흐름</h4>
+    <div style="display:grid; gap:8px; margin-bottom:24px;">
+      <div style="display:grid; grid-template-columns:120px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #6b7280;">
+        <div style="font-weight:700; color:#374151; font-size:13px;">Pre-flight</div>
+        <div style="font-size:13px; color:#414750;"><strong>사전 점검 + 브랜치 생성</strong> — completed 버전 존재 / src/lib/db/store.ts 존재 / npm run build 성공 / <code style="background:#f1f5f9; padding:1px 4px; border-radius:3px;">aws sts get-caller-identity</code>로 자격 증명 확인. <code style="background:#e0e7ff; padding:1px 4px; border-radius:3px;">awsarch/v{N+1}</code> 브랜치 생성.</div>
+      </div>
+      <div style="display:grid; grid-template-columns:120px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #ef4444;">
+        <div style="font-weight:700; color:#b91c1c; font-size:13px;">Phase 1</div>
+        <div style="font-size:13px; color:#414750;"><strong>AWS 인프라 설계</strong> — aws-architect가 architecture.json + requirements.json + src/types/ + src/data/seed.ts를 분석하여 aws-architecture.json 산출. services / iam_policies / cost_estimate 포함. <strong style="color:#dc2626;">APPROVAL GATE — 비용 확인</strong> (모든 모드에서 실행).</div>
+      </div>
+      <div style="display:grid; grid-template-columns:120px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #f97316;">
+        <div style="font-weight:700; color:#c2410c; font-size:13px;">Phase 2</div>
+        <div style="font-size:13px; color:#414750;"><strong>CDK 코드 생성 + 데이터 레이어 교체</strong> — aws-deployer가 infra/ 디렉토리 + DataStore 인터페이스 + DynamoDBStore 구현 + store-factory를 생성. 기존 repository와 API route는 await 추가로 수정.
+          <div style="margin-top:6px; font-size:12px; color:#5f6b7a;">검증: <code style="background:#fef3c7; padding:1px 3px; border-radius:2px;">npm run build</code> + <code style="background:#fef3c7; padding:1px 3px; border-radius:2px;">cd infra && npx tsc --noEmit</code> 성공</div>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:120px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #f59e0b;">
+        <div style="font-weight:700; color:#b45309; font-size:13px;">Phase 3</div>
+        <div style="font-size:13px; color:#414750;"><strong>CDK 배포</strong> — bootstrap → diff → <strong style="color:#dc2626;">APPROVAL GATE (cdk diff 확인)</strong> → deploy. <code style="background:#fef3c7; padding:1px 4px; border-radius:3px;">--require-approval broadening</code>으로 IAM 권한 확대 시 추가 확인. cdk-outputs.json을 .env.local로 변환.</div>
+      </div>
+      <div style="display:grid; grid-template-columns:120px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #10b981;">
+        <div style="font-weight:700; color:#047857; font-size:13px;">Phase 4</div>
+        <div style="font-size:13px; color:#414750;"><strong>시드 데이터 마이그레이션 + 듀얼 모드 검증</strong> — src/data/seed.ts 데이터를 DynamoDB로 삽입. 두 모드 모두 빌드 통과 검증:
+          <div style="margin-top:6px; font-size:12px; color:#5f6b7a;">
+            <code style="background:#d1fae5; padding:1px 4px; border-radius:2px;">npm run build</code> (DynamoDB 모드, 기본) +
+            <code style="background:#d1fae5; padding:1px 4px; border-radius:2px;">DATA_SOURCE=memory npm run build</code> (mock 모드 여전히 동작)
+          </div>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:120px 1fr; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #ec4899;">
+        <div style="font-weight:700; color:#9d174d; font-size:13px;">Phase 5</div>
+        <div style="font-size:13px; color:#414750;"><strong>QA + Review + Security 재실행 (--qa 전용)</strong> — DATA_SOURCE=dynamodb 환경에서 E2E 재실행. reviewer는 <strong>10번째 카테고리 (AWS 통합 품질)</strong> 추가 점검. security-auditor는 IAM 과도 권한 / 하드코딩 자격 증명 / .env.local의 .gitignore 포함 여부 등 AWS 특화 항목 검사.</div>
+      </div>
+    </div>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">대상 AWS 서비스</h4>
+    <div style="background:#0f1b2d; color:#fff; border-radius:6px; padding:20px; margin-bottom:24px;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; font-size:12px;">
+        <div>
+          <div style="color:#ff9900; font-weight:600; margin-bottom:6px; font-size:11px; letter-spacing:0.5px;">DATA</div>
+          <div style="color:#cbd5e1;">DynamoDB · Aurora · ElastiCache · OpenSearch</div>
+        </div>
+        <div>
+          <div style="color:#ff9900; font-weight:600; margin-bottom:6px; font-size:11px; letter-spacing:0.5px;">OBJECT / AUTH</div>
+          <div style="color:#cbd5e1;">S3 · Cognito</div>
+        </div>
+        <div>
+          <div style="color:#ff9900; font-weight:600; margin-bottom:6px; font-size:11px; letter-spacing:0.5px;">INTEGRATION</div>
+          <div style="color:#cbd5e1;">SQS · SNS · EventBridge · Step Functions · Lambda</div>
+        </div>
+        <div>
+          <div style="color:#ff9900; font-weight:600; margin-bottom:6px; font-size:11px; letter-spacing:0.5px;">AI RUNTIME</div>
+          <div style="color:#cbd5e1;">Bedrock AgentCore: Runtime · Memory · Gateway · Identity · Observability</div>
+        </div>
+      </div>
+    </div>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">듀얼 모드 데이터 레이어</h4>
+    <div style="background:#f8fafc; border:1px solid #e9ebed; border-radius:6px; padding:20px; margin-bottom:24px;">
+      <div style="font-family:'SF Mono',Consolas,Monaco,monospace; font-size:12px; line-height:1.7; color:#16191f;">
+        <span style="color:#9333ea;">interface</span> <span style="color:#0891b2;">DataStore</span> { <span style="color:#64748b;">/* 공통 인터페이스 */</span> }<br>
+        <span style="color:#9333ea;">class</span> <span style="color:#0891b2;">InMemoryStore</span> <span style="color:#9333ea;">implements</span> <span style="color:#0891b2;">DataStore</span> { <span style="color:#64748b;">/* mock */</span> }<br>
+        <span style="color:#9333ea;">class</span> <span style="color:#0891b2;">DynamoDBStore</span> <span style="color:#9333ea;">implements</span> <span style="color:#0891b2;">DataStore</span> { <span style="color:#64748b;">/* AWS */</span> }<br>
+        <br>
+        <span style="color:#9333ea;">function</span> <span style="color:#2563eb;">createStore</span>(): <span style="color:#0891b2;">DataStore</span> {<br>
+        &nbsp;&nbsp;<span style="color:#9333ea;">return</span> process.env.<span style="color:#dc2626;">DATA_SOURCE</span> === <span style="color:#16a34a;">'dynamodb'</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;? <span style="color:#9333ea;">new</span> <span style="color:#0891b2;">DynamoDBStore</span>()<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;: <span style="color:#9333ea;">new</span> <span style="color:#0891b2;">InMemoryStore</span>(); <span style="color:#64748b;">// 기본값</span><br>
+        }
+      </div>
+      <div style="margin-top:12px; font-size:12px; color:#5f6b7a;">repository 인터페이스는 동일하므로 <strong>고객 데모 시 오프라인 환경에서도 mock 모드로 시연 가능</strong>. AWS 비용을 발생시키지 않고 개발할 수 있다.</div>
+    </div>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">비용 안전장치</h4>
+    <ul style="margin:0 0 24px 0; padding-left:20px; font-size:13px; color:#414750; line-height:1.7;">
+      <li>Phase 1 APPROVAL GATE에서 <strong>월간 예상 비용 + 서비스별 breakdown + 사용량 기반 요금 경고</strong> 제시 (Bedrock 토큰 단가 등)</li>
+      <li>Phase 3 APPROVAL GATE에서 <code style="background:#f1f5f9; padding:1px 4px; border-radius:3px;">cdk diff</code> 출력을 사용자가 직접 확인</li>
+      <li>aws-deployer가 CloudWatch Billing Alarm을 $50/월로 자동 구성</li>
+      <li>정리 명령: <code style="background:#f1f5f9; padding:1px 4px; border-radius:3px;">cd infra && npx cdk destroy</code> (AgentCore 리소스는 별도 정리 필요)</li>
+    </ul>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">Circuit Breaker</h4>
+    <table style="width:100%; border-collapse:collapse; font-size:12px; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; overflow:hidden;">
+      <thead>
+        <tr style="background:#fee2e2;">
+          <th style="text-align:left; padding:8px 12px; color:#991b1b; font-weight:600;">상황</th>
+          <th style="text-align:left; padding:8px 12px; color:#991b1b; font-weight:600;">조건</th>
+          <th style="text-align:left; padding:8px 12px; color:#991b1b; font-weight:600;">대응</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-top:1px solid #fecaca;">
+          <td style="padding:8px 12px; color:#7f1d1d;">CDK deploy 실패</td>
+          <td style="padding:8px 12px; color:#7f1d1d;">2회 연속 실패</td>
+          <td style="padding:8px 12px; color:#7f1d1d;">halted + halt-report.md</td>
+        </tr>
+        <tr style="border-top:1px solid #fecaca;">
+          <td style="padding:8px 12px; color:#7f1d1d;">npm run build 실패</td>
+          <td style="padding:8px 12px; color:#7f1d1d;">3회 연속 실패</td>
+          <td style="padding:8px 12px; color:#7f1d1d;">halted + halt-report.md</td>
+        </tr>
+        <tr style="border-top:1px solid #fecaca;">
+          <td style="padding:8px 12px; color:#7f1d1d;">QA 실패 (--qa)</td>
+          <td style="padding:8px 12px; color:#7f1d1d;">3회 이터레이션 초과</td>
+          <td style="padding:8px 12px; color:#7f1d1d;">halted + halt-report.md</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- /handover detail -->
+  <div style="background:#fff; border:1px solid #e9ebed; border-radius:8px; padding:32px;">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+      <code style="background:#0f1b2d; color:#ff9900; padding:6px 14px; border-radius:4px; font-size:16px; font-family:'SF Mono',monospace; font-weight:600;">/handover</code>
+      <span style="font-size:12px; color:#5f6b7a;">고객 개발팀 인수인계 패키지 생성</span>
+    </div>
+    <p style="font-size:14px; color:#414750; margin:8px 0 24px 0;">모든 이터레이션이 끝난 후 최종 단계에서 실행한다. <strong>코드만 넘기는 것이 아니라</strong>, 고객 개발팀이 프로토타입을 이해하고 프로덕션으로 발전시킬 수 있도록 구조화된 한국어 문서 패키지를 생성한다. 핸드오버 문서는 CLAUDE.md의 "코드는 영어" 규칙보다 우선하여 한국어로 작성된다.</p>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">사전 조건</h4>
+    <ul style="margin:0 0 24px 0; padding-left:20px; font-size:13px; color:#414750; line-height:1.7;">
+      <li><code style="background:#f1f5f9; padding:1px 4px; border-radius:3px;">.pipeline/state.json</code>의 현재 버전이 <code style="background:#d1fae5; padding:1px 4px; border-radius:3px; color:#065f46;">"completed"</code>여야 함</li>
+      <li>보안 점검(Stage 7)이 PASS 상태여야 함 — FAIL이면 안내 후 종료</li>
+      <li>(권장) <code>/awsarch</code> 실행 후 — AWS 인프라 가이드를 포함하려면 필요</li>
+    </ul>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">생성 문서 (08개)</h4>
+    <div style="display:grid; gap:8px; margin-bottom:24px;">
+      <div style="display:grid; grid-template-columns:200px 1fr 100px; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #10b981;">
+        <code style="font-size:12px; color:#047857; font-family:'SF Mono',monospace;">README.md</code>
+        <div style="font-size:13px; color:#414750;">5분 안에 로컬 실행 가능한 빠른 시작 가이드. 기술 스택 · 디렉토리 트리 · 라우트 · API · 환경 변수</div>
+        <span style="font-size:11px; background:#d1fae5; color:#065f46; padding:2px 8px; border-radius:10px; text-align:center; align-self:start;">필수</span>
+      </div>
+      <div style="display:grid; grid-template-columns:200px 1fr 100px; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #10b981;">
+        <code style="font-size:12px; color:#047857; font-family:'SF Mono',monospace;">ARCHITECTURE.md</code>
+        <div style="font-size:13px; color:#414750;">설계 배경 · 시스템 구조 · 컴포넌트 계층 · 데이터 모델 · 상태 관리 · <strong>Mermaid 다이어그램</strong> · 주요 설계 결정과 이유</div>
+        <span style="font-size:11px; background:#d1fae5; color:#065f46; padding:2px 8px; border-radius:10px; text-align:center; align-self:start;">필수</span>
+      </div>
+      <div style="display:grid; grid-template-columns:200px 1fr 100px; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #10b981;">
+        <code style="font-size:12px; color:#047857; font-family:'SF Mono',monospace;">API.md</code>
+        <div style="font-size:13px; color:#414750;">엔드포인트별 요청/응답 형식 · zod 스키마 추출 · 에러 코드. 백엔드가 있는 경우 생성</div>
+        <span style="font-size:11px; background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:10px; text-align:center; align-self:start;">조건부</span>
+      </div>
+      <div style="display:grid; grid-template-columns:200px 1fr 100px; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #ec4899;">
+        <code style="font-size:12px; color:#9d174d; font-family:'SF Mono',monospace;">AI-AGENT.md</code>
+        <div style="font-size:13px; color:#414750;">에이전트 패턴 · 모델 설정 · 시스템 프롬프트 · 커스텀 도구 · 스트리밍 API. <strong>AI 기능이 있을 때만 생성</strong></div>
+        <span style="font-size:11px; background:#fce7f3; color:#9d174d; padding:2px 8px; border-radius:10px; text-align:center; align-self:start;">조건부</span>
+      </div>
+      <div style="display:grid; grid-template-columns:200px 1fr 100px; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #ef4444;">
+        <code style="font-size:12px; color:#b91c1c; font-family:'SF Mono',monospace;">AWS-INFRASTRUCTURE.md</code>
+        <div style="font-size:13px; color:#414750;">배포된 리소스 목록 · 듀얼 모드 사용법 · CDK 관리 명령 · 시드 재마이그레이션 · 프로덕션 전환 시 변경사항. <strong>/awsarch 실행 후만 생성</strong></div>
+        <span style="font-size:11px; background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:10px; text-align:center; align-self:start;">조건부</span>
+      </div>
+      <div style="display:grid; grid-template-columns:200px 1fr 100px; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #f59e0b;">
+        <code style="font-size:12px; color:#b45309; font-family:'SF Mono',monospace;">PRODUCTION-CHECKLIST.md</code>
+        <div style="font-size:13px; color:#414750;">인증/인가 · 데이터 레이어 · 보안 · 인프라 · 테스트 카테고리별 체크리스트. security-audit의 production_notes 자동 반영</div>
+        <span style="font-size:11px; background:#d1fae5; color:#065f46; padding:2px 8px; border-radius:10px; text-align:center; align-self:start;">필수</span>
+      </div>
+      <div style="display:grid; grid-template-columns:200px 1fr 100px; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #6366f1;">
+        <code style="font-size:12px; color:#4338ca; font-family:'SF Mono',monospace;">REVISION-HISTORY.md</code>
+        <div style="font-size:13px; color:#414750;">v1부터 최종 버전까지 전체 변경 이력. 버전별 트리거 · 요구사항 변화 · 영향받은 파일 · 테스트/리뷰 결과 · 의사결정 기록. <strong>v2 이상일 때만 생성</strong></div>
+        <span style="font-size:11px; background:#e0e7ff; color:#4338ca; padding:2px 8px; border-radius:10px; text-align:center; align-self:start;">조건부</span>
+      </div>
+      <div style="display:grid; grid-template-columns:200px 1fr 100px; gap:12px; padding:12px; background:#f8fafc; border-radius:4px; border-left:3px solid #6b7280;">
+        <code style="font-size:12px; color:#374151; font-family:'SF Mono',monospace;">.env.local.example</code>
+        <div style="font-size:13px; color:#414750;">필요한 환경 변수 템플릿 (AWS 자격 증명 · DynamoDB 테이블명 · DATA_SOURCE 등)</div>
+        <span style="font-size:11px; background:#f1f5f9; color:#475569; padding:2px 8px; border-radius:10px; text-align:center; align-self:start;">필수</span>
+      </div>
+    </div>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">패키지 배치</h4>
+    <div style="background:#0f1b2d; color:#e2e8f0; border-radius:6px; padding:16px; overflow-x:auto; margin-bottom:24px;">
+      <pre style="margin:0; font-family:'SF Mono',Consolas,Monaco,monospace; font-size:12px; line-height:1.6; color:#e2e8f0;">프로젝트 루트/
+├── <span style="color:#1ec9a3;">README.md</span>                    ← 핸드오버 README로 교체
+├── <span style="color:#1ec9a3;">.env.local.example</span>           ← 환경 변수 템플릿
+├── <span style="color:#5294ff;">docs/</span>
+│   ├── ARCHITECTURE.md
+│   ├── API.md
+│   ├── AI-AGENT.md              <span style="color:#94a3b8;">(있는 경우)</span>
+│   ├── AWS-INFRASTRUCTURE.md    <span style="color:#94a3b8;">(/awsarch 실행 시)</span>
+│   ├── PRODUCTION-CHECKLIST.md
+│   └── REVISION-HISTORY.md      <span style="color:#94a3b8;">(v2 이상일 때)</span>
+└── <span style="color:#5294ff;">src/</span>
+
+<span style="color:#94a3b8;"># 원본은 .pipeline/artifacts/v{N}/07-handover/에 모두 보존</span>
+<span style="color:#94a3b8;"># handover-manifest.json에 메타데이터(buckets, stats, conditional 여부) 기록</span></pre>
+    </div>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">컨텍스트 관리 전략</h4>
+    <table style="width:100%; border-collapse:collapse; font-size:13px; background:#fff; border:1px solid #e9ebed; border-radius:6px; overflow:hidden; margin-bottom:24px;">
+      <thead>
+        <tr style="background:#f8fafc;">
+          <th style="text-align:left; padding:10px 12px; color:#414750; font-weight:600;">버전 수</th>
+          <th style="text-align:left; padding:10px 12px; color:#414750; font-weight:600;">읽기 전략</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-top:1px solid #e9ebed;">
+          <td style="padding:10px 12px; color:#414750;">1~3개</td>
+          <td style="padding:10px 12px; color:#5f6b7a;">전체 아티팩트 읽기 (기본)</td>
+        </tr>
+        <tr style="border-top:1px solid #e9ebed;">
+          <td style="padding:10px 12px; color:#414750;">4개 이상</td>
+          <td style="padding:10px 12px; color:#5f6b7a;">state.json versions 요약 + 최종 버전 상세 + 직전 버전 diff만. 이전 버전은 revisions 로그 요약만 참조</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">참조 스킬</h4>
+    <ul style="margin:0 0 24px 0; padding-left:20px; font-size:13px; color:#414750; line-height:1.7;">
+      <li><code style="background:#d1fae5; color:#065f46; padding:1px 4px; border-radius:3px;">mermaid-diagrams</code> — ARCHITECTURE.md의 데이터 플로우/컴포넌트 다이어그램 생성 및 검증</li>
+      <li><code style="background:#d1fae5; color:#065f46; padding:1px 4px; border-radius:3px;">ascii-diagram</code> — README.md의 프로젝트 구조 디렉토리 트리 렌더링</li>
+      <li><code style="background:#fef3c7; color:#92400e; padding:1px 4px; border-radius:3px;">cloudscape-design</code> — 컴포넌트 목록 교차 검증 및 페이지 패턴 설명 보강</li>
+    </ul>
+
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">완료 후</h4>
+    <ol style="margin:0; padding-left:20px; font-size:13px; color:#414750; line-height:1.7;">
+      <li>git-manager(post-handover)가 docs/ + README.md + .env.local.example을 자동 커밋</li>
+      <li>handover-manifest.json에 stats(total_versions/FRs/pages/endpoints, test_pass_rate, verdicts)와 production_checklist_items 카운트 기록</li>
+      <li>사용자에게 한국어 보고: 생성 문서 목록, 프로덕션 전환 필수 작업 수, "이 패키지를 고객 개발팀에 전달하세요"</li>
+    </ol>
+  </div>
+
+  <!-- Lifecycle position -->
+  <div style="background:#0f1b2d; color:#fff; border-radius:8px; padding:32px; margin-top:32px;">
+    <h3 style="margin:0 0 16px 0; font-size:18px; color:#ff9900;">전체 라이프사이클에서의 위치</h3>
+    <div style="background:#1e293b; border-radius:6px; padding:20px; overflow-x:auto;">
+      <pre style="margin:0; font-family:'SF Mono',Consolas,Monaco,monospace; font-size:12px; line-height:1.8; color:#e2e8f0; white-space:pre;">
+  <span style="color:#1ec9a3;">[고객 미팅]</span>          <span style="color:#1ec9a3;">[데모 1]</span>            <span style="color:#1ec9a3;">[데모 N]</span>           <span style="color:#1ec9a3;">[실서비스 결정]</span>      <span style="color:#1ec9a3;">[인수인계]</span>
+       │                  │                   │                    │                  │
+       ▼                  ▼                   ▼                    ▼                  ▼
+  <span style="color:#ff9900;">/brief</span>            <span style="color:#ff9900;">/iterate</span>            <span style="color:#ff9900;">/iterate</span>             <span style="color:#ff9900;">/awsarch</span>           <span style="color:#ff9900;">/handover</span>
+  <span style="color:#ff9900;">/pipeline</span>          <span style="color:#ff9900;">/reconcile</span>          <span style="color:#ff9900;">/reconcile</span>           (mock → AWS)        (문서 패키지)
+  (v1 생성)          (피드백·바이브)      (피드백·바이브)        (CDK 배포)          (docs/ + README)
+                                                                │                  │
+                                                                ▼                  ▼
+                                                         <span style="color:#94a3b8;">실제 AWS 리소스</span>     <span style="color:#94a3b8;">고객 개발팀 전달</span>
+                                                         <span style="color:#94a3b8;">DynamoDB·S3·Cognito</span>  <span style="color:#94a3b8;">프로덕션 전환 가이드</span></pre>
+    </div>
+    <p style="margin:16px 0 0 0; font-size:13px; color:#cbd5e1;">두 커맨드는 <strong style="color:#ff9900;">파이프라인의 종착점</strong>에서 실행된다. /awsarch는 선택적(고객이 실제 AWS 환경 데모를 원할 때), /handover는 항상 마지막에 실행하여 코드와 문서를 함께 인계한다.</p>
+  </div>
+</section>
+
+<!-- SKILLS -->
+<section style="margin-bottom:56px;">
+  <h2 style="font-size:28px; margin:0 0 8px 0; color:#0f1b2d; border-left:4px solid #ff9900; padding-left:12px;">스킬 (9개)</h2>
+  <p style="font-size:14px; color:#5f6b7a; margin:0 0 24px 0;">에이전트들이 작업 시 참조하는 도메인 지식 라이브러리. Skill 도구로 호출되며, 표준 패턴·코드 예제·의사결정 프레임워크를 제공한다.</p>
+
+  <table style="width:100%; border-collapse:collapse; background:#fff; border:1px solid #e9ebed; border-radius:8px; overflow:hidden;">
+    <thead>
+      <tr style="background:#f8fafc;">
+        <th style="text-align:left; padding:12px 16px; font-size:13px; color:#414750; border-bottom:1px solid #e9ebed; font-weight:600;">스킬</th>
+        <th style="text-align:left; padding:12px 16px; font-size:13px; color:#414750; border-bottom:1px solid #e9ebed; font-weight:600;">용도</th>
+        <th style="text-align:left; padding:12px 16px; font-size:13px; color:#414750; border-bottom:1px solid #e9ebed; font-weight:600;">참조 에이전트</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding:12px 16px; font-size:13px; border-bottom:1px solid #f1f5f9;"><code style="background:#fef3c7; color:#92400e; padding:2px 6px; border-radius:3px; font-family:'SF Mono',monospace;">cloudscape-design</code></td>
+        <td style="padding:12px 16px; font-size:13px; color:#414750; border-bottom:1px solid #f1f5f9;">Cloudscape 컴포넌트 101개 · 패턴 73개 · 디자인 토큰</td>
+        <td style="padding:12px 16px; font-size:12px; color:#5f6b7a; border-bottom:1px solid #f1f5f9;">architect, spec-writer-frontend, code-generator-frontend</td>
+      </tr>
+      <tr style="background:#fafbfc;">
+        <td style="padding:12px 16px; font-size:13px; border-bottom:1px solid #f1f5f9;"><code style="background:#dbeafe; color:#1e40af; padding:2px 6px; border-radius:3px; font-family:'SF Mono',monospace;">aws-infra-patterns</code></td>
+        <td style="padding:12px 16px; font-size:13px; color:#414750; border-bottom:1px solid #f1f5f9;">스토리지 의사결정 · IAM 정책 템플릿 · 비용 추정</td>
+        <td style="padding:12px 16px; font-size:12px; color:#5f6b7a; border-bottom:1px solid #f1f5f9;">aws-architect</td>
+      </tr>
+      <tr>
+        <td style="padding:12px 16px; font-size:13px; border-bottom:1px solid #f1f5f9;"><code style="background:#dbeafe; color:#1e40af; padding:2px 6px; border-radius:3px; font-family:'SF Mono',monospace;">aws-cdk-patterns</code></td>
+        <td style="padding:12px 16px; font-size:13px; color:#414750; border-bottom:1px solid #f1f5f9;">CDK Construct 코드 · 듀얼 모드 데이터 레이어 · CfnOutput</td>
+        <td style="padding:12px 16px; font-size:12px; color:#5f6b7a; border-bottom:1px solid #f1f5f9;">aws-deployer</td>
+      </tr>
+      <tr style="background:#fafbfc;">
+        <td style="padding:12px 16px; font-size:13px; border-bottom:1px solid #f1f5f9;"><code style="background:#fce7f3; color:#9d174d; padding:2px 6px; border-radius:3px; font-family:'SF Mono',monospace;">strands-sdk-typescript-guide</code></td>
+        <td style="padding:12px 16px; font-size:13px; color:#414750; border-bottom:1px solid #f1f5f9;">Strands SDK · tool() · MCP · Graph/Swarm · Structured Output</td>
+        <td style="padding:12px 16px; font-size:12px; color:#5f6b7a; border-bottom:1px solid #f1f5f9;">spec-writer-ai, code-generator-ai</td>
+      </tr>
+      <tr>
+        <td style="padding:12px 16px; font-size:13px; border-bottom:1px solid #f1f5f9;"><code style="background:#fce7f3; color:#9d174d; padding:2px 6px; border-radius:3px; font-family:'SF Mono',monospace;">bedrock-agentcore-guide</code></td>
+        <td style="padding:12px 16px; font-size:13px; color:#414750; border-bottom:1px solid #f1f5f9;">AgentCore Runtime · Memory · Gateway · Identity · Observability</td>
+        <td style="padding:12px 16px; font-size:12px; color:#5f6b7a; border-bottom:1px solid #f1f5f9;">aws-architect, code-generator-ai</td>
+      </tr>
+      <tr style="background:#fafbfc;">
+        <td style="padding:12px 16px; font-size:13px; border-bottom:1px solid #f1f5f9;"><code style="background:#ede9fe; color:#5b21b6; padding:2px 6px; border-radius:3px; font-family:'SF Mono',monospace;">agent-patterns</code></td>
+        <td style="padding:12px 16px; font-size:13px; color:#414750; border-bottom:1px solid #f1f5f9;">3계층 택소노미 · 자동화 수준 · 멀티 에이전트 협업 구조</td>
+        <td style="padding:12px 16px; font-size:12px; color:#5f6b7a; border-bottom:1px solid #f1f5f9;">spec-writer-ai, code-generator-ai</td>
+      </tr>
+      <tr>
+        <td style="padding:12px 16px; font-size:13px; border-bottom:1px solid #f1f5f9;"><code style="background:#ede9fe; color:#5b21b6; padding:2px 6px; border-radius:3px; font-family:'SF Mono',monospace;">prompt-engineering</code></td>
+        <td style="padding:12px 16px; font-size:13px; color:#414750; border-bottom:1px solid #f1f5f9;">XML 태그 · Structured Output · Tool Use · Extended Thinking</td>
+        <td style="padding:12px 16px; font-size:12px; color:#5f6b7a; border-bottom:1px solid #f1f5f9;">spec-writer-ai, code-generator-ai</td>
+      </tr>
+      <tr style="background:#fafbfc;">
+        <td style="padding:12px 16px; font-size:13px; border-bottom:1px solid #f1f5f9;"><code style="background:#d1fae5; color:#065f46; padding:2px 6px; border-radius:3px; font-family:'SF Mono',monospace;">mermaid-diagrams</code></td>
+        <td style="padding:12px 16px; font-size:13px; color:#414750; border-bottom:1px solid #f1f5f9;">Flowchart · Sequence Diagram (Agent Workflow 시각화)</td>
+        <td style="padding:12px 16px; font-size:12px; color:#5f6b7a; border-bottom:1px solid #f1f5f9;">architect, handover-packager</td>
+      </tr>
+      <tr>
+        <td style="padding:12px 16px; font-size:13px;"><code style="background:#d1fae5; color:#065f46; padding:2px 6px; border-radius:3px; font-family:'SF Mono',monospace;">ascii-diagram</code></td>
+        <td style="padding:12px 16px; font-size:13px; color:#414750;">한글/영어 혼합 ASCII 다이어그램 (폭 정렬 처리)</td>
+        <td style="padding:12px 16px; font-size:12px; color:#5f6b7a;">all (채팅 응답 시)</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- KEY PRINCIPLES -->
+<section style="margin-bottom:56px;">
+  <h2 style="font-size:28px; margin:0 0 24px 0; color:#0f1b2d; border-left:4px solid #ff9900; padding-left:12px;">핵심 원칙</h2>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px;">
+    <div style="background:#0f1b2d; color:#fff; padding:24px; border-radius:8px;">
+      <div style="color:#ff9900; font-size:12px; font-weight:600; letter-spacing:1px; margin-bottom:8px;">PRINCIPLE 01</div>
+      <h3 style="margin:0 0 8px 0; font-size:18px;">Phase Gate · APPROVAL GATE</h3>
+      <p style="margin:0; font-size:14px; color:#c5cad1;">사용자 승인 없이 다음 Phase로 진행 금지. CHECKPOINT 통과 시에만 진행.</p>
+    </div>
+    <div style="background:#0f1b2d; color:#fff; padding:24px; border-radius:8px;">
+      <div style="color:#ff9900; font-size:12px; font-weight:600; letter-spacing:1px; margin-bottom:8px;">PRINCIPLE 02</div>
+      <h3 style="margin:0 0 8px 0; font-size:18px;">에이전트만 코드 수정</h3>
+      <p style="margin:0; font-size:14px; color:#c5cad1;">/pipeline · /iterate · /awsarch 시 src/, infra/는 code-generator·aws-deployer만 수정한다.</p>
+    </div>
+    <div style="background:#0f1b2d; color:#fff; padding:24px; border-radius:8px;">
+      <div style="color:#ff9900; font-size:12px; font-weight:600; letter-spacing:1px; margin-bottom:8px;">PRINCIPLE 03</div>
+      <h3 style="margin:0 0 8px 0; font-size:18px;">AI 기능은 Mocking 금지</h3>
+      <p style="margin:0; font-size:14px; color:#c5cad1;">반드시 Amazon Bedrock + Strands SDK로 실제 동작. <code style="background:rgba(255,153,0,0.2); padding:1px 4px; border-radius:3px; color:#ffb84d;">@aws-sdk/client-bedrock-runtime</code> 직접 호출 금지.</p>
+    </div>
+    <div style="background:#0f1b2d; color:#fff; padding:24px; border-radius:8px;">
+      <div style="color:#ff9900; font-size:12px; font-weight:600; letter-spacing:1px; margin-bottom:8px;">PRINCIPLE 04</div>
+      <h3 style="margin:0 0 8px 0; font-size:18px;">버전 격리</h3>
+      <p style="margin:0; font-size:14px; color:#c5cad1;">.pipeline/artifacts/v{N}/ 디렉토리로 모든 산출물을 버전별 격리. 이전 버전은 보존된다.</p>
+    </div>
+    <div style="background:#0f1b2d; color:#fff; padding:24px; border-radius:8px;">
+      <div style="color:#ff9900; font-size:12px; font-weight:600; letter-spacing:1px; margin-bottom:8px;">PRINCIPLE 05</div>
+      <h3 style="margin:0 0 8px 0; font-size:18px;">Quality Loop</h3>
+      <p style="margin:0; font-size:14px; color:#c5cad1;">qa-engineer(테스트) → reviewer(품질) → security-auditor(OWASP) PASS까지 자동 반복. budget으로 무한루프 차단.</p>
+    </div>
+    <div style="background:#0f1b2d; color:#fff; padding:24px; border-radius:8px;">
+      <div style="color:#ff9900; font-size:12px; font-weight:600; letter-spacing:1px; margin-bottom:8px;">PRINCIPLE 06</div>
+      <h3 style="margin:0 0 8px 0; font-size:18px;">언어 정책</h3>
+      <p style="margin:0; font-size:14px; color:#c5cad1;">.md = 한국어 · .json = 영어 · 코드 식별자 = 영어 · 주석 설명 = 한국어 · 사용자 보고 = 한국어.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ARTIFACTS -->
+<section style="margin-bottom:56px;">
+  <h2 style="font-size:28px; margin:0 0 24px 0; color:#0f1b2d; border-left:4px solid #ff9900; padding-left:12px;">아티팩트 디렉토리 구조</h2>
+  <div style="background:#0f1b2d; border-radius:8px; padding:24px; overflow-x:auto;">
+    <pre style="margin:0; color:#e2e8f0; font-family:'SF Mono',Consolas,Monaco,monospace; font-size:13px; line-height:1.7;"><span style="color:#ff9900;">.pipeline/</span>
+├── <span style="color:#5294ff;">input/</span>
+│   ├── raw/                          <span style="color:#94a3b8;"># 원시 입력 (회의록, 다이어그램 등)</span>
+│   └── customer-brief.md             <span style="color:#94a3b8;"># brief-composer 산출물</span>
+├── <span style="color:#5294ff;">artifacts/v{N}/</span>                  <span style="color:#94a3b8;"># 버전별 격리</span>
+│   ├── 01-research/                  <span style="color:#94a3b8;"># domain-researcher</span>
+│   ├── 02-requirements/              <span style="color:#94a3b8;"># requirements-analyst</span>
+│   ├── 03-architecture/              <span style="color:#94a3b8;"># architect</span>
+│   ├── 03-specs/
+│   │   ├── api-contract.json         <span style="color:#94a3b8;"># BE/FE 단일 소스</span>
+│   │   ├── ai-contract.json          <span style="color:#94a3b8;"># AI 외부 계약</span>
+│   │   └── ai-internals.json         <span style="color:#94a3b8;"># AI 내부 구현</span>
+│   ├── 04-codegen/
+│   │   └── api-manifest.json         <span style="color:#94a3b8;"># 실제 구현 매니페스트</span>
+│   ├── 05-qa/                        <span style="color:#94a3b8;"># Playwright 테스트 결과</span>
+│   ├── 06-review/                    <span style="color:#94a3b8;"># 품질 리뷰 리포트</span>
+│   └── 07-security/                  <span style="color:#94a3b8;"># OWASP 감사 리포트</span>
+├── <span style="color:#5294ff;">scripts/</span>
+│   ├── checkpoint.mjs                <span style="color:#94a3b8;"># state.json 단일 소스</span>
+│   └── stages.json                   <span style="color:#94a3b8;"># 유효 스테이지 카탈로그</span>
+└── state.json                        <span style="color:#94a3b8;"># 파이프라인 진행 상태</span>
+
+<span style="color:#ff9900;">src/</span>                                  <span style="color:#94a3b8;"># 코드 제너레이터가 생성</span>
+├── app/                              <span style="color:#94a3b8;"># Next.js 16 App Router</span>
+├── components/                       <span style="color:#94a3b8;"># Cloudscape UI</span>
+├── lib/{db,services,validation}/     <span style="color:#94a3b8;"># 데이터 · AWS · zod</span>
+└── ...
+
+<span style="color:#ff9900;">infra/</span>                                <span style="color:#94a3b8;"># /awsarch 시 aws-deployer가 생성</span>
+└── lib/                              <span style="color:#94a3b8;"># CDK TypeScript</span></pre>
+  </div>
+</section>
+
+<!-- TYPICAL FLOW -->
+<section style="margin-bottom:56px;">
+  <h2 style="font-size:28px; margin:0 0 24px 0; color:#0f1b2d; border-left:4px solid #ff9900; padding-left:12px;">전형적인 SA 워크플로우</h2>
+  <div style="background:#fff; border:1px solid #e9ebed; border-radius:8px; padding:32px;">
+    <ol style="margin:0; padding-left:20px; counter-reset:step; list-style:none;">
+      <li style="position:relative; padding-left:48px; margin-bottom:20px; counter-increment:step;">
+        <div style="position:absolute; left:0; top:0; width:32px; height:32px; background:#ff9900; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;">1</div>
+        <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">고객 미팅 → 회의록 수집</div>
+        <div style="font-size:14px; color:#5f6b7a;">회의록 · 화면 스케치 · 시스템 다이어그램을 <code style="background:#f1f5f9; padding:1px 4px; border-radius:3px;">.pipeline/input/raw/</code>에 투입</div>
+      </li>
+      <li style="position:relative; padding-left:48px; margin-bottom:20px; counter-increment:step;">
+        <div style="position:absolute; left:0; top:0; width:32px; height:32px; background:#ff9900; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;">2</div>
+        <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;"><code style="background:#0f1b2d; color:#ff9900; padding:2px 8px; border-radius:4px; font-family:'SF Mono',monospace; font-size:13px;">/brief</code> 실행</div>
+        <div style="font-size:14px; color:#5f6b7a;">brief-composer가 customer-brief.md 자동 생성. SA가 검토·수정</div>
+      </li>
+      <li style="position:relative; padding-left:48px; margin-bottom:20px; counter-increment:step;">
+        <div style="position:absolute; left:0; top:0; width:32px; height:32px; background:#ff9900; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;">3</div>
+        <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;"><code style="background:#0f1b2d; color:#ff9900; padding:2px 8px; border-radius:4px; font-family:'SF Mono',monospace; font-size:13px;">/pipeline</code> 실행</div>
+        <div style="font-size:14px; color:#5f6b7a;">전체 파이프라인 자동 실행. 각 Phase별 APPROVAL GATE에서 검토</div>
+      </li>
+      <li style="position:relative; padding-left:48px; margin-bottom:20px; counter-increment:step;">
+        <div style="position:absolute; left:0; top:0; width:32px; height:32px; background:#ff9900; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;">4</div>
+        <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">고객 데모 → 피드백 수집</div>
+        <div style="font-size:14px; color:#5f6b7a;"><code style="background:#0f1b2d; color:#ff9900; padding:2px 8px; border-radius:4px; font-family:'SF Mono',monospace; font-size:13px;">/iterate</code>로 변경 반영. 영향 범위가 작으면 후반 스테이지부터 재실행</div>
+      </li>
+      <li style="position:relative; padding-left:48px; margin-bottom:20px; counter-increment:step;">
+        <div style="position:absolute; left:0; top:0; width:32px; height:32px; background:#ff9900; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;">5</div>
+        <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">실서비스 전환 결정 시</div>
+        <div style="font-size:14px; color:#5f6b7a;"><code style="background:#0f1b2d; color:#ff9900; padding:2px 8px; border-radius:4px; font-family:'SF Mono',monospace; font-size:13px;">/awsarch</code>로 mock → 실제 AWS 리소스 전환 (DynamoDB · S3 · Cognito · Bedrock)</div>
+      </li>
+      <li style="position:relative; padding-left:48px; counter-increment:step;">
+        <div style="position:absolute; left:0; top:0; width:32px; height:32px; background:#ff9900; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;">6</div>
+        <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">고객 개발팀 인수인계</div>
+        <div style="font-size:14px; color:#5f6b7a;"><code style="background:#0f1b2d; color:#ff9900; padding:2px 8px; border-radius:4px; font-family:'SF Mono',monospace; font-size:13px;">/handover</code>로 문서 패키지 + 프로덕션 전환 체크리스트 생성</div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+</main>
+
+<!-- FOOTER -->
+<footer style="background:#0f1b2d; color:#94a3b8; padding:32px; text-align:center; border-top:1px solid #1e293b;">
+  <div style="max-width:1200px; margin:0 auto;">
+    <p style="margin:0 0 8px 0; font-size:14px;">CDE AI Harness · Customer Deployed Engineer Pipeline</p>
+    <p style="margin:0; font-size:12px; color:#64748b;">Built on Claude Code · Sub-Agents · Skills · Slash Commands · Strands SDK · Amazon Bedrock</p>
+  </div>
+</footer>
+
+</body>
+</html>

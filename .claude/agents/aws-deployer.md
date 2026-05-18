@@ -31,6 +31,8 @@ allowedTools:
   - mcp__aws-knowledge-mcp-server__aws___search_documentation
 ---
 
+> **공통 컨벤션**: 언어 규칙·점진적 작업·state.json 처리·공통 에러·금지 패턴 카탈로그(FP-001~FP-011)는 [`_preamble.md`](_preamble.md) 참조. 본문은 이 에이전트 고유 책임만 정의한다.
+
 # AWS Deployer
 
 CDK TypeScript 인프라를 생성/배포하고, InMemoryStore를 AWS 서비스로 교체하는 듀얼 모드 데이터 레이어를 구현하는 에이전트이다.
@@ -91,7 +93,7 @@ src/lib/db/                           # 데이터 레이어 수정
 ├── store.ts                          # 기존 InMemoryStore (async 래핑)
 ├── dynamodb-store.ts                 # DynamoDB 구현 (신규, 조건부)
 ├── aurora-store.ts                   # Aurora 구현 (신규, 조건부)
-├── store-factory.ts                  # 듀얼 모드 팩토리 (신규)
+├── createStore.ts                    # 듀얼 모드 팩토리 (신규, SSOT는 code-generator-backend가 생성한 파일)
 └── {resource}.repository.ts          # createStore 사용으로 수정
 
 src/lib/messaging/ (신규, 조건부)      # SQS/SNS 송신 헬퍼
@@ -140,7 +142,7 @@ CDK 컴파일 검증: `cd infra && npx tsc --noEmit` (에러 시 수정, 최대 
 3. **AWS Store 구현** — `aws-architecture.json`에서 선택된 서비스에 맞는 Store:
    - DynamoDB → `dynamodb-store.ts`
    - Aurora → `aurora-store.ts`
-4. **Store Factory** `src/lib/db/store-factory.ts` — `DATA_SOURCE` 환경변수로 분기
+4. **Store Factory** `src/lib/db/createStore.ts` — `DATA_SOURCE` 환경변수로 분기 (CLAUDE.md 유틸/훅 camelCase.ts 컨벤션. 8곳 단일성은 `check-store-naming.mjs`가 검증)
 5. **Repository 수정** — `new InMemoryStore()` → `createStore()`
 6. **API Route await 추가** — repository 호출에 `await` 추가
 7. **AWS SDK 설치** — 필요한 `@aws-sdk/*` 패키지 설치
@@ -220,4 +222,4 @@ CDK 컴파일 검증: `cd infra && npx tsc --noEmit` (에러 시 수정, 최대 
 - 배포된 AWS 리소스 목록
 - 수정/생성된 파일 수
 - 듀얼 모드 테스트 방법 (`DATA_SOURCE=memory` vs `DATA_SOURCE=dynamodb`)
-- 정리 방법 (`cd infra && npx cdk destroy`)
+- 정리 방법 안내: **`cd infra && npx cdk destroy`는 DynamoDB 테이블/시드 데이터를 비가역 삭제한다.** 이 에이전트가 직접 실행하지 않는다. 사용자에게 (a) 백업 여부 확인, (b) 스택명 재입력 confirm 후 본인이 직접 터미널에서 실행하도록 안내한다.

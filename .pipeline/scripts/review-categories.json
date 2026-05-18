@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "ssot_for": [
+    ".claude/agents/reviewer.md",
+    ".claude/agents/git-manager.md",
+    ".claude/commands/pipeline.md",
+    ".claude/commands/iterate.md",
+    ".claude/commands/reconcile.md",
+    ".claude/commands/awsarch.md"
+  ],
+  "categories": [
+    {
+      "id": 1,
+      "key": "cloudscape_compliance",
+      "title": "Cloudscape Design System 준수",
+      "summary": "개별 임포트, useCollection, TopNavigation 위치, 이벤트 패턴",
+      "always_active": true
+    },
+    {
+      "id": 2,
+      "key": "nextjs_conventions",
+      "title": "Next.js 16 규약 준수",
+      "summary": "App Router, \"use client\" 최소화, Server Components 기본",
+      "always_active": true
+    },
+    {
+      "id": 3,
+      "key": "typescript_quality",
+      "title": "TypeScript 품질",
+      "summary": "no any, strict 모드, src/types/ 위치",
+      "always_active": true
+    },
+    {
+      "id": 4,
+      "key": "accessibility",
+      "title": "접근성",
+      "summary": "enableKeyboardNavigation, ariaLabel, FormField",
+      "always_active": true
+    },
+    {
+      "id": 5,
+      "key": "requirements_coverage",
+      "title": "요구사항 커버리지",
+      "summary": "_manifest.json.requirements_coverage SSOT, uncovered_requirements[] 기반 검증",
+      "always_active": true,
+      "ssot_input": ".pipeline/artifacts/v{N}/03-specs/_manifest.json"
+    },
+    {
+      "id": 6,
+      "key": "backend_quality",
+      "title": "백엔드 품질",
+      "summary": "HTTP 메서드, zod 검증, repository 패턴, 에러 코드",
+      "always_active": true
+    },
+    {
+      "id": 7,
+      "key": "code_organization",
+      "title": "코드 구조",
+      "summary": "디렉토리 규칙, 네이밍, 순환 의존성, barrel 금지, silent fail 차단",
+      "always_active": true
+    },
+    {
+      "id": 8,
+      "key": "comment_language",
+      "title": "주석 언어 검증",
+      "summary": "파일 헤더 한국어, JSDoc 한국어, 인라인 주석 한국어",
+      "always_active": true
+    },
+    {
+      "id": 9,
+      "key": "seed_data_consistency",
+      "title": "시드 데이터 일관성",
+      "summary": "FK 참조 유효, 데이터 볼륨, enum 정합",
+      "always_active": true
+    },
+    {
+      "id": 10,
+      "key": "model_id_compliance",
+      "title": "AI 모델 ID 컴플라이언스",
+      "summary": "Rule 13: 화이트리스트 3개 외 사용 금지, 환경변수 fallback 금지",
+      "always_active": true,
+      "ssot_input": ".pipeline/scripts/allowed-models.json"
+    },
+    {
+      "id": 11,
+      "key": "aws_integration",
+      "title": "AWS 통합 품질",
+      "summary": "DynamoDB 접근 패턴, DATA_SOURCE 듀얼 모드, IAM 최소 권한, 자격증명 노출 검사",
+      "always_active": false,
+      "active_when": "state.json.versions[v].trigger === \"awsarch\" 또는 infra/ 디렉토리 존재",
+      "consumers": [".claude/commands/awsarch.md"]
+    }
+  ],
+  "counts": {
+    "total": 11,
+    "always_active": 10,
+    "conditional": 1,
+    "display_label_default": "10개",
+    "display_label_with_awsarch": "10 + 1 (AWS 통합 조건부)"
+  },
+  "render_helper": "node .pipeline/scripts/checkpoint.mjs review-categories [--awsarch]"
+}

@@ -13,7 +13,11 @@
       "Bash(npx playwright:*)",
       "Bash(npm run test:*)",
       "Bash(ls:*)",
-      "Bash(npx cdk:*)",
+      "Bash(npx cdk deploy:*)",
+      "Bash(npx cdk diff:*)",
+      "Bash(npx cdk synth:*)",
+      "Bash(npx cdk ls:*)",
+      "Bash(npx cdk bootstrap:*)",
       "Bash(npx ts-node:*)",
       "Bash(aws sts:*)",
       "Bash(aws dynamodb:*)",
@@ -33,6 +37,38 @@
           {
             "type": "command",
             "command": "jq -r '.tool_input.file_path // \"\"' | { read -r f; case \"$f\" in *.pipeline/state.json) printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"state.json은 checkpoint.mjs 서브커맨드로만 수정하세요. CLAUDE.md 정책: node .pipeline/scripts/checkpoint.mjs check <stage> <args>\"}}' ;; *) exit 0 ;; esac; }",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command // \"\"' | { c=$(cat); reason=''; if printf '%s' \"$c\" | grep -qE '(^|[^a-zA-Z0-9_])node[[:space:]]+(-e|--eval|-p|--print)([[:space:]]|$)'; then reason='node -e/-p/--eval/--print 금지 (state.json 우회 가능). checkpoint.mjs 서브커맨드 사용.'; elif printf '%s' \"$c\" | grep -qE '(^|[^a-zA-Z0-9_])(python|python3)[[:space:]]+(-c|-m[[:space:]]+py_compile)([[:space:]]|$)' && printf '%s' \"$c\" | grep -qE '\\.pipeline/state\\.json'; then reason='python -c로 .pipeline/state.json 접근 금지. checkpoint.mjs 사용.'; elif printf '%s' \"$c\" | grep -qE '(^|[^a-zA-Z0-9_])(bun|deno)[[:space:]]+(-e|--eval|eval|run[[:space:]]+--allow-write)([[:space:]]|$)' && printf '%s' \"$c\" | grep -qE '\\.pipeline/state\\.json'; then reason='bun/deno eval로 .pipeline/state.json 접근 금지. checkpoint.mjs 사용.'; elif printf '%s' \"$c\" | grep -qE '(^|[^a-zA-Z0-9_])tee[[:space:]]+([^|]*[[:space:]])?\\.pipeline/state\\.json([[:space:]]|$)'; then reason='tee로 .pipeline/state.json 작성 금지. checkpoint.mjs 사용.'; elif printf '%s' \"$c\" | grep -qE '(fs\\.(writeFileSync|unlinkSync|appendFileSync|writeFile|unlink|rm|rmSync|truncate))[^;\\n]*\\.pipeline/state\\.json'; then reason='state.json 직접 fs 호출 금지. checkpoint.mjs 사용.'; elif printf '%s' \"$c\" | grep -qE '(>>?[[:space:]]*\\.pipeline/state\\.json)'; then reason='.pipeline/state.json 셸 리다이렉트 금지. checkpoint.mjs로 작성.'; elif printf '%s' \"$c\" | grep -qE '(^|[^a-zA-Z0-9_])(mv|cp)[[:space:]][^|]*[[:space:]]\\.pipeline/state\\.json([[:space:]]|$)'; then reason='.pipeline/state.json 이동/복사 금지. 우회 경로 차단.'; elif printf '%s' \"$c\" | grep -qE '(^|[^a-zA-Z0-9_])(rm|unlink)[[:space:]][^|]*\\.pipeline/(state\\.json|\\.lock)([[:space:]]|$)'; then reason='.pipeline/state.json 또는 .pipeline/.lock 직접 삭제(rm/unlink) 금지.'; elif printf '%s' \"$c\" | grep -qE '(^|[^a-zA-Z0-9_])sed[[:space:]]+([^|]*[[:space:]])?-i([[:space:]]|=|\\.[a-zA-Z0-9]+[[:space:]])[^|]*\\.pipeline/state\\.json'; then reason='sed -i로 .pipeline/state.json 인플레이스 수정 금지. checkpoint.mjs 사용.'; elif printf '%s' \"$c\" | grep -qE '(^|[^a-zA-Z0-9_])awk[[:space:]]+([^|]*[[:space:]])?-i[[:space:]]+inplace[^|]*\\.pipeline/state\\.json'; then reason='awk -i inplace로 .pipeline/state.json 수정 금지. checkpoint.mjs 사용.'; elif printf '%s' \"$c\" | grep -qE '(^|[^a-zA-Z0-9_])perl[[:space:]]+([^|]*[[:space:]])?-[piPI]+[a-zA-Z]*[[:space:]][^|]*\\.pipeline/state\\.json'; then reason='perl -pi/-i로 .pipeline/state.json 인플레이스 수정 금지. checkpoint.mjs 사용.'; elif printf '%s' \"$c\" | grep -qE '\\.pipeline/state\\.json[^|]*\\|[[:space:]]*sponge'; then reason='jq | sponge로 .pipeline/state.json 덮어쓰기 금지. checkpoint.mjs 사용.'; elif printf '%s' \"$c\" | grep -qE '(^|[^a-zA-Z0-9_])(npx|cdk)[[:space:]]+(cdk[[:space:]]+)?destroy([[:space:]]|$)'; then reason='cdk destroy 차단. 비가역 인프라 파괴. .claude/agents/git-manager.md의 4-step 가드 절차 또는 사용자 명시 승인 필요.'; elif printf '%s' \"$c\" | grep -qE '(^|[^a-zA-Z0-9_])git[[:space:]]+push([[:space:]]+([^[:space:]]+[[:space:]]+)*)?(--force([[:space:]=]|$)|--force-with-lease([[:space:]=]|$)|-f([[:space:]]|$))'; then reason='git push --force 차단. main 보호 정책 (.claude/policies/auto-safety-gates.md). 사용자 명시 승인 필요.'; elif printf '%s' \"$c\" | grep -qE '(^|[^a-zA-Z0-9_])git[[:space:]]+branch[[:space:]]+(-D|--delete[[:space:]]+--force|-d[[:space:]]+--force)([[:space:]]|$)'; then reason='git branch -D (강제 삭제) 차단. 머지되지 않은 커밋 손실 위험. -d 사용 또는 사용자 명시 승인.'; elif printf '%s' \"$c\" | grep -qE '(^|[^a-zA-Z0-9_])git[[:space:]]+reset[[:space:]].*--hard([[:space:]]|$)'; then reason='git reset --hard 차단. 워킹 트리/스테이지 손실 위험. git stash 또는 사용자 명시 승인.'; elif printf '%s' \"$c\" | grep -qE '(^|[^a-zA-Z0-9_])aws[[:space:]]+(dynamodb|cognito-idp|cloudformation)[[:space:]]+delete-(table|user-pool|stack)([[:space:]]|$)'; then reason='AWS delete-table/delete-user-pool/delete-stack 차단. cdk destroy(승인된 경우) 또는 사용자 명시 승인 필요.'; elif printf '%s' \"$c\" | grep -qE '(^|[^a-zA-Z0-9_])aws[[:space:]]+s3[[:space:]]+rb[[:space:]].*--force'; then reason='aws s3 rb --force 차단. S3 버킷 강제 삭제 비가역. 사용자 명시 승인 필요.'; fi; if [ -n \"$reason\" ]; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"%s\"}}' \"$reason\"; else exit 0; fi; }",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // \"\"' | { read -r f; case \"$f\" in *src/*.ts|*src/*.tsx|*src/*.mts|*src/*.cts) cd \"${CLAUDE_PROJECT_DIR:-.}\" 2>/dev/null && [ -f package.json ] && npm run lint --silent 2>&1 | tail -40 || true ;; *) exit 0 ;; esac; }",
+            "timeout": 60
+          }
+        ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -c '{ts: now|tojson, skill: (.tool_input.skill // \"\"), args: (.tool_input.args // \"\"), agent: env.CLAUDE_AGENT_NAME, session: env.CLAUDE_SESSION_ID}' >> \"${CLAUDE_PROJECT_DIR:-.}/.pipeline/.skill-invocations.jsonl\" 2>/dev/null; exit 0",
             "timeout": 5
           }
         ]

@@ -71,7 +71,7 @@ Claude 4.x 모델의 내장 thinking 모드입니다. 프롬프트 기반 CoT보
 
 ```python
 response = client.converse(
-    modelId="anthropic.claude-opus-4-6-20250514-v1:0",
+    modelId="global.anthropic.claude-sonnet-4-6",  # CLAUDE.md Rule 13: 직접 ID 명시
     messages=messages,
     inferenceConfig={
         "maxTokens": 16000,

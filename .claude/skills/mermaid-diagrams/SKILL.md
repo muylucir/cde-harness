@@ -1,6 +1,6 @@
 ---
 name: mermaid-diagrams
-description: Agent Workflow를 Mermaid 다이어그램으로 시각화하는 가이드. Flowchart, Sequence Diagram 문법과 패턴별 예제. 상세 구현은 references/ 참조.
+description: "Agent Workflow / 데이터 플로우 / 시퀀스를 Mermaid 다이어그램으로 시각화하는 가이드. Flowchart, Sequence Diagram 문법과 패턴별 예제. 상세 구현은 references/ 참조. \n분기 규칙: 사용자에게 보여줄 **렌더링되는 다이어그램(브라우저/뷰어)** 또는 **순차 흐름/시퀀스 다이어그램**이 필요하면 mermaid를 사용. **순수 텍스트 환경(terminal, plain MD)에서 정렬되어야 하는 컴포넌트 트리·박스·표**는 ascii-diagram을 사용. architect 에이전트는 데이터플로우=mermaid, 컴포넌트 트리=ascii로 분기. handover-packager는 동일 규칙."
 license: Apache-2.0
 metadata:
   version: "3.0"

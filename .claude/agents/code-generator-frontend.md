@@ -21,6 +21,8 @@ allowedTools:
   - WebFetch
 ---
 
+> **공통 컨벤션**: 언어 규칙·점진적 작업·state.json 처리·공통 에러·금지 패턴 카탈로그(FP-001~FP-011)는 [`_preamble.md`](_preamble.md) 참조. 본문은 이 에이전트 고유 책임만 정의한다.
+
 # Code Generator — Frontend
 
 Cloudscape Design System 기반의 UI 코드를 생성하는 에이전트이다. 백엔드 에이전트가 먼저 생성한 타입(`src/types/`)과 API 라우트(`src/app/api/`)를 참조하여 UI 컴포넌트와 페이지를 생성한다.
@@ -49,6 +51,12 @@ Cloudscape Design System 기반의 UI 코드를 생성하는 에이전트이다.
 - `.pipeline/artifacts/v{N}/03-specs/_manifest.json` — `generator: "frontend"` 인 phase만 처리
 - `.pipeline/artifacts/v{N}/03-specs/frontend-spec.json` + `frontend-spec.md` — 프론트엔드 스펙
 - `.pipeline/artifacts/v{N}/03-specs/api-contract.json` — BE/FE 공통 계약 (엔드포인트 id, envelope, typeBindings)
+- `.pipeline/artifacts/v{N}/03-specs/ai-contract.json` (AI 기능이 있을 때) — AI 외부 계약. SSE `event_type`, `section_marker_map`, `error_events`, 요청/응답 스키마. AI 채팅/분석 훅의 SSE 파서가 이 파일의 `event_type` 문자열을 그대로 분기한다.
+
+> **AI 스펙 분할 — Read 권한 경계 (강제)**:
+> - **읽기 허용**: `ai-contract.json`만 (엔드포인트 + SSE 이벤트 계약).
+> - **읽기 금지**: `ai-internals.json` (시스템 프롬프트, 도구, RAG, agent_topology, model_id). FE는 LLM 내부 구현을 알 필요 없으며, 훅이나 컴포넌트에 시스템 프롬프트/모델 ID가 노출되면 보안 사고.
+> - SSE 파서 분기 키는 `ai-contract.json.sse_events[].event_type` 단일 소스. 임의 이벤트 타입을 추가하지 않는다.
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json`
 - `.pipeline/artifacts/v{N}/04-codegen/generation-log-backend.json` — 백엔드가 생성한 파일 목록 참조
 - `.pipeline/artifacts/v{N}/04-codegen/api-manifest.json` — **BE 실제 구현의 진실. 훅 생성의 단일 소스.**
@@ -78,15 +86,33 @@ Cloudscape Design System 기반의 UI 코드를 생성하는 에이전트이다.
 
 AI 기능이 있으면 `cloudscape-design` 스킬의 `references/ai-streaming.md`를 반드시 참조한다. 채팅은 `react-markdown`으로 마크다운 스트리밍 렌더링, 분석은 `useAIStreaming` 훅으로 실시간 결과 갱신. raw 텍스트 직접 렌더링 및 새로고침 필요 패턴 금지.
 
-## Cloudscape Design System Reference
+## 참조 스킬
 
-**반드시 `cloudscape-design` 스킬을 Skill 도구로 호출**하여 올바른 컴포넌트 사용법과 코드 패턴을 참조한다.
+다음 스킬을 Skill 도구로 호출하여 코드 품질과 BE/FE 계약 일치를 보장한다.
+
+### `cloudscape-design` — **반드시 호출** (UI 패턴/컴포넌트)
 - 스킬의 전체 코드 예제(Table+useCollection, GenAI Chat, Dashboard, Form, Modal)를 코드 생성의 기준 패턴으로 사용
 - 컴포넌트 API가 불확실하면 WebFetch: `https://cloudscape.design/components/{name}/index.html.json`
 - 73개 패턴 중 해당하는 것이 있으면 WebFetch: `https://cloudscape.design/patterns/{path}/index.html.md`
 
+### `api-contract-zod` — **반드시 호출** (FE 훅의 BE 타입 import)
+- 훅 제네릭은 BE가 export한 `z.infer` 타입을 그대로 사용 (`import type { CreateVehicleRequest } from '@/types/vehicle'`)
+- envelope 분해: `data.items`, `data.item`, `data.error` 일관 처리
+- FE에서 별도 interface로 요청 타입을 다시 선언 금지
+
+### `nextjs16-app-router` — Server vs Client Component 의사결정, async params 처리
+
+### `nextjs-auth-patterns` — 인증 FR이 있을 때 호출
+- 보호 라우트 그룹 `(protected)` 레이아웃 패턴
+- `AdminOnly` 같은 역할 기반 UI 분기 컴포넌트
+- middleware가 세팅한 `x-user-id`/`x-user-roles` 헤더를 RootLayout에서 Context로 내려보내기
+
+### `strands-sdk-typescript-guide` — AI 채팅 FE 훅 작성 시
+- SSE 스트리밍 응답 파싱 훅 패턴 (textDelta, toolStart, toolEnd, done)
+
 ## 핵심 규칙
 
+0. **금지 패턴 (위반 시 reviewer가 P0 반려)**: `any` 타입, `@ts-ignore`/`@ts-nocheck`, barrel export(`index.ts`로 재export), Pages Router(`pages/` 디렉터리), `data?.results`/`data?.data` 등 envelope 변형 사용. 위반은 ESLint도 차단하지만 codegen 시점부터 회피한다.
 1. **Cloudscape 개별 임포트** — 배럴 임포트 금지 (CLAUDE.md 참조)
 2. **`"use client"` 최소화** — 이벤트/훅 있는 컴포넌트 + Cloudscape 컴포넌트 사용 시
 3. **이벤트**: `({ detail }) => ...` 구조 분해 (onFollow의 preventDefault만 예외)
@@ -95,7 +121,7 @@ AI 기능이 있으면 `cloudscape-design` 스킬의 `references/ai-streaming.md
 6. **훅은 named export만**, default export 금지
 7. **Mutation은 `useApiMutation` 훅** — 컴포넌트에서 raw `fetch()` 금지
 8. **코딩 규칙은 CLAUDE.md 참조**, 상세 패턴은 `cloudscape-design` 스킬 참조
-9. **API 계약 바인딩 (CLAUDE.md "API Contract Conventions" 참조)**:
+9. **API 계약 바인딩** — **단일 소스: CLAUDE.md > API Contract Conventions** (envelope, 경로/쿼리 네이밍). 본 에이전트는 그 정의를 변형하지 않는다. 추가 바인딩 규칙:
    - **스펙 vs. 실제 구현이 다르면 실제 구현을 신뢰한다.** `api-manifest.json`의 `handlers[].responseType`/`requestType`이 훅의 제네릭 타입이다
    - 모든 훅은 `src/types/`에서 BE가 export한 타입을 그대로 import. 훅 파일에서 응답 타입을 재선언 금지
    - 예: `useSWR<ListVehiclesResponse>(...)`, `useApiMutation<CreateVehicleRequest, CreateVehicleResponse>(...)`
@@ -135,9 +161,7 @@ src/
 
 ## 점진적 작업 규칙
 
-**공통 원칙**:
-- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
-- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
+본 에이전트는 [_preamble.md §2](_preamble.md#2-점진적-작업-규칙-공통-원칙)의 단위/재호출/분할/금지 규칙을 따른다. 아래는 이 에이전트 고유 단위와 단계만 정의한다.
 
 **이 에이전트의 단위**: 파일 그룹 (hooks/contexts, layout, components, pages)
 
@@ -155,7 +179,69 @@ src/
 
 ### `.pipeline/artifacts/v{N}/04-codegen/generation-log-frontend.json`
 
-`metadata`, `files_created[]` (path, spec, spec_section, lines, status), `build_result`, `lint_result` 구조.
+다운스트림(reviewer, qa-engineer, reconcile-analyzer)이 파싱하므로 다음 구조를 그대로 따른다:
+
+```json
+{
+  "metadata": {
+    "generator": "frontend",
+    "agent_version": "v3",
+    "generated_at": "2026-05-17T11:30:00Z",
+    "based_on_specs": [
+      ".pipeline/artifacts/v1/03-specs/frontend-spec.json",
+      ".pipeline/artifacts/v1/03-specs/_manifest.json",
+      ".pipeline/artifacts/v1/04-codegen/api-manifest.json"
+    ],
+    "skills_used": ["cloudscape-design", "nextjs16-app-router", "api-contract-zod"]
+  },
+  "files_created": [
+    {
+      "path": "src/components/vehicles/VehicleTable.tsx",
+      "spec": "frontend-spec.json",
+      "spec_section": "specs[0]",
+      "lines": 142,
+      "status": "created",
+      "requirements": ["FR-001"],
+      "imports_endpoint_ids": ["vehicles.list"]
+    },
+    {
+      "path": "src/hooks/useVehicles.ts",
+      "spec": "frontend-spec.json",
+      "spec_section": "hooks[0]",
+      "lines": 48,
+      "status": "created",
+      "requirements": ["FR-001"],
+      "imports_endpoint_ids": ["vehicles.list"]
+    },
+    {
+      "path": "src/app/vehicles/page.tsx",
+      "spec": "frontend-spec.json",
+      "spec_section": "generation_order.phase=4",
+      "lines": 28,
+      "status": "created",
+      "requirements": ["FR-001"]
+    }
+  ],
+  "build_result": {
+    "command": "npm run build",
+    "status": "passed",
+    "duration_ms": 24521,
+    "warnings": 0
+  },
+  "lint_result": {
+    "command": "npm run lint",
+    "status": "passed",
+    "errors": 0,
+    "warnings": 0
+  }
+}
+```
+
+**파싱 규약**:
+- `files_created[].status`는 `"created"` | `"updated"` | `"skipped"`. ad-hoc 후 reconcile 시 `"reconciled"`도 등장.
+- `files_created[].imports_endpoint_ids[]`는 cross-check-endpoints.mjs가 FE 훅 ↔ api-contract drift를 잡는 키.
+- `metadata.skills_used[]`는 PostToolUse 훅 로그(`.pipeline/.skill-invocations.jsonl`)와 cross-check 대상.
+- `build_result.status`/`lint_result.status`는 `"passed"` | `"failed"`. failed면 `errors[]`에 첫 5건 포함.
 
 ## 피드백 처리
 

@@ -10,6 +10,7 @@ allowedTools:
   - Edit
   - Glob
   - Grep
+  - Skill
   - WebFetch
   - Bash(npm run build:*)
   - Bash(npm run lint:*)
@@ -19,6 +20,8 @@ allowedTools:
   - Bash(mkdir:*)
   - Bash(node:*)
 ---
+
+> **공통 컨벤션**: 언어 규칙·점진적 작업·state.json 처리·공통 에러·금지 패턴 카탈로그(FP-001~FP-011)는 [`_preamble.md`](_preamble.md) 참조. 본문은 이 에이전트 고유 책임만 정의한다.
 
 # Code Generator — Backend
 
@@ -82,24 +85,20 @@ src/
 
 ## 핵심 규칙
 
+0. **금지 패턴 (위반 시 reviewer가 P0 반려)**: `any` 타입, `@ts-ignore`/`@ts-nocheck`, barrel export(`index.ts`로 재export), Pages Router(`pages/` 디렉터리), 응답 envelope 변형(`{data}`/`{results}`/`{payload}` 등), `as unknown as Record` 이중 캐스트, 별도 interface로 요청 타입 선언(반드시 `z.infer`).
 1. **AI/Bedrock 코드는 이 에이전트의 담당이 아니다** — `code-generator-ai`가 `@strands-agents/sdk`로 구현
-2. **인메모리 스토어 + Repository 패턴** — `backend-spec.json`의 스펙을 따라 구현
+2. **Repository 패턴 의무화** — 모든 데이터 접근은 `src/lib/db/store.ts`에 정의된 `Store<T>` 인터페이스를 거친다. 첫 구현은 `InMemoryStore`이지만 `createStore<T>(name)` 팩토리가 `process.env.DATA_SOURCE`를 보고 `memory`(기본) | `dynamodb` 어댑터를 분기 반환한다. `/awsarch` 시 DynamoDB 어댑터만 추가하면 되도록 모든 service/route는 store를 직접 인스턴스화하지 않고 팩토리만 호출한다. `api-manifest.json.repository_paths[]`에 store 인터페이스/구현 파일 경로를 기록한다.
 3. **정렬은 타입 안전 접근자 패턴** — `as unknown as Record` 이중 캐스트 금지. `Record<string, (item: T) => string | number>` 사용
 4. **zod로 모든 POST/PUT 요청 검증**
 5. **코딩 규칙은 CLAUDE.md 참조** — TypeScript, 주석, 네이밍 컨벤션 등
-6. **API 계약 준수 (CLAUDE.md "API Contract Conventions" 참조)**:
-   - 응답 envelope 고정: `{ items, total }` / `{ item }` / `{ success: true }` / `{ error: { code, message } }`
-   - 동적 세그먼트는 `[id]`, 쿼리는 camelCase
-   - 요청 타입은 `z.infer<typeof xxxSchema>`로 도출 (별도 interface 금지)
+6. **API 계약 준수** — 단일 소스: `CLAUDE.md > API Contract Conventions` (envelope, HTTP 코드, 경로/쿼리 네이밍, zod ↔ TS 바인딩). 본 에이전트는 그 정의를 변형하지 않는다. 추가로 다음 두 가지를 보장한다:
    - `api-contract.json`의 `typeBindings`에 정의된 이름 그대로 `src/types/`에 export (예: `CreateVehicleRequest`, `ListVehiclesResponse`)
    - route handler의 `NextResponse.json<ResponseType>(...)` 제네릭에 정확한 응답 타입 명시
+7. **인증/middleware 패턴**: 인증 FR이 있으면 `nextjs-auth-patterns` 스킬을 호출하여 `src/middleware.ts`, `src/lib/auth/session.ts`, `src/app/api/auth/callback/route.ts` 등을 생성한다. 기본은 `AUTH_PROVIDER=mock` (개발 편의), `/awsarch` 후 `cognito`로 전환된다. 인증 FR이 없으면 middleware는 보안 헤더만 처리한다.
 
 ## 점진적 작업 규칙
 
-**공통 원칙**:
-- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
-- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
-- **JSON 분할**(예: api-manifest.json)은 최상위 키 + 빈 배열 스켈레톤을 먼저 Write한다.
+본 에이전트는 [_preamble.md §2](_preamble.md#2-점진적-작업-규칙-공통-원칙)의 단위/재호출/분할/금지 규칙을 따른다. 아래는 이 에이전트 고유 단위와 단계만 정의한다.
 
 **이 에이전트의 단위**: 파일 그룹 (types/validation, data/db, api routes, middleware)
 
@@ -226,9 +225,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     "createVehicleSchema": "src/lib/validation/schemas.ts",
     "updateVehicleSchema": "src/lib/validation/schemas.ts"
   },
+  "repository_paths": [
+    { "interface": "src/lib/db/store.ts", "factory": "src/lib/db/createStore.ts", "implementations": ["src/lib/db/inMemoryStore.ts"] }
+  ],
   "drift_notes": []
 }
 ```
+
+`repository_paths`: `Store<T>` 인터페이스 + `createStore()` 팩토리 + 구현 어댑터 경로. `/awsarch` 시 aws-deployer가 이 경로를 보고 `dynamodbStore.ts`를 추가한다. 누락 시 reviewer P0.
 
 `drift_notes[]` 항목 예: `{ "endpoint": "GET /api/vehicles", "expected_type": "ListVehiclesResponse", "actual_type": "{ data: Vehicle[] }", "file": "..." }`. drift가 발생했다는 것은 계약 준수 실패이므로 가능한 한 0개여야 한다.
 
@@ -241,6 +245,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 ### `.pipeline/artifacts/v{N}/04-codegen/api-manifest.json`
 
 위 "api-manifest.json 추출" 섹션 포맷 참조. FE 에이전트가 훅 생성 시 단일 소스로 사용한다.
+
+## 참조 스킬
+
+### `api-contract-zod` — **반드시 호출** (구현 시 drift 차단)
+- `api-contract.json`의 typeBindings를 `src/types/`에 그대로 export하기 전에 envelope/HTTP 코드/zod ↔ TS 바인딩 규칙을 재확인
+- `z.infer<typeof xxxSchema>`로 요청 타입 도출, 별도 `interface CreateXxxRequest` 수동 선언 금지
+- 응답 envelope `{ items: T[]; total: number; nextToken? }` / `{ item: T }` / `{ error: { code, message } }` 강제
+
+### `nextjs16-app-router` — Route Handler / middleware 작성 시 호출
+- async params/searchParams (Next 16 Promise 처리), Server Actions, generateMetadata 패턴
+
+### `nextjs-auth-patterns` — 인증 FR이 있을 때 호출
+- middleware, JWT 검증, Cognito 콜백 라우트 구현 패턴
 
 ## 피드백 처리
 
@@ -268,7 +285,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 - [ ] 타입이 `src/types/`에 정의되어 프론트엔드와 공유 가능
 - [ ] 하드코딩된 시크릿 없음
 - [ ] 인메모리 스토어가 repository 패턴으로 추상화됨
-- [ ] 모든 응답이 `{ items, total }` / `{ item }` / `{ success: true }` / `{ error }` envelope 중 하나를 따름
+- [ ] 모든 응답이 CLAUDE.md "API Contract Conventions"의 envelope 중 하나를 따름
 - [ ] 요청 타입이 `z.infer<typeof xxxSchema>`로 정의됨 (별도 interface 선언 없음)
 - [ ] `api-contract.json`의 `typeBindings` 이름과 `src/types/`의 export 이름이 일치
 - [ ] `api-manifest.json`이 생성되었고 `drift_notes[]`가 비어있음 (또는 최소화됨)

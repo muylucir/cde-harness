@@ -172,7 +172,7 @@ Extended Thinking 없이도 프롬프트로 유사한 효과:
 ```python
 # Bedrock Converse API는 동일 system prompt에 대해 자동 캐싱
 response = client.converse(
-    modelId="anthropic.claude-sonnet-4-6-20250514-v1:0",
+    modelId="global.anthropic.claude-sonnet-4-6",  # CLAUDE.md Rule 13: 직접 ID 명시
     system=[{"text": very_long_system_prompt}],  # 자동 캐싱
     messages=[{"role": "user", "content": [{"text": user_input}]}],
 )

@@ -52,7 +52,7 @@ Amazon Bedrock Guardrails는 네이티브 콘텐츠 필터링(금지 주제, 유
 import { Agent, BedrockModel } from '@strands-agents/sdk'
 
 const bedrock = new BedrockModel({
-  modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+  modelId: 'global.anthropic.claude-sonnet-4-6',
   region: 'us-west-2',
   guardrailConfig: {
     guardrailIdentifier: 'my-guardrail-id',
@@ -160,6 +160,83 @@ agent.addHook(BeforeToolCallEvent, (event) => {
 })
 ```
 
+## Silent fail 처리 패턴 (사용자 화면 회귀 차단)
+
+guardrail 차단 / 빈 응답 / stopReason 비정상은 모두 **사용자 화면에서만 드러나는 회귀**다. 다음 3가지 패턴을 모든 SSE 라우트에서 강제한다 (ai-smoke Check 10이 종결 보장만 검증, 의미적 차단은 본문 코드에서 처리).
+
+### 패턴 A — guardrail intervened 처리
+
+```typescript
+import type { Event } from '@strands-agents/sdk';
+
+for await (const event of agent.stream(prompt)) {
+  // guardrail이 응답을 차단한 경우 stopReason 또는 별도 이벤트로 통지됨
+  if (event.type === 'modelMessageStopEvent') {
+    const stopReason = event.message?.stopReason;
+    if (stopReason === 'guardrail_intervened') {
+      send({
+        type: 'error',
+        code: 'GUARDRAIL_BLOCKED',
+        message: '안전 정책에 의해 응답이 차단되었습니다. 다른 방식으로 질문해주세요.',
+      });
+      send({ type: 'done' });
+      return;
+    }
+  }
+  // 일반 처리 ...
+}
+```
+
+### 패턴 B — 빈 응답 fallback
+
+`agent.stream()`이 0 chunks 반환하는 경우(Bedrock 5xx, 네트워크 일시 오류, guardrail silent block) UI에 빈 메시지가 보인다. 다음 카운터로 차단:
+
+```typescript
+let textChunks = 0;
+for await (const event of agent.stream(prompt)) {
+  if (event.type === 'textDelta' && event.text) {
+    textChunks++;
+    send({ type: 'textDelta', text: event.text });
+  }
+  // ...
+}
+if (textChunks === 0) {
+  send({
+    type: 'error',
+    code: 'EMPTY_RESPONSE',
+    message: '응답을 생성하지 못했습니다. 잠시 후 다시 시도해주세요.',
+  });
+}
+send({ type: 'done' });
+```
+
+### 패턴 C — nested agent 실패 표준 envelope
+
+도구 안에서 sub-agent를 호출할 때 `try/catch + return null`은 silent fail. 표준 에러 envelope으로 상위에 전파:
+
+```typescript
+async function diagnoseTool(input: { symptom: string }) {
+  try {
+    const result = await subAgent.invoke(input.symptom);
+    if (!result || result.text.trim().length === 0) {
+      // sub-agent 빈 응답도 명시적 에러로 처리
+      return { error: { code: 'SUB_AGENT_EMPTY', message: '하위 진단을 완료하지 못함', retriable: true } };
+    }
+    return { diagnosis: result.text };
+  } catch (e) {
+    return {
+      error: {
+        code: 'SUB_AGENT_FAILED',
+        message: e instanceof Error ? e.message : 'Unknown',
+        retriable: false,
+      },
+    };
+  }
+}
+```
+
+상위 Agent의 시스템 프롬프트에 "도구 결과에 `error` 필드가 있으면 사용자에게 그 message를 한국어로 전달하고 다른 접근 시도"를 명시.
+
 ## TypeScript에서 미지원 (Python-only)
 
 다음 안전 기능은 TypeScript SDK에 아직 없음. 필요하면 Python A2A 서버로 우회.
@@ -171,4 +248,4 @@ agent.addHook(BeforeToolCallEvent, (event) => {
 | **`ModelRetryStrategy` (지수 백오프 등)** | `AfterModelCallEvent.retry = true`로 기본 재시도 |
 | **Bedrock Guardrails Shadow Mode Hook** | Python의 `NotifyOnlyGuardrailsHook` 미이식 |
 
-Python 전용 기능이 필수면 `strands-sdk-python-guide` 스킬 + A2A 아키텍처 검토.
+Python 전용 기능이 필수면 별도 Python 에이전트를 A2A로 노출하는 아키텍처를 검토한다. CDE 하네스는 TypeScript SDK만 직접 지원한다.

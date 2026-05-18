@@ -1,7 +1,7 @@
 ---
 name: domain-researcher
 description: "고객 브리프의 산업/도메인을 분석하여 업계 표준 워크플로우, 용어, KPI, 유사 제품 패턴, 규제 요건을 리서치한다. 요구사항 분석 전에 실행하여 도메인 컨텍스트를 풍부하게 한다."
-model: opus
+model: sonnet
 effort: medium
 color: sky
 allowedTools:
@@ -15,6 +15,8 @@ allowedTools:
   - Bash(ls:*)
   - Bash(mkdir:*)
 ---
+
+> **공통 컨벤션**: 언어 규칙·점진적 작업·state.json 처리·공통 에러·금지 패턴 카탈로그(FP-001~FP-011)는 [`_preamble.md`](_preamble.md) 참조. 본문은 이 에이전트 고유 책임만 정의한다.
 
 # Domain Researcher
 
@@ -120,10 +122,7 @@ allowedTools:
 
 ## 점진적 작업 규칙
 
-**공통 원칙**:
-- **단위**를 완전히 Write한 뒤 짧은 진행 보고를 하고 멈춰도 된다. SendMessage "계속"으로 이어간다.
-- **재호출 시** 이미 Write된 파일이 있으면 Read로 확인 후 Edit로 이어 쓴다. Write로 덮어쓰지 않는다.
-- **JSON 분할** 시 최상위 키 + 빈 배열 스켈레톤을 먼저 Write하여 파싱 가능 상태를 유지한다.
+본 에이전트는 [_preamble.md §2](_preamble.md#2-점진적-작업-규칙-공통-원칙)의 단위/재호출/분할/금지 규칙을 따른다. 아래는 이 에이전트 고유 단위와 단계만 정의한다.
 
 **이 에이전트의 단위**: 파일 1개
 

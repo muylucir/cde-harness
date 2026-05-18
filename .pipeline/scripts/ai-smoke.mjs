@@ -12,6 +12,10 @@
  *   4. ai-contract.sse_events[].event_type ↔ 라우트 emit 이벤트명 집합 일치
  *   5. ai-internals.system_prompt*.template ↔ section_marker_map 값 교차 검증
  *   6. 도구 파일의 nested Agent 호출 실패 경로(error 객체 반환 또는 throw) 존재
+ *   7. modelId가 SSOT(.pipeline/scripts/allowed-models.json)의 화이트리스트와 일치
+ *   8. forbidden_env_var(BEDROCK_MODEL_ID) 환경변수 fallback 패턴 부재
+ *   9. code-generator-ai의 generation-log-ai.json.skills_used[]에 필수 스킬 호출 기록
+ *  10. SSE 종결 보장 (정상/catch 경로 모두 done emit 또는 controller.close 도달)
  *
  * 사용법:
  *   node .pipeline/scripts/ai-smoke.mjs           # 현재 버전 사용
@@ -25,7 +29,10 @@
  */
 
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { resolve, join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 
 // ROOT는 process.cwd() 기반이어서 어느 프로토타입 디렉토리에서 실행해도 해당 앱을 검사한다.
 // 하네스 자체에서 실행하면 AI 스펙이 없으므로 조용히 통과한다.
@@ -110,26 +117,43 @@ function main() {
   }
 
   // AI 소스 파일 집합 ---------------------------------------
-  const agentsLibDir = resolve(ROOT, 'src/lib/agents');
-  const agentsAiDir = resolve(ROOT, 'src/lib/ai');
-  const agentsApiDir = resolve(ROOT, 'src/app/api/agents');
-  const chatApiDir = resolve(ROOT, 'src/app/api/chat');
-
+  // 라이브러리: src/lib/{agents,ai,llm} 모두 스캔 (신규 디렉토리 추가에 강건)
+  // Check 1(Bedrock 직접 import 금지)은 src/ 전역으로 별도 확장된 srcAllFiles를 사용한다.
   const tsFilter = (p) => p.endsWith('.ts') || p.endsWith('.tsx');
   const libFiles = [
-    ...walk(agentsLibDir, tsFilter),
-    ...walk(agentsAiDir, tsFilter),
+    ...walk(resolve(ROOT, 'src/lib/agents'), tsFilter),
+    ...walk(resolve(ROOT, 'src/lib/ai'), tsFilter),
+    ...walk(resolve(ROOT, 'src/lib/llm'), tsFilter),
   ];
-  const apiFiles = [
-    ...walk(agentsApiDir, tsFilter),
-    ...walk(chatApiDir, tsFilter),
-  ].filter((p) => p.endsWith('/route.ts'));
 
-  // Check 1: Bedrock 직접 import 금지 ----------------------
+  // Check 1 전용: src/ 전역 ts/tsx (e2e/, node_modules/, .next/는 src/ 외부이므로 자동 제외).
+  // CLAUDE.md Rule 9는 "Bedrock 직접 호출 금지"가 src/ 전역에 적용되므로,
+  // 기존 lib/agents·ai·llm + AI 라우트 스캔만으로는 src/lib/services, src/components 등을 놓친다.
+  const srcAllFiles = walk(resolve(ROOT, 'src'), tsFilter);
+
+  // API 라우트: src/app/api/ 전체를 스캔하되 다음 라우트는 AI 정책 검사에서 제외:
+  //   - /api/auth/*  (Cognito 콜백/로그아웃)
+  //   - /api/health* (헬스체크)
+  //   - 단순 CRUD 라우트 (Bedrock import도 없고 Agent 호출도 없는 라우트)
+  // 정확한 분류는 Bedrock import / Agent / Strands SDK 사용 흔적이 있는 파일만 AI 라우트로 간주.
+  const allApiRouteFiles = walk(resolve(ROOT, 'src/app/api'), tsFilter).filter((p) =>
+    p.endsWith('/route.ts'),
+  );
+  const aiSignalRegex =
+    /(@strands-agents\/sdk|@aws-sdk\/client-bedrock-runtime|new\s+Agent\s*\(|createXxxAgent|agent\.(invoke|stream))/;
+  const apiFiles = allApiRouteFiles.filter((p) => {
+    if (/\/api\/(auth|health)\b/.test(p)) return false; // 인증/헬스체크 라우트 제외
+    const src = readFileSync(p, 'utf-8');
+    return aiSignalRegex.test(src);
+  });
+
+  // Check 1: Bedrock 직접 import 금지 (src/ 전역) ----------------------
+  // 사용자 결정(전 디렉토리 금지): wrapper 화이트리스트 없음.
+  // CLAUDE.md Rule 9 prose 정책을 코드로 전환 — src/ 안 어디서든 import 시 fail.
   const bedrockImporters = [];
   // 실제 import 문만 탐지 (주석 내 문서화 언급은 무시)
   const importRegex = /^\s*(?:import\s+[^'"]*from\s+|(?:const|let|var)\s+[^=]*=\s*(?:await\s+)?require\s*\(\s*)['"]@aws-sdk\/client-bedrock-runtime['"]/m;
-  for (const f of [...libFiles, ...apiFiles]) {
+  for (const f of srcAllFiles) {
     const src = readFileSync(f, 'utf-8');
     if (importRegex.test(src)) {
       bedrockImporters.push(f.replace(ROOT + '/', ''));
@@ -320,6 +344,145 @@ function main() {
       ? `review fallback paths: ${silentNestedFailures.join(', ')}`
       : null,
   );
+
+  // Check 7: modelId / model 가 허용된 3개 ID 중 하나로 직접 명시 ----------
+  // SSOT: .pipeline/scripts/allowed-models.json. 4곳(ai-smoke/reviewer/ONBOARDING/CLAUDE.md)이 이 파일을 인용한다.
+  const allowedModelsPath = resolve(SCRIPT_DIR, 'allowed-models.json');
+  const allowedModels = JSON.parse(readFileSync(allowedModelsPath, 'utf-8'));
+  const ALLOWED_MODEL_IDS = allowedModels.allowed_model_ids.map((m) => m.id);
+  const FORBIDDEN_ALIASES = allowedModels.forbidden_aliases_in_sdk;
+  const FORBIDDEN_ENV_VAR = allowedModels.forbidden_env_var; // 'BEDROCK_MODEL_ID'
+  // model: '...' / modelId: '...' 형태 리터럴 추출. claude-* 또는 anthropic.* 패턴이 들어간 값만 모델 ID로 간주
+  // 주석 사전 제거 — `// model: 'haiku' for triage` 같은 안내 주석이 false positive 만들지 않게
+  const stripComments = (s) =>
+    s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+  const modelLiteralRegex = /\b(?:modelId|model)\s*:\s*['"`]([^'"`]+)['"`]/g;
+  const invalidModelIds = [];
+  for (const f of [...libFiles, ...apiFiles]) {
+    const src = stripComments(readFileSync(f, 'utf-8'));
+    let m;
+    modelLiteralRegex.lastIndex = 0;
+    while ((m = modelLiteralRegex.exec(src))) {
+      const id = m[1];
+      const looksLikeModelId =
+        id.includes('anthropic') || id.includes('claude') || FORBIDDEN_ALIASES.includes(id);
+      if (!looksLikeModelId) continue; // model: 'gpt-4' 같은 다른 프로바이더 ID는 다른 검사로
+      if (!ALLOWED_MODEL_IDS.includes(id)) {
+        invalidModelIds.push(`${f.replace(ROOT + '/', '')}: "${id}"`);
+      }
+    }
+  }
+  collectResult(
+    results,
+    'model/modelId uses one of CLAUDE.md Rule 13 allowed IDs (haiku-4-5/sonnet-4-6/opus-4-7); shorthand aliases forbidden',
+    invalidModelIds.length === 0,
+    invalidModelIds.length ? invalidModelIds.slice(0, 5).join(' | ') : null,
+  );
+
+  // Check 8: 금지 환경변수 fallback 패턴 부재 + indirect computed access 차단 ----------
+  // 직접: process.env.BEDROCK_MODEL_ID
+  // 간접: process.env['BEDROCK_MODEL_ID']
+  // 우회: process.env[someVar] (computed access — AI 디렉토리에서 일반적으로 불필요)
+  // SSOT: allowed-models.json.forbidden_env_var
+  // 보강: ESLint `no-restricted-syntax` 규칙이 AST 레벨에서 추가 차단 (eslint.config.mjs).
+  const envFallbackRegex = new RegExp(`process\\.env\\s*[.[]\\s*['"]?${FORBIDDEN_ENV_VAR}`);
+  const computedEnvRegex = /process\.env\[\s*[A-Za-z_$][A-Za-z0-9_$]*\s*\]/; // process.env[varName]
+  const envFallbackHits = [];
+  const computedEnvHits = [];
+  for (const f of [...libFiles, ...apiFiles]) {
+    const src = readFileSync(f, 'utf-8');
+    if (envFallbackRegex.test(src)) {
+      envFallbackHits.push(f.replace(ROOT + '/', ''));
+    }
+    if (computedEnvRegex.test(src)) {
+      computedEnvHits.push(f.replace(ROOT + '/', ''));
+    }
+  }
+  collectResult(
+    results,
+    `no ${FORBIDDEN_ENV_VAR} env fallback (SSOT: .pipeline/scripts/allowed-models.json; CLAUDE.md Rule 13: direct ID only)`,
+    envFallbackHits.length === 0,
+    envFallbackHits.length ? envFallbackHits.join(', ') : null,
+  );
+  collectResult(
+    results,
+    'no process.env[<computed>] in AI directories (indirect bypass)',
+    computedEnvHits.length === 0,
+    computedEnvHits.length
+      ? `${computedEnvHits.join(', ')} — ESLint no-restricted-syntax도 함께 차단함`
+      : null,
+  );
+
+  // Check 10: SSE 종결 보장 (정상/에러 경로 모두 done emit 또는 controller.close 도달) ----------
+  // 사용자 화면에서만 드러나는 회귀 T1 차단: 채팅이 "응답 중..." 무한 정지.
+  // 휴리스틱 (정확한 AST 분석은 ts-morph 도입 시 보강):
+  //   - AI 라우트 파일에서 `new ReadableStream({ start` 또는 `new Response(...)` + readable stream 패턴 탐지
+  //   - 해당 함수 본문에 다음 둘 중 하나가 모두 나타나야 한다:
+  //     (a) 정상 경로: 메인 루프 다음 `controller.close()` 또는 `event: 'done'`/`type: 'done'` emit
+  //     (b) catch 블록: `controller.close()` 또는 `event: 'error'` emit + (close|done) 호출
+  const sseTerminationIssues = [];
+  for (const f of apiFiles) {
+    const src = readFileSync(f, 'utf-8');
+    const hasStream = /new\s+ReadableStream\s*\(/.test(src) || /controller\.enqueue\s*\(/.test(src);
+    if (!hasStream) continue;
+    // 정상 종료 시그널
+    const normalDone =
+      /controller\.close\s*\(\s*\)/.test(src) ||
+      /event:\s*['"]done['"]/.test(src) ||
+      /type:\s*['"]done['"]/.test(src) ||
+      /\bemit\s*\(\s*['"]done['"]/.test(src);
+    // catch 블록 안에 종결 시그널 (close 또는 error+done emit)
+    const catchBlocks = [...src.matchAll(/catch\s*\([^)]*\)\s*\{([\s\S]*?)\}/g)].map((m) => m[1]);
+    const allCatchTerminated =
+      catchBlocks.length === 0 ||
+      catchBlocks.every(
+        (body) =>
+          /controller\.close\s*\(\s*\)/.test(body) ||
+          /event:\s*['"]done['"]/.test(body) ||
+          /type:\s*['"]done['"]/.test(body) ||
+          /event:\s*['"]error['"]/.test(body) ||
+          /type:\s*['"]error['"]/.test(body),
+      );
+    const issues = [];
+    if (!normalDone) issues.push('no done/close in normal path');
+    if (!allCatchTerminated) issues.push('catch block missing done/close/error emit');
+    if (issues.length > 0) {
+      sseTerminationIssues.push(`${f.replace(ROOT + '/', '')}: ${issues.join('; ')}`);
+    }
+  }
+  collectResult(
+    results,
+    'SSE termination guaranteed in all normal/catch paths (T1 silent-fail prevention)',
+    sseTerminationIssues.length === 0,
+    sseTerminationIssues.length ? sseTerminationIssues.slice(0, 5).join(' | ') : null,
+  );
+
+  // Check 9: spec-writer-ai / code-generator-ai의 skills_used 기록 검증 ----------
+  // agent-patterns / prompt-engineering / strands-sdk-typescript-guide 스킬 호출 흔적이
+  // generation-log에 남아있어야 한다. 본문 prose만 보고 호출을 건너뛰는 회귀 차단.
+  const aiLogPath = resolve(ROOT, `.pipeline/artifacts/v${version}/04-codegen/generation-log-ai.json`);
+  const aiLog = readJsonOptional(aiLogPath);
+  const REQUIRED_AI_CODEGEN_SKILLS = ['strands-sdk-typescript-guide', 'agent-patterns'];
+  if (aiLog) {
+    const used = Array.isArray(aiLog.skills_used) ? aiLog.skills_used : [];
+    const missing = REQUIRED_AI_CODEGEN_SKILLS.filter((s) => !used.includes(s));
+    collectResult(
+      results,
+      'code-generator-ai recorded required Skill calls (skills_used[])',
+      missing.length === 0,
+      missing.length
+        ? `missing in generation-log-ai.json.skills_used: ${missing.join(', ')}. Skill 도구로 실제 호출되었는지 확인.`
+        : null,
+    );
+  } else {
+    // generation-log-ai.json 없으면 code-generator-ai가 아직 안 돌았을 수 있음 — skip
+    collectResult(
+      results,
+      'code-generator-ai recorded required Skill calls',
+      true,
+      'generation-log-ai.json 없음 — code-generator-ai 미실행으로 skip',
+    );
+  }
 
   return finalize(results);
 }

@@ -147,7 +147,7 @@ AI 기능이 포함된 프로토타입에서 추가 점검:
 | 2 | 인증 패턴 | PASS/FAIL/N/A | localStorage 검색, httpOnly 확인 | {N} |
 | 3 | XSS 방지 | PASS/FAIL | eval/innerHTML 패턴 검색 | {N} |
 | 4 | CSRF 방어 | PASS/FAIL | 상태 변경 API HTTP 메서드 확인 | {N} |
-| 5 | 보안 헤더 | PASS/FAIL | next.config.ts/middleware 검토 | {N} |
+| 5 | 보안 헤더 | PASS/FAIL | next.config.ts/proxy.ts(구 middleware.ts) 검토 | {N} |
 | 6 | 의존성 보안 | PASS/FAIL | `npm audit --json` 결과 | {N} |
 | 7 | 시크릿 관리 | PASS/FAIL | API 키/비밀번호 패턴 grep | {N} |
 | 8 | 프로토타입 전용 | PASS/FAIL | PII, 기본 자격증명, console.log 검색 | {N} |
@@ -237,7 +237,7 @@ AI 기능이 포함된 프로토타입에서 추가 점검:
 |------|------|----------|
 | cloudscape-design | Cloudscape 컴포넌트의 보안 관련 속성(sanitize, escape) 확인 | XSS 방지 점검 시 |
 | api-contract-zod | 응답 envelope/HTTP 코드/zod 검증 점검 기준 | 백엔드 카테고리(envelope, zod 단일 바인딩, 401/403 형식) 검사 시 |
-| nextjs-auth-patterns | middleware 가드/JWT 검증/쿠키 속성 보안 체크리스트 | 인증 FR이 있을 때 (로그인/권한/보호 라우트), security 카테고리 7번 |
+| nextjs-auth-patterns | proxy.ts(구 middleware.ts) 가드/JWT 검증/쿠키 속성 보안 체크리스트 | 인증 FR이 있을 때 (로그인/권한/보호 라우트), security 카테고리 7번 |
 
 ## 피드백 작성
 

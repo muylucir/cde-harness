@@ -45,7 +45,7 @@ allowedTools:
 4. **db** — 인메모리 스토어 + 리소스별 repository
 5. **services** — AWS 서비스 래퍼 (필요 시: DynamoDB, S3)
 6. **api** — Next.js Route Handlers (REST endpoints)
-7. **middleware** — 보안 헤더, 인증 미들웨어
+7. **proxy** (`src/proxy.ts`, 구 `src/middleware.ts`) — 보안 헤더, 인증 가드. Next.js 16에서 `middleware.ts` 컨벤션은 deprecated되고 `proxy.ts` + `export function proxy()`로 리네이밍됨
 8. **api-contract** — BE/FE가 공유하는 OpenAPI-lite 단일 계약 문서 (`api-contract.json`). 모든 엔드포인트의 요청/응답/에러 형태를 정규화된 포맷으로 기술한다. FE 훅 생성의 타입 소스로 사용된다.
 
 ## 도메인 컨텍스트 활용 (domain-context.json이 있으면)
@@ -74,7 +74,7 @@ allowedTools:
 
 **단계**:
 1. **Read**: requirements.json, architecture.json, domain-context.json (있으면), 피드백 (있으면)
-2. **Write**: `backend-spec.json` — 스켈레톤 먼저 → types → validation → data → db → services → api → middleware 순서로 Edit
+2. **Write**: `backend-spec.json` — 스켈레톤 먼저 → types → validation → data → db → services → api → proxy 순서로 Edit
 3. **Write**: `backend-spec.md`
 4. **Write**: `api-contract.json` — BE/FE 공통 계약 (endpoints + validation_schema + typeBindings)
 
@@ -83,7 +83,7 @@ allowedTools:
 ## 처리 프로세스
 
 1. 입력 파일에서 백엔드 관련 FR/API를 파악 + 도메인 보강 + 피드백 반영
-2. 담당 범위 7개(types → validation → data → db → services → api → middleware) 순서로 스펙 작성
+2. 담당 범위 7개(types → validation → data → db → services → api → proxy) 순서로 스펙 작성
 3. 삼중 출력: backend-spec.json → backend-spec.md → api-contract.json
 
 ## 출력
@@ -176,7 +176,7 @@ allowedTools:
 - spec 작성 단계에서 호출하지 않으면 code-generator-backend가 잘못된 envelope/네이밍으로 구현하고 reviewer cat 6이 critical로 반려
 
 ### `nextjs-auth-patterns` — 인증 FR이 있을 때 호출
-- `requirements.json`에 로그인/회원가입/권한 FR이 있으면 `middleware.ts`, `/api/auth/*` 라우트 스펙을 이 스킬의 패턴으로 작성
+- `requirements.json`에 로그인/회원가입/권한 FR이 있으면 `src/proxy.ts`(구 `middleware.ts`, Next.js 16 리네이밍), `/api/auth/*` 라우트 스펙을 이 스킬의 패턴으로 작성
 - mock 모드(`AUTH_PROVIDER=mock`) 기본 + Cognito 전환 가이드
 
 ### `mermaid-diagrams` — API 시퀀스 다이어그램

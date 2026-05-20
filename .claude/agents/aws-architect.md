@@ -53,7 +53,7 @@ allowedTools:
 
 ### `nextjs-auth-patterns` — 인증 FR이 있고 Cognito User Pool을 추가할 때 호출
 - Cognito User Pool + Hosted UI + Identity Pool 설계 패턴
-- middleware.ts ↔ Cognito JWT 검증 통합
+- proxy.ts(구 middleware.ts) ↔ Cognito JWT 검증 통합 — Next.js 16에서 `middleware.ts`가 `proxy.ts`로 리네이밍됨
 - aws-deployer가 CDK로 Cognito User Pool/Client/Domain을 생성할 때 reference
 - AgentCore Identity와의 분리: 사용자 인증=Cognito, 워크로드 인증=AgentCore Identity
 

@@ -61,7 +61,7 @@ src/
 │   │   ├── dynamodb.ts       # DynamoDB (필요 시)
 │   │   └── s3.ts             # S3 (필요 시)
 │   ├── auth/                 # 인증 유틸리티
-│   │   └── middleware.ts     # JWT/Cognito 검증
+│   │   └── session.ts        # JWT/Cognito 검증 (verifySession)
 │   └── validation/           # 요청 스키마 검증
 │       └── schemas.ts        # zod 스키마
 ├── app/api/                  # API Route Handlers
@@ -71,7 +71,7 @@ src/
 │           └── route.ts      # GET (상세), PUT (수정), DELETE (삭제)
 ├── data/                     # 시드 데이터
 │   └── seed.ts               # 초기 목데이터
-└── middleware.ts              # Next.js 미들웨어 (보안 헤더, 인증)
+└── proxy.ts                   # Next.js Proxy (구 middleware.ts, 보안 헤더 + 보호 라우트 가드)
 ```
 
 ## 도메인 컨텍스트 활용 (domain-context.json이 있으면)
@@ -94,20 +94,20 @@ src/
 6. **API 계약 준수** — 단일 소스: `CLAUDE.md > API Contract Conventions` (envelope, HTTP 코드, 경로/쿼리 네이밍, zod ↔ TS 바인딩). 본 에이전트는 그 정의를 변형하지 않는다. 추가로 다음 두 가지를 보장한다:
    - `api-contract.json`의 `typeBindings`에 정의된 이름 그대로 `src/types/`에 export (예: `CreateVehicleRequest`, `ListVehiclesResponse`)
    - route handler의 `NextResponse.json<ResponseType>(...)` 제네릭에 정확한 응답 타입 명시
-7. **인증/middleware 패턴**: 인증 FR이 있으면 `nextjs-auth-patterns` 스킬을 호출하여 `src/middleware.ts`, `src/lib/auth/session.ts`, `src/app/api/auth/callback/route.ts` 등을 생성한다. 기본은 `AUTH_PROVIDER=mock` (개발 편의), `/awsarch` 후 `cognito`로 전환된다. 인증 FR이 없으면 middleware는 보안 헤더만 처리한다.
+7. **인증/proxy 패턴**: 인증 FR이 있으면 `nextjs-auth-patterns` 스킬을 호출하여 `src/proxy.ts`(Next.js 16에서 `middleware.ts` → `proxy.ts`로 리네이밍됨), `src/lib/auth/session.ts`, `src/app/api/auth/callback/route.ts` 등을 생성한다. `export function proxy(request)` 시그니처를 사용하며 `middleware.ts`/`export function middleware()` 패턴은 작성 금지(reviewer가 P0 반려). 기본은 `AUTH_PROVIDER=mock` (개발 편의), `/awsarch` 후 `cognito`로 전환된다. 인증 FR이 없으면 proxy는 보안 헤더만 처리한다.
 
 ## 점진적 작업 규칙
 
 본 에이전트는 [_preamble.md §2](_preamble.md#2-점진적-작업-규칙-공통-원칙)의 단위/재호출/분할/금지 규칙을 따른다. 아래는 이 에이전트 고유 단위와 단계만 정의한다.
 
-**이 에이전트의 단위**: 파일 그룹 (types/validation, data/db, api routes, middleware)
+**이 에이전트의 단위**: 파일 그룹 (types/validation, data/db, api routes, proxy)
 
 **단계**:
 1. **Read + Bootstrap**: _manifest.json, backend-spec.json, **api-contract.json**, architecture.json, domain-context.json (있으면). `node_modules/` 없으면 `npm install`, `src/` 없으면 최소 구조 생성
 2. **Write**: types + validation 파일 (**api-contract.json의 `typeBindings` 이름 그대로 export**)
 3. **Write**: data (시드) + db (store, repository) 파일
 4. **Write**: api route handlers (**api-contract.json의 경로/envelope/responseType 준수**)
-5. **Write**: middleware → `npm run build` + `npm run lint` 검증
+5. **Write**: proxy (`src/proxy.ts`) → `npm run build` + `npm run lint` 검증
 6. **Fix**: 빌드/린트 에러 수정 (있으면)
 7. **Extract + Log**: `api-manifest.json` 생성 + 생성 로그 작성
 
@@ -159,7 +159,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
    d. **db** — 인메모리 스토어 + repository
    e. **services** — AWS 서비스 래퍼 (필요 시)
    f. **api** — Route Handlers
-   g. **middleware** — 보안 헤더, 인증
+   g. **proxy** (`src/proxy.ts`, 구 `middleware.ts`) — 보안 헤더, 인증 가드
 3. `npm run build` + `npm run lint` 로 검증 (lint error 0 필수. 실패 시 최대 3회 재시도)
 4. **`api-manifest.json` 추출** (아래 "api-manifest.json 추출" 섹션 참조)
 5. 생성 로그 작성
@@ -253,11 +253,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 - `z.infer<typeof xxxSchema>`로 요청 타입 도출, 별도 `interface CreateXxxRequest` 수동 선언 금지
 - 응답 envelope `{ items: T[]; total: number; nextToken? }` / `{ item: T }` / `{ error: { code, message } }` 강제
 
-### `nextjs16-app-router` — Route Handler / middleware 작성 시 호출
+### `nextjs16-app-router` — Route Handler / proxy 작성 시 호출
 - async params/searchParams (Next 16 Promise 처리), Server Actions, generateMetadata 패턴
+- `proxy.ts`(구 `middleware.ts`) 파일 컨벤션 — Next.js 16 리네이밍 정책
 
 ### `nextjs-auth-patterns` — 인증 FR이 있을 때 호출
-- middleware, JWT 검증, Cognito 콜백 라우트 구현 패턴
+- `src/proxy.ts`(구 `src/middleware.ts`), JWT 검증, Cognito 콜백 라우트 구현 패턴
 
 ## 피드백 처리
 

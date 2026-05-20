@@ -110,7 +110,7 @@ npm run dev
 | mermaid-diagrams | ARCHITECTURE.md의 데이터 플로우/컴포넌트 다이어그램 생성 및 검증 | 문서 생성 3b단계 (ARCHITECTURE.md) |
 | ascii-diagram | README.md의 프로젝트 구조 디렉토리 트리 렌더링 | 문서 생성 3a단계 (README.md) |
 | cloudscape-design | 컴포넌트 목록 교차 검증, 페이지 패턴 설명 보강 | ARCHITECTURE.md 컴포넌트 계층 작성 시 |
-| **nextjs-auth-patterns** | 인증 FR이 있을 때 `docs/AUTH.md` 자동 생성 (Cognito 전환, middleware 가드, 보호 라우트) | requirements.json에 인증/로그인/권한 FR 감지 시 |
+| **nextjs-auth-patterns** | 인증 FR이 있을 때 `docs/AUTH.md` 자동 생성 (Cognito 전환, proxy.ts(구 middleware.ts) 가드, 보호 라우트) | requirements.json에 인증/로그인/권한 FR 감지 시 |
 
 **인증 FR 감지 로직**: `requirements.json`의 `functional_requirements[]` 또는 `non_functional_requirements[]`에서 다음 키워드 검색:
 - 한국어: `로그인`, `회원가입`, `인증`, `권한`, `관리자`, `Cognito`, `세션`

@@ -1,6 +1,6 @@
 ---
 name: nextjs-auth-patterns
-description: "Next.js 16 App Router 프로토타입의 인증/인가 패턴 종합 가이드. Cognito Hosted UI 통합, JWT 검증, middleware 기반 보호 라우트, 서버 컴포넌트에서 세션 조회, API Route 인증 가드, 권한 기반 UI 분기를 다룬다.\n다음 시나리오에서 호출: (1) FR에 로그인/회원가입/권한 분기 요구사항이 있을 때 (2) /awsarch 시 Cognito User Pool을 추가할 때 (3) middleware.ts에 인증 가드를 작성할 때 (4) 보호된 API Route 작성 시 (5) 다중 역할(admin/user) UI 분기. Skip: AgentCore Identity 한정 인증(bedrock-agentcore-guide 참조), 단순 read-only 프로토타입(인증 불필요)."
+description: "Next.js 16 App Router 프로토타입의 인증/인가 패턴 종합 가이드. Cognito Hosted UI 통합, JWT 검증, proxy.ts(Next.js 16에서 middleware.ts → proxy.ts로 리네이밍됨) 기반 보호 라우트, 서버 컴포넌트에서 세션 조회, API Route 인증 가드, 권한 기반 UI 분기를 다룬다.\n다음 시나리오에서 호출: (1) FR에 로그인/회원가입/권한 분기 요구사항이 있을 때 (2) /awsarch 시 Cognito User Pool을 추가할 때 (3) proxy.ts에 인증 가드를 작성할 때 (4) 보호된 API Route 작성 시 (5) 다중 역할(admin/user) UI 분기. Skip: AgentCore Identity 한정 인증(bedrock-agentcore-guide 참조), 단순 read-only 프로토타입(인증 불필요)."
 license: Apache-2.0
 metadata:
   version: "1.0"
@@ -14,7 +14,7 @@ Next.js 16 App Router 프로토타입에서 **AWS Cognito User Pool + Hosted UI*
 CDE 파이프라인에서 호출되는 위치:
 - `requirements-analyst`가 인증 관련 FR을 식별
 - `architect`가 보호 라우트 트리 설계
-- `code-generator-backend`가 middleware.ts + API Route 가드 생성
+- `code-generator-backend`가 `src/proxy.ts`(구 `middleware.ts`) + API Route 가드 생성
 - `aws-architect` / `aws-deployer`가 `/awsarch` 시 Cognito 인프라 추가
 - `security-auditor-pipeline`이 인증 누락/우회 점검 시 참조
 
@@ -39,18 +39,26 @@ COGNITO_REDIRECT_URI=http://localhost:3000/api/auth/callback
 COGNITO_LOGOUT_URI=http://localhost:3000/
 ```
 
-## 2. middleware.ts 패턴 (필수)
+## 2. proxy.ts 패턴 (필수)
 
-Next.js 16 App Router에서 보호 라우트 가드는 **`src/middleware.ts`** 단일 파일에 둔다.
+Next.js 16 App Router에서 보호 라우트 가드는 **`src/proxy.ts`** 단일 파일에 둔다.
+
+> **리네이밍 (Next.js 16)**: `middleware.ts` 파일 컨벤션은 deprecated. 새 코드는 `proxy.ts` + `export function proxy()`로 작성한다. Express.js middleware와의 혼동을 피하고, "네트워크 경계에서 동작하는 마지막 수단"이라는 의미를 명확히 하기 위함이다. `config.matcher`, Edge Runtime, `NextRequest`/`NextResponse` API는 모두 동일하다. 기존 `middleware.ts` 코드는 코드모드로 일괄 마이그레이션:
+>
+> ```bash
+> npx @next/codemod@canary middleware-to-proxy .
+> ```
+>
+> 코드모드는 파일명(`middleware.ts` → `proxy.ts`)과 export 함수명(`middleware` → `proxy`)을 자동 변환한다. 참고: https://nextjs.org/docs/messages/middleware-to-proxy
 
 ```typescript
-// src/middleware.ts
+// src/proxy.ts
 import { NextResponse, type NextRequest } from 'next/server';
 import { verifySession } from '@/lib/auth/session';
 
 const PUBLIC_PATHS = ['/', '/login', '/api/auth/callback', '/api/auth/login', '/api/auth/logout'];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 보안 헤더 (모든 응답)
@@ -111,7 +119,7 @@ export const config = {
 };
 ```
 
-**주의**: middleware는 Edge runtime이므로 `aws-jwt-verify`가 동작한다. `crypto`는 Web Crypto API만 사용 가능 — Node.js `crypto` 모듈 import 금지.
+**주의**: proxy는 Edge runtime이므로 `aws-jwt-verify`가 동작한다. `crypto`는 Web Crypto API만 사용 가능 — Node.js `crypto` 모듈 import 금지.
 
 ## 3. JWT 검증 (Cognito)
 
@@ -208,7 +216,7 @@ export async function GET(request: NextRequest) {
 
 ## 5. Server Component에서 세션 조회
 
-Next.js 16에서는 RSC(Server Component)에서 `cookies()` 또는 middleware가 세팅한 `x-user-id` 헤더를 읽는다.
+Next.js 16에서는 RSC(Server Component)에서 `cookies()` 또는 proxy가 세팅한 `x-user-id` 헤더를 읽는다.
 
 ```typescript
 // src/app/(protected)/dashboard/page.tsx
@@ -222,7 +230,7 @@ export default async function DashboardPage() {
 }
 ```
 
-API Route에서도 동일하게 헤더 또는 cookies()로 세션을 조회한다. middleware가 이미 검증했으므로 API Route는 헤더만 읽으면 된다 (재검증 불필요).
+API Route에서도 동일하게 헤더 또는 cookies()로 세션을 조회한다. proxy가 이미 검증했으므로 API Route는 헤더만 읽으면 된다 (재검증 불필요).
 
 ## 6. 권한 기반 UI 분기 (Cloudscape)
 
@@ -240,21 +248,22 @@ export function AdminOnly({ roles, children }: { roles: string[]; children: Reac
 
 ## 7. 보안 체크리스트 (security-auditor-pipeline 참조)
 
-- [ ] middleware의 `matcher`가 `/api/auth/*`를 제외했는가 (콜백 자체가 401 되면 안 됨)
+- [ ] proxy의 `config.matcher`가 `/api/auth/*`를 제외했는가 (콜백 자체가 401 되면 안 됨)
 - [ ] idToken 쿠키가 `httpOnly + secure(prod) + sameSite=Lax`인가
 - [ ] 401 응답이 envelope `{ error: { code, message } }` 형식인가 (CLAUDE.md API Contract)
 - [ ] **SSE 라우트 401은 SSE 형식 응답** (Accept: text/event-stream 시 `data: {"type":"error",...}\n\ndata: {"type":"done"}\n\n` — strands SSE SSOT) — JSON으로 응답하면 EventSource silent fail
-- [ ] 역할 검증이 client-side가 아닌 middleware/API에서 일어나는가
+- [ ] 역할 검증이 client-side가 아닌 proxy/API에서 일어나는가
 - [ ] mock 모드 환경변수(`MOCK_USER_ID`)가 production 빌드에서 사용 불가하도록 가드되었는가
 - [ ] CSRF 토큰 또는 SameSite=Lax/Strict로 CSRF가 방어되는가
 - [ ] 로그아웃 시 쿠키 삭제 + Cognito Hosted UI logout endpoint 호출하는가
 
-### 7-1. middleware 가드 결과 검증 (호출 강제만으로는 부족)
+### 7-1. proxy 가드 결과 검증 (호출 강제만으로는 부족)
 
 `nextjs-auth-patterns` 스킬을 호출했다고 가드가 동작한다는 보장은 없다. 다음을 모두 검증:
 
 - **코드 패턴 검사** (reviewer 카테고리 7 또는 보안 카테고리에서 grep):
-  - `middleware.ts`에 `verifySession(request)` 호출 존재
+  - `src/proxy.ts`에 `export async function proxy(request: NextRequest)` 시그니처 존재 (구 `src/middleware.ts`가 잔존하면 reviewer가 `npx @next/codemod@canary middleware-to-proxy .` 실행 권고로 FAIL)
+  - `src/proxy.ts`에 `verifySession(request)` 호출 존재
   - 보호 경로(`/api/`, 또는 `(protected)` 그룹) 진입 시 `if (!session) return 401/redirect` 분기 존재
   - 단순히 `NextResponse.next()`만 반환하면 가드 무력화
 - **Playwright 테스트** (qa-engineer가 인증 FR마다 자동 생성):
@@ -267,12 +276,13 @@ export function AdminOnly({ roles, children }: { roles: string[]; children: Reac
 
 이 스킬은 **사용자(human) 인증**용. AI 에이전트의 **워크로드 인증**(에이전트가 외부 API를 호출하기 위한 OAuth/API Key)은 `bedrock-agentcore-guide` 의 Identity 섹션 참조. 두 영역이 섞이지 않도록 한다:
 
-- 사용자 → 앱: 이 스킬 (Cognito Hosted UI + middleware)
+- 사용자 → 앱: 이 스킬 (Cognito Hosted UI + proxy)
 - 앱 → AI Agent: Strands SDK (`strands-sdk-typescript-guide`)
 - Agent → 외부 API: AgentCore Identity (`bedrock-agentcore-guide`)
 
 ## 9. 참조 자료
 
 - Cognito Hosted UI: https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-app-integration.html
-- Next.js 16 middleware: https://nextjs.org/docs/app/building-your-application/routing/middleware
+- Next.js 16 Proxy (file convention): https://nextjs.org/docs/app/api-reference/file-conventions/proxy
+- Middleware → Proxy 마이그레이션 가이드: https://nextjs.org/docs/messages/middleware-to-proxy
 - aws-jwt-verify: https://github.com/awslabs/aws-jwt-verify

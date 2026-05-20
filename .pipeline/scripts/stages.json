@@ -147,7 +147,7 @@
       "group": "codegen",
       "phase": "codegen",
       "optional": false,
-      "description": "types/validation/db/services/api/middleware 생성 + api-manifest.json",
+      "description": "types/validation/db/services/api/proxy 생성 + api-manifest.json",
       "prerequisites": [
         ".pipeline/artifacts/v{N}/03-specs/backend-spec.json",
         ".pipeline/artifacts/v{N}/03-specs/api-contract.json",
@@ -158,7 +158,7 @@
         "src/lib/",
         "src/app/api/",
         "src/data/",
-        "src/middleware.ts",
+        "src/proxy.ts",
         ".pipeline/artifacts/v{N}/04-codegen/api-manifest.json",
         ".pipeline/artifacts/v{N}/04-codegen/generation-log-backend.json"
       ],

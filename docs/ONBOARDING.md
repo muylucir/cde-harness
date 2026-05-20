@@ -381,13 +381,18 @@ npm run dev
 
 `state.json.versions[v]`가 **누적**된다. `/iterate`마다 `v2`, `v3`... 이전 버전은 보존. `.pipeline/artifacts/v1/`도 삭제되지 않음.
 
-### 3-파일 단일 소스
+### 핵심 단일 소스 (SSOT)
 
 | 파일 | 역할 | 수정 금지 |
 |---|---|---|
-| `.pipeline/scripts/stages.json` | 스테이지 카탈로그, budget 임계값 | 일반 사용자 X |
-| `.pipeline/scripts/checkpoint.mjs` | state.json의 유일한 writer | 일반 사용자 X |
-| `.pipeline/scripts/ai-smoke.mjs` | AI 구현 런타임 가드 | 일반 사용자 X |
+| `.pipeline/scripts/stages.json` | 스테이지 카탈로그, budget 임계값, `auto_approval_allowed` 플래그 | 일반 사용자 X |
+| `.pipeline/scripts/checkpoint.mjs` | state.json의 유일한 writer (서브커맨드로만 호출) | 일반 사용자 X |
+| `.pipeline/scripts/ai-smoke.mjs` | AI 구현 런타임 가드 (stub/SSE/모델ID) | 일반 사용자 X |
+| `.pipeline/scripts/allowed-models.json` | AI 모델 ID 화이트리스트 (Rule 13) | 일반 사용자 X |
+| `.pipeline/scripts/review-categories.json` | reviewer 11개 카테고리 SSOT | 일반 사용자 X |
+| `.claude/policies/auto-safety-gates.md` | `--auto` 안전 게이트 5종 SSOT | 일반 사용자 X |
+
+**드리프트 차단 스크립트**: `check-stages-sync.mjs`, `check-allowed-models-sync.mjs`, `check-spec-model-id.mjs`, `check-agent-models.mjs`, `cross-check-endpoints.mjs`, `check-envelope.mjs`, `check-store-naming.mjs`, `check-strands-rule13.mjs`, `check-bedrock-no-direct-import.mjs`, `check-reviewer-skills.mjs`가 명령/에이전트/코드 ↔ SSOT drift를 자동 차단합니다.
 
 ---
 
@@ -399,10 +404,19 @@ CLAUDE.md에 규칙 15개가 있지만 현실적으로 Top 5만 기억하면 된
 
 Hook으로 차단되지만 원리: state.json은 `checkpoint.mjs` 서브커맨드로만 수정한다. 직접 편집 시 `total_code_regens`, `identical_error_streak` 등 자동 파생 값이 깨진다.
 
+차단되는 우회 패턴 (PreToolUse hook이 deny):
+- Write/Edit 도구 직접
+- `node -e/-p/--eval`, `python -c`, `bun/deno eval`
+- 셸 리다이렉트 (`>`, `>>`), `tee`, `mv`, `cp`, `rm`
+- `sed -i`, `awk -i inplace`, `perl -pi`, `jq | sponge`
+- 코드 내부 `fs.writeFileSync('.pipeline/state.json', ...)`
+
 대신 사용:
 ```bash
 node .pipeline/scripts/checkpoint.mjs status
 node .pipeline/scripts/checkpoint.mjs budget <stage>
+node .pipeline/scripts/checkpoint.mjs schema       # 스키마 인간 가독
+node .pipeline/scripts/checkpoint.mjs list-stages  # 유효 stage 목록
 ```
 
 ### 7.2. `src/` 수정 후 `/reconcile` 없이 `/iterate`
@@ -473,8 +487,12 @@ git merge upstream/main --no-ff
 - `.claude/agents/*.md` — 에이전트 정의 (하네스 개선 반영)
 - `.claude/commands/*.md` — 커맨드 정의
 - `.claude/skills/` — 스킬 업데이트
-- `.pipeline/scripts/*.mjs` — 오케스트레이션 로직
-- `.pipeline/scripts/stages.json` — 카탈로그
+- `.claude/policies/` — 정책 SSOT (auto-safety-gates 등)
+- `.claude/settings.json` — 권한 + state.json 보호 hook
+- `.pipeline/scripts/*.mjs` — 오케스트레이션 + 드리프트 차단 스크립트
+- `.pipeline/scripts/stages.json` / `stages.mjs` — 카탈로그
+- `.pipeline/scripts/allowed-models.json` — AI 모델 화이트리스트
+- `.pipeline/scripts/review-categories.json` — reviewer 카테고리 SSOT
 - `CLAUDE.md` — 규칙
 - `README.md`, `docs/` — 문서
 

@@ -235,7 +235,7 @@ src/
 │   └── validation/     # zod 스키마 (BE가 생성)
 ├── data/               # 시드 데이터 (BE가 생성)
 ├── hooks/              # API 호출 훅 (FE가 생성)
-└── middleware.ts        # 보안 헤더 (BE가 생성)
+└── proxy.ts             # 보안 헤더 + 보호 라우트 가드 (Next.js 16에서 middleware.ts → proxy.ts로 리네이밍, BE가 생성)
 ```
 
 ```

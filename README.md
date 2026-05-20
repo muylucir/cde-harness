@@ -33,7 +33,7 @@ AWS Solutions Architect가 고객 요구사항으로부터 **Next.js 16 + Clouds
 [6a. QA 테스트] → 빌드 + Playwright E2E → 수정 (PASS까지 최대 3회)
     │
     ▼
-[6b. 코드 리뷰] → 동작하는 코드에 대해 9개 카테고리 품질 검증
+[6b. 코드 리뷰] → 동작하는 코드에 대해 11개 카테고리 품질 검증 (10·11은 조건부)
     │
     ▼
 [7. 보안 점검] → OWASP 기반 보안 감사
@@ -230,13 +230,46 @@ domain-researcher → requirements-analyst → architect
 
 ### 서킷 브레이커
 
-최대 반복 횟수에 도달하면:
+`checkpoint.mjs`가 stage 진입 시점에 자동으로 budget을 검사합니다 (SSOT: `.pipeline/scripts/stages.json`). 임계 도달 시:
+
+| 트리거 | 임계값 | 출처 |
+|---|---|---|
+| `total_code_regens` | ≥ 8 | `stages.json.budgets` |
+| `identical_error_streak` | ≥ 2 | `deriveBudgetCounters` |
+| `flip_flop_max` (PASS↔FAIL 진동) | ≥ 4 | `deriveBudgetCounters` |
+| stage 루프 이터레이션 | `loops.{name}.max_iterations` | `stages.json` |
+
+halt 발생 시:
 1. 파이프라인이 `halted` 상태로 전환
 2. `halt-report.md`에 실패 원인 요약
 3. 사용자에게 세 가지 옵션 제시:
    - **(a)** 수동으로 수정하고 `/pipeline-from {stage}`로 재개
    - **(b)** 요구사항을 조정하고 `/pipeline`로 재시작
    - **(c)** 알려진 이슈를 문서화하고 현재 상태로 수용
+
+### 안전 게이트 (`--auto` 모드 우회 불가)
+
+상세 정의는 [`.claude/policies/auto-safety-gates.md`](.claude/policies/auto-safety-gates.md) (SSOT). `--auto`는 design phase 승인 게이트(domain-researcher / requirements-analyst / architect)만 자동 통과하고 다음 5종은 항상 사용자 동의를 요구합니다:
+
+1. `/awsarch` 비용/배포 승인 — `--auto` 미지원
+2. `cdk destroy` 가드 — git-manager의 4단계 가드 절차
+3. `/iterate` 모든 게이트 — `--auto` 미지원
+4. Circuit Breaker halt — budget 임계 도달 시
+5. Security Auditor critical 발견
+
+코드 강제: `stages.json.{stage}.auto_approval_allowed` 플래그 + `checkpoint.mjs cmdApprove`가 `--mode=auto` 우회를 차단합니다.
+
+### state.json 보호
+
+`.pipeline/state.json`은 `checkpoint.mjs` 서브커맨드로만 수정합니다. `.claude/settings.json`의 PreToolUse hook이 다음 우회 패턴을 모두 차단:
+
+- `Write`/`Edit` 도구로 직접 편집
+- `node -e`/`-p`/`--eval`, `python -c`, `bun/deno eval`
+- 셸 리다이렉트 (`>`, `>>`), `tee`, `mv`, `cp`, `rm`
+- `sed -i`, `awk -i inplace`, `perl -pi`, `jq | sponge`
+- 코드 내부 `fs.writeFileSync('.pipeline/state.json', ...)`
+
+추가로 hook이 차단: `cdk destroy`, `git push --force`, `git reset --hard`, `git branch -D`, `aws (dynamodb|cognito-idp|cloudformation) delete-*`, `aws s3 rb --force`.
 
 ---
 
@@ -275,17 +308,23 @@ cde-harness/
 │   │   ├── pipeline-status.md
 │   │   ├── pipeline.md
 │   │   └── reconcile.md
-│   ├── skills/                     # 참조 스킬 (9개)
-│   │   ├── agent-patterns/
-│   │   ├── ascii-diagram/
-│   │   ├── aws-cdk-patterns/
-│   │   ├── aws-infra-patterns/
-│   │   ├── cloudscape-design/
-│   │   ├── mermaid-diagrams/
-│   │   ├── prompt-engineering/
-│   │   ├── strands-sdk-python-guide/
-│   │   └── strands-sdk-typescript-guide/
-│   └── settings.json               # Claude Code 권한 설정
+│   ├── skills/                     # 참조 스킬 (13개)
+│   │   ├── agent-patterns/             # AI Agent 설계 3계층 택소노미
+│   │   ├── api-contract-zod/           # API envelope + zod 단일 바인딩
+│   │   ├── ascii-diagram/              # 한글/영어 혼합 ASCII 다이어그램
+│   │   ├── aws-cdk-patterns/           # CDK construct 코드 + 듀얼 모드
+│   │   ├── aws-infra-patterns/         # 스토리지 의사결정 + IAM + 비용
+│   │   ├── bedrock-agentcore-guide/    # AgentCore Runtime/Memory/Gateway
+│   │   ├── cloudscape-design/          # Cloudscape 컴포넌트/패턴/토큰
+│   │   ├── mermaid-diagrams/           # Flowchart/Sequence 다이어그램
+│   │   ├── nextjs16-app-router/        # App Router 파일 컨벤션
+│   │   ├── nextjs-auth-patterns/       # Cognito + middleware + 보호 라우트
+│   │   ├── playwright-e2e/             # Cloudscape 셀렉터 + E2E 패턴
+│   │   ├── prompt-engineering/         # XML 구조화 + Structured Output
+│   │   └── strands-sdk-typescript-guide/  # Strands SDK TS 종합 가이드
+│   ├── policies/                   # 정책 SSOT
+│   │   └── auto-safety-gates.md        # --auto 안전 게이트 5종 단일 소스
+│   └── settings.json               # Claude Code 권한 + state.json 보호 hook
 │
 ├── .pipeline/
 │   ├── input/
@@ -294,7 +333,23 @@ cde-harness/
 │   │   ├── source-analysis.md        # 소스별 분석 보고서 (/brief 생성)
 │   │   └── manifest.json             # 입력 파일 체크섬 (변경 감지용)
 │   ├── scripts/
-│   │   └── checkpoint.mjs            # CHECKPOINT 검증 스크립트
+│   │   ├── checkpoint.mjs            # state.json 단일 writer (서브커맨드만 허용)
+│   │   ├── stages.json               # 스테이지 카탈로그 SSOT (이름/순서/budget)
+│   │   ├── stages.mjs                # stages.json import 진입점 (코드용 SSOT)
+│   │   ├── allowed-models.json       # AI 모델 ID 화이트리스트 (Rule 13 SSOT)
+│   │   ├── review-categories.json    # reviewer 11개 카테고리 SSOT
+│   │   ├── ai-smoke.mjs              # AI 구현 런타임 가드 (stub/SSE/모델ID)
+│   │   ├── cross-check-endpoints.mjs # api-contract ↔ manifest ↔ FE훅 3자 검증
+│   │   ├── check-allowed-models-sync.mjs # CLAUDE.md ↔ allowed-models.json drift 차단
+│   │   ├── check-stages-sync.mjs     # 명령/에이전트 ↔ stages.json drift 차단
+│   │   ├── check-spec-model-id.mjs   # ai-internals.json 모델ID 검증
+│   │   ├── check-agent-models.mjs    # 에이전트 frontmatter 모델 검증
+│   │   ├── check-bedrock-no-direct-import.mjs # Rule 9 강제
+│   │   ├── check-envelope.mjs        # API envelope 형식 강제
+│   │   ├── check-store-naming.mjs    # Repository 패턴 네이밍 강제
+│   │   ├── check-strands-rule13.mjs  # Strands SDK 사용 강제
+│   │   ├── check-reviewer-skills.mjs # reviewer 스킬 호출 강제
+│   │   └── has-ai.mjs                # AI 기능 포함 여부 판정
 │   ├── artifacts/                  # 파이프라인 산출물 (버전별)
 │   │   └── v{N}/
 │   │       ├── 00-domain/            # 도메인 리서치 결과
@@ -385,7 +440,10 @@ cde-harness/
 
 ### 6B. 코드 리뷰 (Reviewer)
 - QA 통과한 코드에 대해 **정적 품질 리뷰만** 수행 (테스트 생성/실행은 QA가 담당)
-- **9개 카테고리**: Cloudscape 준수, Next.js 16 규약, TypeScript 품질, 접근성, 백엔드 품질, 요구사항 커버리지, 코드 조직, 주석 언어 검증, 시드 데이터 일관성
+- **11개 카테고리** (SSOT: `.pipeline/scripts/review-categories.json`):
+  - 항상 활성 9개: Cloudscape 준수, Next.js 16 규약, TypeScript 품질, 접근성, 요구사항 커버리지, 백엔드 품질, 코드 구조, 주석 언어, 시드 데이터 일관성
+  - 조건부 1개 — 항상 활성: AI 모델 ID 컴플라이언스 (Rule 13 화이트리스트 3개 강제)
+  - 조건부 1개 — `/awsarch` 후만 활성: AWS 통합 품질 (DynamoDB/S3/Cognito 패턴 검증)
 - FAIL 시 수정 → **6A 테스트부터 재실행** (리뷰 수정이 기능을 깨뜨리지 않았는지 확인)
 - **산출물**: `review-report.md`, `test-report.md`, `review-result.json`
 
@@ -621,6 +679,18 @@ cd infra && npx cdk destroy   # 인프라 제거
 | Strands Agents SDK | TypeScript | AI Agent 구현 (`@strands-agents/sdk`) |
 | Playwright | latest | E2E 테스트 |
 
+### AI 런타임 모델 정책 (생성된 프로토타입용)
+
+생성된 프로토타입의 AI 기능은 **`.pipeline/scripts/allowed-models.json` SSOT** 화이트리스트 3개만 사용합니다 (CLAUDE.md Rule 13). `process.env.BEDROCK_MODEL_ID` fallback 패턴은 **금지** — 도구/에이전트 단위로 코드에 모델 ID를 직접 박습니다.
+
+| 모델 ID | 용도 |
+|---|---|
+| `global.anthropic.claude-haiku-4-5-20251001-v1:0` | 분류/라우팅/요약/단순 도구 |
+| `global.anthropic.claude-sonnet-4-6` | 일반 챗/생성/도구 호출 기본값 |
+| `global.anthropic.claude-opus-4-7` | 복잡 추론/장기 컨텍스트/멀티스텝 에이전트 |
+
+`ai-smoke.mjs` Check 7/8 + reviewer 카테고리 10이 위반을 P0로 차단합니다.
+
 ### 에이전트 모델 배치
 
 19개 에이전트 전원 **Opus**를 사용하며, **effort** 등급(max/high/medium)으로 품질-속도 트레이드오프를 조절합니다.
@@ -638,21 +708,25 @@ cd infra && npx cdk destroy   # 인프라 제거
 
 ---
 
-## 참조 스킬 (9개)
+## 참조 스킬 (13개)
 
 에이전트가 필요한 시점에 자동으로 참조하는 도메인 지식 라이브러리입니다. Progressive disclosure 구조(SKILL.md → references/)로 컨텍스트를 효율적으로 사용합니다.
 
 | 스킬 | 참조 에이전트 | 제공 내용 |
 |------|-------------|----------|
 | `cloudscape-design` | architect, spec-writer-frontend, code-gen-frontend, reviewer | 101개 컴포넌트 카탈로그, 73개 UI 패턴, 코드 예제 5개, 디자인 토큰 |
-| `agent-patterns` | spec-writer-ai, code-gen-ai | AI 에이전트 설계 패턴 3계층 택소노미, 18개 패턴 레퍼런스 |
+| `nextjs16-app-router` | code-gen-backend, code-gen-frontend | Server Components 기본, async params, 라우트 핸들러, generateMetadata |
+| `nextjs-auth-patterns` | code-gen-backend, aws-architect | Cognito Hosted UI, JWT 검증, middleware 보호 라우트, 권한 분기 |
+| `api-contract-zod` | spec-writer-backend, code-gen-backend, code-gen-frontend | envelope 형식, HTTP 코드, zod ↔ TypeScript 단일 바인딩(z.infer) |
+| `agent-patterns` | spec-writer-ai, code-gen-ai | AI 에이전트 3계층 택소노미, 18개 패턴 레퍼런스, 자동화 수준 |
 | `prompt-engineering` | spec-writer-ai, code-gen-ai | XML 구조화, Structured Output, Tool Use, Extended Thinking |
-| `strands-sdk-typescript-guide` | spec-writer-ai, code-gen-ai | Strands SDK TypeScript 구현 가이드, 도구/MCP/멀티에이전트 |
-| `strands-sdk-python-guide` | (범용 참조) | Strands SDK Python 구현 가이드, 도구/MCP/모델 프로바이더/배포 |
+| `strands-sdk-typescript-guide` | spec-writer-ai, code-gen-ai | Strands SDK TypeScript 구현 가이드, 도구/MCP/Graph/Swarm/A2A |
+| `bedrock-agentcore-guide` | aws-architect, code-gen-ai | AgentCore Runtime/Memory/Gateway/Identity/Observability/Policy |
 | `aws-infra-patterns` | aws-architect | 스토리지 선택 의사결정, IAM 정책 템플릿, 비용 추정 공식 |
 | `aws-cdk-patterns` | aws-deployer | CDK construct 코드, 데이터 레이어 듀얼 모드, 시드 마이그레이션 |
-| `mermaid-diagrams` | spec-writer-backend | Mermaid Flowchart/Sequence 문법, 패턴별 예제 |
-| `ascii-diagram` | spec-writer-frontend | 한글/영어 혼합 ASCII 다이어그램, 2칸/1칸 폭 계산 |
+| `playwright-e2e` | qa-engineer | Cloudscape 셀렉터, AppLayout/Table 상호작용, SSE 스트리밍 검증 |
+| `mermaid-diagrams` | spec-writer-backend, architect, handover-packager | Flowchart/Sequence 다이어그램 (렌더링용) |
+| `ascii-diagram` | spec-writer-frontend, architect, handover-packager | 한글/영어 혼합 ASCII 다이어그램 (terminal/plain MD용) |
 
 ### Cloudscape 라이브 문서 접근
 
@@ -711,7 +785,8 @@ https://cloudscape.design/patterns/{path}/index.html.md
 npm run dev           # next dev --turbopack
 npm run build         # next build
 npm run start         # next start
-npm run lint          # next lint
+npm run lint          # eslint .
+npm run lint:fix      # eslint . --fix
 npm run format        # prettier --write .
 npm run format:check  # prettier --check .
 npm run type-check    # tsc --noEmit

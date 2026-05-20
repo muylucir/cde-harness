@@ -16,7 +16,7 @@
     <div style="margin-top:24px; display:flex; gap:24px; flex-wrap:wrap;">
       <div style="display:flex; align-items:center; gap:8px;"><span style="width:8px; height:8px; background:#1ec9a3; border-radius:50%;"></span><span style="font-size:13px; color:#c5cad1;">19 Sub-Agents</span></div>
       <div style="display:flex; align-items:center; gap:8px;"><span style="width:8px; height:8px; background:#5294ff; border-radius:50%;"></span><span style="font-size:13px; color:#c5cad1;">8 Slash Commands</span></div>
-      <div style="display:flex; align-items:center; gap:8px;"><span style="width:8px; height:8px; background:#ff9900; border-radius:50%;"></span><span style="font-size:13px; color:#c5cad1;">9 Skills</span></div>
+      <div style="display:flex; align-items:center; gap:8px;"><span style="width:8px; height:8px; background:#ff9900; border-radius:50%;"></span><span style="font-size:13px; color:#c5cad1;">13 Skills</span></div>
       <div style="display:flex; align-items:center; gap:8px;"><span style="width:8px; height:8px; background:#d63384; border-radius:50%;"></span><span style="font-size:13px; color:#c5cad1;">Strands SDK + Bedrock</span></div>
     </div>
   </div>
@@ -173,7 +173,7 @@
     </div>
     <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #eab308; padding:16px; border-radius:6px;">
       <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">reviewer</div>
-      <div style="font-size:13px; color:#5f6b7a;">9개 카테고리 정적 품질 리뷰 (구조 · 타입 · 보안 · 접근성 등)</div>
+      <div style="font-size:13px; color:#5f6b7a;">11개 카테고리 정적 품질 리뷰 (Cloudscape · 타입 · 접근성 · 모델ID · AWS통합 등)</div>
     </div>
     <div style="background:#fff; border:1px solid #e9ebed; border-left:4px solid #f97316; padding:16px; border-radius:6px;">
       <div style="font-weight:600; color:#0f1b2d; margin-bottom:4px;">security-auditor-pipeline</div>
@@ -762,7 +762,7 @@
 
 <!-- SKILLS -->
 <section style="margin-bottom:56px;">
-  <h2 style="font-size:28px; margin:0 0 8px 0; color:#0f1b2d; border-left:4px solid #ff9900; padding-left:12px;">스킬 (9개)</h2>
+  <h2 style="font-size:28px; margin:0 0 8px 0; color:#0f1b2d; border-left:4px solid #ff9900; padding-left:12px;">스킬 (13개)</h2>
   <p style="font-size:14px; color:#5f6b7a; margin:0 0 24px 0;">에이전트들이 작업 시 참조하는 도메인 지식 라이브러리. Skill 도구로 호출되며, 표준 패턴·코드 예제·의사결정 프레임워크를 제공한다.</p>
 
   <table style="width:100%; border-collapse:collapse; background:#fff; border:1px solid #e9ebed; border-radius:8px; overflow:hidden;">
@@ -815,9 +815,29 @@
         <td style="padding:12px 16px; font-size:12px; color:#5f6b7a; border-bottom:1px solid #f1f5f9;">architect, handover-packager</td>
       </tr>
       <tr>
-        <td style="padding:12px 16px; font-size:13px;"><code style="background:#d1fae5; color:#065f46; padding:2px 6px; border-radius:3px; font-family:'SF Mono',monospace;">ascii-diagram</code></td>
-        <td style="padding:12px 16px; font-size:13px; color:#414750;">한글/영어 혼합 ASCII 다이어그램 (폭 정렬 처리)</td>
-        <td style="padding:12px 16px; font-size:12px; color:#5f6b7a;">all (채팅 응답 시)</td>
+        <td style="padding:12px 16px; font-size:13px; border-bottom:1px solid #f1f5f9;"><code style="background:#d1fae5; color:#065f46; padding:2px 6px; border-radius:3px; font-family:'SF Mono',monospace;">ascii-diagram</code></td>
+        <td style="padding:12px 16px; font-size:13px; color:#414750; border-bottom:1px solid #f1f5f9;">한글/영어 혼합 ASCII 다이어그램 (폭 정렬 처리)</td>
+        <td style="padding:12px 16px; font-size:12px; color:#5f6b7a; border-bottom:1px solid #f1f5f9;">spec-writer-frontend, architect, handover-packager</td>
+      </tr>
+      <tr style="background:#fafbfc;">
+        <td style="padding:12px 16px; font-size:13px; border-bottom:1px solid #f1f5f9;"><code style="background:#fef3c7; color:#92400e; padding:2px 6px; border-radius:3px; font-family:'SF Mono',monospace;">nextjs16-app-router</code></td>
+        <td style="padding:12px 16px; font-size:13px; color:#414750; border-bottom:1px solid #f1f5f9;">App Router · Server Components · async params · Route Handler · generateMetadata</td>
+        <td style="padding:12px 16px; font-size:12px; color:#5f6b7a; border-bottom:1px solid #f1f5f9;">code-generator-backend, code-generator-frontend</td>
+      </tr>
+      <tr>
+        <td style="padding:12px 16px; font-size:13px; border-bottom:1px solid #f1f5f9;"><code style="background:#fef3c7; color:#92400e; padding:2px 6px; border-radius:3px; font-family:'SF Mono',monospace;">nextjs-auth-patterns</code></td>
+        <td style="padding:12px 16px; font-size:13px; color:#414750; border-bottom:1px solid #f1f5f9;">Cognito Hosted UI · JWT 검증 · middleware 보호 라우트 · 권한 분기</td>
+        <td style="padding:12px 16px; font-size:12px; color:#5f6b7a; border-bottom:1px solid #f1f5f9;">code-generator-backend, aws-architect</td>
+      </tr>
+      <tr style="background:#fafbfc;">
+        <td style="padding:12px 16px; font-size:13px; border-bottom:1px solid #f1f5f9;"><code style="background:#dbeafe; color:#1e40af; padding:2px 6px; border-radius:3px; font-family:'SF Mono',monospace;">api-contract-zod</code></td>
+        <td style="padding:12px 16px; font-size:13px; color:#414750; border-bottom:1px solid #f1f5f9;">envelope 형식 · HTTP 코드 · zod ↔ TypeScript 단일 바인딩 (z.infer)</td>
+        <td style="padding:12px 16px; font-size:12px; color:#5f6b7a; border-bottom:1px solid #f1f5f9;">spec-writer-backend, code-generator-backend, code-generator-frontend</td>
+      </tr>
+      <tr>
+        <td style="padding:12px 16px; font-size:13px;"><code style="background:#fbcfe8; color:#9d174d; padding:2px 6px; border-radius:3px; font-family:'SF Mono',monospace;">playwright-e2e</code></td>
+        <td style="padding:12px 16px; font-size:13px; color:#414750;">Cloudscape 셀렉터 · AppLayout/Table 상호작용 · SSE 스트리밍 검증</td>
+        <td style="padding:12px 16px; font-size:12px; color:#5f6b7a;">qa-engineer</td>
       </tr>
     </tbody>
   </table>
@@ -857,6 +877,21 @@
       <h3 style="margin:0 0 8px 0; font-size:18px;">언어 정책</h3>
       <p style="margin:0; font-size:14px; color:#c5cad1;">.md = 한국어 · .json = 영어 · 코드 식별자 = 영어 · 주석 설명 = 한국어 · 사용자 보고 = 한국어.</p>
     </div>
+    <div style="background:#0f1b2d; color:#fff; padding:24px; border-radius:8px;">
+      <div style="color:#ff9900; font-size:12px; font-weight:600; letter-spacing:1px; margin-bottom:8px;">PRINCIPLE 07</div>
+      <h3 style="margin:0 0 8px 0; font-size:18px;">SSOT · state.json 보호</h3>
+      <p style="margin:0; font-size:14px; color:#c5cad1;"><code style="background:rgba(255,153,0,0.2); padding:1px 4px; border-radius:3px; color:#ffb84d;">checkpoint.mjs</code> 서브커맨드가 state.json 유일 writer. PreToolUse hook이 Write/Edit/redirect/sed/python/node 우회 12종 차단.</p>
+    </div>
+    <div style="background:#0f1b2d; color:#fff; padding:24px; border-radius:8px;">
+      <div style="color:#ff9900; font-size:12px; font-weight:600; letter-spacing:1px; margin-bottom:8px;">PRINCIPLE 08</div>
+      <h3 style="margin:0 0 8px 0; font-size:18px;">--auto 안전 게이트 5종</h3>
+      <p style="margin:0; font-size:14px; color:#c5cad1;">/awsarch 비용 · cdk destroy · /iterate · Circuit Breaker · 보안 critical은 <code style="background:rgba(255,153,0,0.2); padding:1px 4px; border-radius:3px; color:#ffb84d;">--auto</code>로 우회 불가. SSOT: <code style="background:rgba(255,153,0,0.2); padding:1px 4px; border-radius:3px; color:#ffb84d;">.claude/policies/auto-safety-gates.md</code>.</p>
+    </div>
+    <div style="background:#0f1b2d; color:#fff; padding:24px; border-radius:8px;">
+      <div style="color:#ff9900; font-size:12px; font-weight:600; letter-spacing:1px; margin-bottom:8px;">PRINCIPLE 09</div>
+      <h3 style="margin:0 0 8px 0; font-size:18px;">AI 모델 ID 화이트리스트 (Rule 13)</h3>
+      <p style="margin:0; font-size:14px; color:#c5cad1;">haiku-4-5 · sonnet-4-6 · opus-4-7 3개만 허용. 도구/에이전트 단위로 코드에 직접 박는다. <code style="background:rgba(255,153,0,0.2); padding:1px 4px; border-radius:3px; color:#ffb84d;">process.env.BEDROCK_MODEL_ID</code> fallback 금지.</p>
+    </div>
   </div>
 </section>
 
@@ -882,9 +917,14 @@
 │   ├── 06-review/                    <span style="color:#94a3b8;"># 품질 리뷰 리포트</span>
 │   └── 07-security/                  <span style="color:#94a3b8;"># OWASP 감사 리포트</span>
 ├── <span style="color:#5294ff;">scripts/</span>
-│   ├── checkpoint.mjs                <span style="color:#94a3b8;"># state.json 단일 소스</span>
-│   └── stages.json                   <span style="color:#94a3b8;"># 유효 스테이지 카탈로그</span>
-└── state.json                        <span style="color:#94a3b8;"># 파이프라인 진행 상태</span>
+│   ├── checkpoint.mjs                <span style="color:#94a3b8;"># state.json 유일 writer (서브커맨드만)</span>
+│   ├── stages.json / stages.mjs      <span style="color:#94a3b8;"># 스테이지 카탈로그 SSOT + budget 임계</span>
+│   ├── allowed-models.json           <span style="color:#94a3b8;"># AI 모델 ID 화이트리스트 (Rule 13)</span>
+│   ├── review-categories.json        <span style="color:#94a3b8;"># reviewer 11개 카테고리 SSOT</span>
+│   ├── ai-smoke.mjs                  <span style="color:#94a3b8;"># AI 구현 런타임 가드 (10 checks)</span>
+│   ├── cross-check-endpoints.mjs     <span style="color:#94a3b8;"># contract ↔ manifest ↔ FE훅 3자</span>
+│   └── check-*.mjs                   <span style="color:#94a3b8;"># 드리프트 차단 (10여 종)</span>
+└── state.json                        <span style="color:#94a3b8;"># 파이프라인 진행 상태 (직접 편집 금지)</span>
 
 <span style="color:#ff9900;">src/</span>                                  <span style="color:#94a3b8;"># 코드 제너레이터가 생성</span>
 ├── app/                              <span style="color:#94a3b8;"># Next.js 16 App Router</span>
@@ -893,7 +933,15 @@
 └── ...
 
 <span style="color:#ff9900;">infra/</span>                                <span style="color:#94a3b8;"># /awsarch 시 aws-deployer가 생성</span>
-└── lib/                              <span style="color:#94a3b8;"># CDK TypeScript</span></pre>
+└── lib/                              <span style="color:#94a3b8;"># CDK TypeScript</span>
+
+<span style="color:#ff9900;">.claude/</span>
+├── agents/      (19)                 <span style="color:#94a3b8;"># 서브에이전트 + _preamble.md 공통 규약</span>
+├── commands/    (8)                  <span style="color:#94a3b8;"># /pipeline /iterate /reconcile /awsarch ...</span>
+├── skills/      (13)                 <span style="color:#94a3b8;"># 도메인 지식 라이브러리</span>
+├── policies/                         <span style="color:#94a3b8;"># 정책 SSOT</span>
+│   └── auto-safety-gates.md          <span style="color:#94a3b8;"># --auto 안전 게이트 5종</span>
+└── settings.json                     <span style="color:#94a3b8;"># 권한 + state.json 보호 hook</span></pre>
   </div>
 </section>
 

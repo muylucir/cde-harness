@@ -56,6 +56,42 @@ allowedTools:
 5. **feature** — 기능별 컴포넌트 (AI 채팅 UI 포함 시 Cloudscape Chat 컴포넌트 사용)
 6. **page** — App Router page 컴포넌트
 
+## RSC-by-default 룰 (강제)
+
+CLAUDE.md Rule 6/7과 정합. `code-generator-frontend`가 페이지를 RSC로 유지하도록 스펙에서 명시적으로 강제한다.
+
+- **page.tsx 기본은 Server Component** (`"use client"` 디렉티브 없음). 데이터 로딩은 서버에서 RSC fetch 또는 서버 헬퍼로 수행.
+- **클라이언트 인터랙션은 island 컴포넌트로 분리한다.** 즉 `useState`/`useEffect`/이벤트 핸들러/브라우저 API/SSE/`useCollection`이 필요한 부분은 별도의 `*Client.tsx`(또는 feature 컴포넌트)로 빼고, page에서 import만 한다. island 컴포넌트만 `"use client"`를 단다.
+- **금지**: page.tsx 자체에 `"use client"` 추가. 모든 page를 client로 마킹하는 패턴(예: 6개 페이지 중 6개 모두 `"use client"`)은 reviewer 카테고리 2에서 major로 분류됨.
+- **예외**: 페이지 전체가 본질적으로 인터랙티브하고 server data가 없는 경우(예: 순수 클라이언트 폼 단일 페이지)에 한해 허용. 이 경우 frontend-spec.json의 page 스펙에 **`client_directive_reason`** 필드로 사유를 명시한다 (없으면 reviewer가 반려).
+
+### 스펙 표현 — `directive` 필드 (필수, page/feature 한정)
+
+`type: "page"` 또는 `type: "feature"` 컴포넌트 스펙에 `directive` 필드를 명시한다:
+- `"directive": "server"` — Server Component (page의 기본값). `"use client"` 미부착.
+- `"directive": "client"` — Client island. `"use client"` 부착. 사유 필드(`client_directive_reason`) 권장.
+- `"directive": "client-with-reason"` — page를 client로 두는 예외 케이스. `client_directive_reason`이 **반드시** 함께 명시되어야 한다.
+
+page.tsx 스펙은 기본값 `"server"`를 따른다. client 인터랙션이 있는 페이지는 island 컴포넌트(예: `VehicleTableClient.tsx`)를 추가로 분할 스펙으로 작성하고, page 스펙의 `dependencies[]`에 island를 포함시킨다.
+
+예시:
+```json
+{
+  "component": "VehiclesPage",
+  "file_path": "src/app/vehicles/page.tsx",
+  "type": "page",
+  "directive": "server",
+  "dependencies": ["VehicleTableClient"]
+},
+{
+  "component": "VehicleTableClient",
+  "file_path": "src/components/vehicles/VehicleTableClient.tsx",
+  "type": "feature",
+  "directive": "client",
+  "use_collection": true
+}
+```
+
 ## 도메인 컨텍스트 활용 (domain-context.json이 있으면)
 
 | 담당 범위 | 참조 필드 | 활용 방식 |
@@ -114,7 +150,9 @@ allowedTools:
 
 ## 프론트엔드 스펙 JSON 포맷 (frontend-spec.json)
 
-`generator: "frontend"`, `specs[]` (component, file_path, type, requirements, cloudscape_components[], props_interface, use_collection, state, dependencies, imports), `hooks[]` (name, file_path, **endpoint_id**, api_endpoint, return_type, request_type), `generation_order`.
+`generator: "frontend"`, `specs[]` (component, file_path, type, **directive**, requirements, cloudscape_components[], props_interface, use_collection, state, dependencies, imports, [client_directive_reason]), `hooks[]` (name, file_path, **endpoint_id**, api_endpoint, return_type, request_type), `generation_order`.
+
+**`specs[].directive`** (page/feature 한정 필수): `"server"` | `"client"` | `"client-with-reason"`. page는 기본 `"server"`. `"client-with-reason"` 사용 시 `client_directive_reason` 함께 명시. 자세한 룰은 위 "RSC-by-default 룰" 참조.
 
 **`hooks[].endpoint_id`**: `api-contract.json`의 `endpoints[].id` 값과 일치해야 한다. code-generator-frontend는 이 id로 매니페스트의 실제 responseType/requestType을 조회하여 훅 제네릭에 바인딩한다.
 
@@ -174,6 +212,8 @@ allowedTools:
 - `specs[].props_interface`는 **객체** (`{ name, fields[] }`). architect.json은 string으로 받지만 spec-writer-frontend가 객체로 확장한다.
 - `specs[].imports[]`는 실제 코드에 들어갈 import 문자열 (개별 경로 강제).
 - `specs[].use_collection`은 Table/Cards 컴포넌트만 `true`, 나머지는 `false`.
+- `specs[].directive`는 `type: "page"` 또는 `type: "feature"`에 필수. page 기본값은 `"server"`. `"use client"` 부착 여부의 단일 소스이며, code-generator-frontend는 이 값으로만 디렉티브를 결정한다 (스펙 외 자의적 부착 금지).
+- `specs[].client_directive_reason`은 `directive === "client-with-reason"`일 때만 의미가 있고, 이 경우 반드시 명시해야 한다. reviewer 카테고리 2가 검증.
 - `hooks[].endpoint_id`는 `api-contract.json.endpoints[].id`와 정확히 일치해야 한다 (drift 시 code-generator-frontend가 에러).
 - `generation_order[]`는 **`phase` 오름차순으로 정렬**. shared → hooks → feature → page 의존 순서.
 
@@ -206,7 +246,7 @@ AI 기능이 없으면 `ai_specs: 0`, `has_ai: false`로 설정하고, generatio
 - 보호 라우트 그룹 `(protected)` 레이아웃 패턴 spec
 - `AdminOnly`, `AuthenticatedOnly` 같은 역할 기반 UI 분기 컴포넌트 spec
 - `/login`, `/forbidden` 페이지 spec
-- middleware가 세팅한 `x-user-id`/`x-user-roles` 헤더를 RootLayout에서 React Context로 전달하는 hook spec
+- proxy(구 middleware)가 세팅한 `x-user-id`/`x-user-roles` 헤더를 RootLayout에서 React Context로 전달하는 hook spec — Next.js 16에서 `middleware.ts`가 `proxy.ts`로 리네이밍됨
 - spec-writer-backend의 nextjs-auth-patterns 호출과 대칭 (FE/BE 동일 패턴 강제)
 
 ## 스펙에 적용할 Cloudscape 규칙

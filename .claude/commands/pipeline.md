@@ -353,7 +353,7 @@ node .pipeline/scripts/checkpoint.mjs start code-generator-backend
 ```
 - Launch `code-generator-backend`
 - Input: 위 + `api-contract.json` (계약 단일 소스)
-- Output: `src/types/`, `src/lib/`, `src/app/api/`, `src/data/`, `src/middleware.ts` + **`04-codegen/api-manifest.json`** (실제 구현 매니페스트, FE가 훅 생성 시 참조)
+- Output: `src/types/`, `src/lib/`, `src/app/api/`, `src/data/`, `src/proxy.ts` (Next.js 16에서 `middleware.ts`가 `proxy.ts`로 리네이밍) + **`04-codegen/api-manifest.json`** (실제 구현 매니페스트, FE가 훅 생성 시 참조)
 
 ```bash
 node .pipeline/scripts/checkpoint.mjs check code-generator-backend \
@@ -541,7 +541,14 @@ node .pipeline/scripts/checkpoint.mjs check security-auditor-pipeline \
 ## Completion
 
 When all stages pass:
-1. Update `.pipeline/state.json` with final status `"completed"`
+1. Mark current version completed — `checkpoint.mjs`로 위임 (LLM은 state.json 직접 쓰지 않음, _preamble §3):
+   ```bash
+   node .pipeline/scripts/checkpoint.mjs complete \
+     --stage=security-auditor-pipeline \
+     --notes="all stages green"
+   ```
+   - `versions[N].status="completed"` + `state.pipeline_status="completed"` + `completed_at` 기록
+   - 멱등(idempotent): 이미 completed면 no-op. running stage가 있거나 마지막 finalized가 checkpoint-failed면 거부 → 그 경우 `halt`를 사용
 2. Launch `git-manager` agent with action: `post-pipeline`
    - 생성된 코드 + 아티팩트 자동 커밋
 3. Present summary to user:
@@ -550,7 +557,7 @@ When all stages pass:
    - Build/test status
    - Review score
    - Security audit result
-3. Suggest:
+4. Suggest:
    - `npm run dev`로 프로토타입 확인
    - 고객 피드백 후 `/iterate`로 반복 개선
    - 최종 핸드오버 시 `/handover` 실행

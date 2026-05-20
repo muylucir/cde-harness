@@ -70,8 +70,15 @@
       "id": 9,
       "key": "seed_data_consistency",
       "title": "시드 데이터 일관성",
-      "summary": "FK 참조 유효, 데이터 볼륨, enum 정합",
-      "always_active": true
+      "summary": "FK 참조 유효, 데이터 볼륨 vs brief 명시 스케일, enum 정합. brief에 명시된 노드/엣지 볼륨이 있으면 실제 시드 카운트와 ±20% 이내로 일치해야 한다 (예: brief가 10k 라이더를 명시했는데 시드가 100건이면 FAIL).",
+      "always_active": true,
+      "ssot_input": ".pipeline/input/customer-brief.md",
+      "checks": [
+        "brief의 명시 볼륨(예: '~10,000 riders', 'Member 500명') 추출",
+        "실제 시드 파일 또는 시드 로더의 produced 카운트 측정",
+        "차이 ±20% 초과 시 FAIL — '시드 스케일 사기' (brief 100k vs 실제 45 같은 케이스 차단)",
+        "brief에 볼륨 명시가 없으면 이 체크는 skip하고 FK/enum 정합만 검증"
+      ]
     },
     {
       "id": 10,

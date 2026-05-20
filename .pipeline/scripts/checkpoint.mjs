@@ -19,6 +19,7 @@
  *   node .pipeline/scripts/checkpoint.mjs new-version --trigger=<...> # 새 버전 생성 (current_version + 1)
  *   node .pipeline/scripts/checkpoint.mjs record-feedback-loop ...    # feedback_loops[]에 1건 push
  *   node .pipeline/scripts/checkpoint.mjs halt <stage> --reason="..." # 현재 버전을 halted로 마킹 (LLM이 직접 state.json 쓰지 않음)
+ *   node .pipeline/scripts/checkpoint.mjs complete [--stage=<name>] [--notes="..."]  # 현재 버전을 completed로 마킹 (정상 종료, idempotent)
  *
  * check 형식:
  *   file:<path>                    파일 존재 확인
@@ -980,6 +981,8 @@ function cmdSchema(args) {
       halt_stage: '(optional) string — stage name where halt occurred (set by `halt`)',
       halt_reason: '(optional) string — reason text from `halt --reason=...`',
       halt_report: '(optional) string — path to halt-report.md if provided to `halt --report=...`',
+      final_stage: '(optional) string — terminal stage name (set by `complete`; usually security-auditor-pipeline)',
+      completion_notes: '(optional) string — free-text note from `complete --notes=...`',
     },
     StageEntry: {
       stage: 'stage name (must exist in stages.json or be a registered helper)',
@@ -1102,6 +1105,83 @@ function cmdHalt(stageName, args) {
   console.log(`  Reason: ${reason}`);
   if (opts.report) console.log(`  Report: ${opts.report}`);
   console.log(`  Recovery options: 1) /pipeline-from <stage>  2) /reconcile  3) accept current state`);
+}
+
+/**
+ * 현재 버전을 정상 종료 상태로 마킹한다.
+ * 파이프라인 오케스트레이터가 모든 스테이지(보안 감사 포함)를 성공적으로 끝낸 직후 호출.
+ *
+ * 멱등성:
+ *   - 이미 completed면 no-op 후 exit 0.
+ *   - 현재 stage 엔트리가 running이거나 마지막 finalized 엔트리가 checkpoint-failed이면 거부 (exit 1).
+ *
+ * 옵션:
+ *   --stage=<name>   기록용 종료 스테이지 (생략 시 ver.current_stage 사용; 일반적으로 security-auditor-pipeline)
+ *   --notes="..."    자유 텍스트 메모
+ *
+ * 사용 예:
+ *   node .pipeline/scripts/checkpoint.mjs complete
+ *   node .pipeline/scripts/checkpoint.mjs complete --stage=security-auditor-pipeline --notes="all 12 stages green"
+ */
+function cmdComplete(args) {
+  const opts = parseFlags(args);
+
+  acquireLock('complete');
+
+  const state = readState();
+  const ver = state.versions?.[String(state.current_version)];
+  if (!ver) {
+    console.error(`✗ No active version in state.json — nothing to complete.`);
+    process.exit(1);
+  }
+
+  // 멱등: 이미 completed면 그대로 두고 0으로 종료. 호출자가 파이프라인 마지막에 안전하게 호출 가능.
+  if (ver.status === 'completed' && state.pipeline_status === 'completed') {
+    console.log(`✓ v${state.current_version} already completed — no-op.`);
+    return;
+  }
+
+  // 진행 중인 stage가 있으면 종료 거부. 깨끗한 종료만 허용.
+  const running = ver.stages.find((s) => s.status === 'running');
+  if (running) {
+    console.error(`✗ Cannot complete — stage "${running.stage}" is still running.`);
+    console.error(`  Run 'check' to finalize it first, or use 'halt' if it failed.`);
+    process.exit(1);
+  }
+
+  // 마지막으로 finalized 된 엔트리가 checkpoint-failed면 거부.
+  const lastFinalized = [...ver.stages]
+    .reverse()
+    .find((s) => s.status === 'completed' || s.status === 'checkpoint-failed');
+  if (lastFinalized && lastFinalized.status === 'checkpoint-failed') {
+    console.error(
+      `✗ Cannot complete — last finalized stage "${lastFinalized.stage}" is checkpoint-failed.`,
+    );
+    console.error(`  Use 'halt --reason=...' or fix the failure and re-run check.`);
+    process.exit(1);
+  }
+
+  // halted 상태에서 complete 호출은 명시적 의사가 필요하므로 거부.
+  if (ver.status === 'halted') {
+    console.error(`✗ Cannot complete — v${state.current_version} is halted.`);
+    console.error(`  Use /pipeline-from <stage> to resume on a new version.`);
+    process.exit(1);
+  }
+
+  const now = new Date().toISOString();
+  const finalStage = opts.stage || ver.current_stage || (lastFinalized && lastFinalized.stage) || null;
+
+  ver.status = 'completed';
+  ver.completed_at = now;
+  if (opts.notes) ver.completion_notes = String(opts.notes);
+  if (finalStage) ver.final_stage = finalStage;
+  state.pipeline_status = 'completed';
+
+  writeState(state);
+
+  console.log(`✓ v${state.current_version} marked completed at ${now}`);
+  if (finalStage) console.log(`  Final stage: ${finalStage}`);
+  if (opts.notes) console.log(`  Notes: ${opts.notes}`);
 }
 
 function cmdRecordFeedbackLoop(args) {
@@ -1295,6 +1375,11 @@ switch (action) {
     cmdHalt(stageName, checkArgs);
     break;
 
+  case 'complete':
+    // stageName 자리는 이 cmd에서 사용하지 않으므로 args 전체를 다시 슬라이스해서 전달한다.
+    cmdComplete(process.argv.slice(3));
+    break;
+
   default:
     console.error('Usage: checkpoint.mjs <command> [args...]');
     console.error('');
@@ -1311,6 +1396,7 @@ switch (action) {
     console.error('  record-feedback-loop --from --to --iter --issues');
     console.error('  schema [--json]            Print state.json schema (SSOT)');
     console.error('  halt <stage> --reason="..." [--report=<path>]   Mark current version halted');
+    console.error('  complete [--stage=<name>] [--notes="..."]      Mark current version completed (idempotent)');
     console.error('');
     console.error('Check formats:');
     console.error('  file:<path>                File exists');

@@ -88,6 +88,12 @@ reviewer는 카테고리별 검사 직전에 다음 Skill 도구를 **반드시*
 - [ ] App Router 파일 규약: `page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`
 - [ ] `"use client"`는 이벤트 핸들러 또는 훅이 있는 컴포넌트에만 사용
 - [ ] 기본적으로 Server Components 사용
+- [ ] **RSC-by-default 강제** (major 분류 — spec-writer-frontend의 RSC-by-default 룰 검증):
+  - `find src/app -name 'page.tsx' | xargs grep -l '"use client"'`로 page.tsx의 client 디렉티브 카운트 측정
+  - `frontend-spec.json`의 `specs[]`에서 `type==="page"`이고 `directive==="server"`인 페이지 카운트와 대조
+  - 스펙이 `"server"`로 명시한 page에 `"use client"`가 부착되어 있으면 즉시 major
+  - 전체 page.tsx 중 50% 이상이 `"use client"`를 달고 있고 그 중 `client_directive_reason`이 명시된 페이지가 절반 미만이면 "RSC-by-default 위반 패턴"으로 분류 (test7 식 50개 중 43개 `"use client"` 케이스 차단)
+  - 위반 시 review-report.md에 위반 page 파일 목록 + 스펙상 directive + 각 페이지의 사유(또는 사유 부재)를 표로 인용
 - [ ] 페이지에 적절한 `metadata` export
 - [ ] Pages Router 패턴 없음 (`getServerSideProps`, `getStaticProps` 등)
 - [ ] 내비게이션에 `next/link`, 이미지에 `next/image` 사용
@@ -161,10 +167,30 @@ diff /tmp/fr-req.txt /tmp/fr-cov.txt
 - [ ] 인라인 주석이 한국어로 작성되어 있는가 (의도 불명확 시만 작성)
 
 ### 9. 시드 데이터 일관성 (L4)
+
+> **SSOT input**: `.pipeline/input/customer-brief.md` — brief에 명시된 시드 볼륨이 진실이다.
+
 - [ ] teamId 등 FK 참조가 유효한가 (존재하지 않는 ID 참조 없음)
 - [ ] FK 관계 정합성: 모든 외래 키가 대응하는 엔티티에 존재
+- [ ] **brief 명시 볼륨 vs 실제 시드 카운트 비교** (L3 — 차이 ±20% 초과 시 major):
+  - brief에서 정량 표현 추출 (예: `"~10,000 riders"`, `"Member 500명"`, `"Trip 5,000건"`, `"~100,000 orders"`).
+  - 실제 시드 파일(`src/data/seed/*.ts`, `src/data/*.json`) 또는 시드 로더(`createGraphStore`/`ensureSeedLoaded` 등)가 produce하는 노드/엔티티 카운트를 측정.
+  - 차이가 ±20%를 넘으면 **시드 스케일 사기**로 분류 (예: brief `~100k orders` vs 실제 45개 = 99.95% 미달, 즉시 major).
+  - brief에 정량 표현이 없으면 이 sub-check는 skip하고 FK/enum 정합만 검증한다.
 - [ ] 데이터 볼륨이 NFR 요구사항과 부합 (예: "최소 50건" 요구 시 시드 데이터가 충분한가)
 - [ ] 시드 데이터의 상태값이 정의된 enum에 포함되는가
+
+**검사 방법 예시** (Bash):
+```bash
+# brief에서 숫자 표현 추출 (수동 또는 grep)
+grep -nE '~?[0-9,]+[ ]*(건|명|개|riders?|orders?|merchants?|nodes?|edges?)' .pipeline/input/customer-brief.md
+
+# 실제 시드 카운트 측정 (예: TS 시드)
+grep -rn "Array.from\|new Array\|push(" src/data/seed/ | head -20
+# 또는 JSON 시드
+for f in src/data/*.json; do echo "$f: $(jq 'length' "$f")"; done
+```
+FAIL 시 `review-report.md`에 brief의 raw 표현 + 실제 카운트 + 차이율을 표로 인용한다.
 
 ### 10. AI 모델 ID 컴플라이언스 (L0 — 필수)
 

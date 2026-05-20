@@ -105,7 +105,7 @@ AI 기능이 있으면 `cloudscape-design` 스킬의 `references/ai-streaming.md
 ### `nextjs-auth-patterns` — 인증 FR이 있을 때 호출
 - 보호 라우트 그룹 `(protected)` 레이아웃 패턴
 - `AdminOnly` 같은 역할 기반 UI 분기 컴포넌트
-- middleware가 세팅한 `x-user-id`/`x-user-roles` 헤더를 RootLayout에서 Context로 내려보내기
+- proxy(구 middleware)가 세팅한 `x-user-id`/`x-user-roles` 헤더를 RootLayout에서 Context로 내려보내기 — Next.js 16에서 `middleware.ts`가 `proxy.ts`로 리네이밍됨
 
 ### `strands-sdk-typescript-guide` — AI 채팅 FE 훅 작성 시
 - SSE 스트리밍 응답 파싱 훅 패턴 (textDelta, toolStart, toolEnd, done)
@@ -114,7 +114,7 @@ AI 기능이 있으면 `cloudscape-design` 스킬의 `references/ai-streaming.md
 
 0. **금지 패턴 (위반 시 reviewer가 P0 반려)**: `any` 타입, `@ts-ignore`/`@ts-nocheck`, barrel export(`index.ts`로 재export), Pages Router(`pages/` 디렉터리), `data?.results`/`data?.data` 등 envelope 변형 사용. 위반은 ESLint도 차단하지만 codegen 시점부터 회피한다.
 1. **Cloudscape 개별 임포트** — 배럴 임포트 금지 (CLAUDE.md 참조)
-2. **`"use client"` 최소화** — 이벤트/훅 있는 컴포넌트 + Cloudscape 컴포넌트 사용 시
+2. **`"use client"`는 스펙의 `directive` 필드를 따른다** — `frontend-spec.json`의 `specs[].directive`가 단일 소스. `"server"`면 디렉티브 미부착, `"client"` / `"client-with-reason"`만 `"use client"`를 1행에 부착. `type: "page"`의 기본값은 `"server"`이며, 스펙 외 자의적 부착 금지. 인터랙션이 필요한 부분은 별도 island feature 컴포넌트로 빼서 page에서 import한다 (RSC-by-default).
 3. **이벤트**: `({ detail }) => ...` 구조 분해 (onFollow의 preventDefault만 예외)
 4. **모든 Table/Cards에 `useCollection`** 필수
 5. **TopNavigation은 AppLayout 밖에** 배치
@@ -152,7 +152,7 @@ src/
 - `src/types/` — 백엔드가 생성, 프론트엔드는 import만
 - `src/app/api/` — API Route Handlers
 - `src/lib/db/`, `src/lib/services/`, `src/lib/validation/` — 데이터/서비스 레이어
-- `src/middleware.ts`
+- `src/proxy.ts` (Next.js 16에서 `middleware.ts`가 `proxy.ts`로 리네이밍됨)
 
 ## API 호출 패턴
 

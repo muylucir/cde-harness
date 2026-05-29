@@ -149,7 +149,7 @@ node .pipeline/scripts/checkpoint.mjs start aws-architect
 - 서비스별 세부: {breakdown}
 
 ### ⚠️ 사용량 기반 요금 경고 (해당 시)
-- **Bedrock 모델**: 토큰 단위 과금. CLAUDE.md Rule 13의 3개 모델 중 사용된 ID에 따라 다름 (예: claude-sonnet-4-6 ≈ $3/M input + $15/M output, claude-haiku-4-5 ≈ $1/M + $5/M, claude-opus-4-7은 더 높음). 프로토타입 사용량에 따라 월 $1–$50
+- **Bedrock 모델**: 토큰 단위 과금. CLAUDE.md Rule 13의 3개 모델 중 사용된 ID에 따라 다름 (예: claude-sonnet-4-6 ≈ $3/M input + $15/M output, claude-haiku-4-5 ≈ $1/M + $5/M, claude-opus-4-8은 더 높음). 프로토타입 사용량에 따라 월 $1–$50
 - **AgentCore Runtime**: 호출 수 + 실행 시간 기반. 예측 불가 — 모니터링 필수
 - **AgentCore Memory**: 저장 크기 + 검색 횟수 기반
 - **권장**: CloudWatch Billing Alarm을 $50/월로 설정 (aws-deployer가 자동 구성)

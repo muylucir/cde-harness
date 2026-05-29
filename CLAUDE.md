@@ -144,7 +144,7 @@ node .pipeline/scripts/checkpoint.mjs schema --json
     |---|---|---|
     | `global.anthropic.claude-haiku-4-5-20251001-v1:0` | haiku | 분류/라우팅/요약/단순 도구(예: 의도 분류, 정형 데이터 추출, 짧은 응답). 빠르고 저렴 |
     | `global.anthropic.claude-sonnet-4-6` | sonnet | 일반 챗/생성/도구 호출 기본값. 균형 잡힌 비용/품질 |
-    | `global.anthropic.claude-opus-4-7` | opus | 복잡 추론/장기 컨텍스트/멀티스텝 에이전트(예: 코드 분석, 깊은 추론, 까다로운 RAG) |
+    | `global.anthropic.claude-opus-4-8` | opus | 복잡 추론/장기 컨텍스트/멀티스텝 에이전트(예: 코드 분석, 깊은 추론, 까다로운 RAG) |
 
     **선택 원칙**: 도구의 ground truth가 명확하고 짧으면 haiku, 사용자 대면 일반 챗은 sonnet, 추론이 길어지거나 도메인 지식이 필요하면 opus. 대화 단위가 아니라 **도구/에이전트 단위**로 모델을 다르게 가져갈 수 있다.
 
@@ -159,7 +159,7 @@ node .pipeline/scripts/checkpoint.mjs schema --json
       tools: [searchDocs, getOrderStatus],
     });
     const planningAgent = new Agent({
-      model: 'global.anthropic.claude-opus-4-7', // 멀티스텝 플래닝
+      model: 'global.anthropic.claude-opus-4-8', // 멀티스텝 플래닝
       tools: [searchDocs, callApi, runCode],
     });
     ```

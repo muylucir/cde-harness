@@ -362,7 +362,7 @@ AI 에이전트 복잡도 분석 시작 (/awsarch 단계)
 | EventBridge | `EVENT_BUS_NAME` (custom bus 사용 시) |
 | Step Functions | `STEP_FUNCTION_{PURPOSE}_ARN` |
 | Lambda | 함수 내부 — 별도 ENV 네이밍 없음 (트리거 소스 ARN은 CDK에서 주입) |
-| Bedrock | (환경변수 미사용) — 모델 ID는 코드에 직접 명시. CLAUDE.md Rule 13: `global.anthropic.claude-haiku-4-5-20251001-v1:0` / `claude-sonnet-4-6` / `claude-opus-4-7` 중 작업에 맞게 선택 |
+| Bedrock | (환경변수 미사용) — 모델 ID는 코드에 직접 명시. CLAUDE.md Rule 13: `global.anthropic.claude-haiku-4-5-20251001-v1:0` / `claude-sonnet-4-6` / `claude-opus-4-8` 중 작업에 맞게 선택 |
 | AgentCore | `AGENTCORE_AGENT_ID`, `AGENTCORE_MEMORY_ID`, `AGENTCORE_GATEWAY_ID` |
 | 공통 | `AWS_REGION` |
 

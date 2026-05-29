@@ -130,7 +130,7 @@ const orchestrator = new Agent({
 - writer_agent: 문서 작성
 요청을 가장 적합한 도구로 라우팅하고, 결과를 종합하세요.`,
   tools: [researchAgent, analysisAgent, writerAgent],
-  model: 'global.anthropic.claude-opus-4-7', // 멀티스텝 라우팅·종합은 opus
+  model: 'global.anthropic.claude-opus-4-8', // 멀티스텝 라우팅·종합은 opus
 });
 
 // 컨텍스트 보존이 필요할 때는 .asTool()로 명시:
@@ -235,7 +235,7 @@ const refiner = new Agent({
   description: '충분히 다듬어진 아이디어를 최종 정제하여 응답을 마무리한다.',
   systemPrompt: `당신은 아이디어 정제 전문가입니다.
 피드백을 반영하여 최종 아이디어를 완성하세요. 마무리 단계에서 호출됩니다.`,
-  model: 'global.anthropic.claude-opus-4-7', // 최종 종합은 opus
+  model: 'global.anthropic.claude-opus-4-8', // 최종 종합은 opus
 });
 
 const swarm = new Swarm({
@@ -563,7 +563,7 @@ const analyzeAgent = new Agent({
 });
 const reportAgent = new Agent({
   systemPrompt: '보고서 작성 전문가. 분석 결과를 보고서 형태로 작성하세요.',
-  model: 'global.anthropic.claude-opus-4-7', // 최종 종합은 opus
+  model: 'global.anthropic.claude-opus-4-8', // 최종 종합은 opus
 });
 
 const result = await runWorkflow('원본 데이터...', {

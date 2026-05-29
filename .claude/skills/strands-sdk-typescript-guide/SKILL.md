@@ -46,7 +46,7 @@ Strands Agents SDK는 AI 에이전트를 빠르게 구축, 관리, 배포할 수
 |---|---|---|---|
 | `global.anthropic.claude-haiku-4-5-20251001-v1:0` | haiku | 분류/라우팅/요약/단순 도구 | low |
 | `global.anthropic.claude-sonnet-4-6` | sonnet | 일반 챗/생성/도구 호출 기본값 | medium |
-| `global.anthropic.claude-opus-4-7` | opus | 복잡 추론/멀티스텝 에이전트 | high |
+| `global.anthropic.claude-opus-4-8` | opus | 복잡 추론/멀티스텝 에이전트 | high |
 
 **금지 패턴** (ai-smoke Check 7/8 + ESLint `no-restricted-syntax`가 차단):
 

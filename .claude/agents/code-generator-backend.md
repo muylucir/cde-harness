@@ -85,7 +85,7 @@ src/
 
 ## 핵심 규칙
 
-0. **금지 패턴 (위반 시 reviewer가 P0 반려)**: `any` 타입, `@ts-ignore`/`@ts-nocheck`, barrel export(`index.ts`로 재export), Pages Router(`pages/` 디렉터리), 응답 envelope 변형(`{data}`/`{results}`/`{payload}` 등), `as unknown as Record` 이중 캐스트, 별도 interface로 요청 타입 선언(반드시 `z.infer`).
+0. **금지 패턴 (위반 시 reviewer가 P0 반려)**: `any` 타입, `@ts-ignore`/`@ts-nocheck`, barrel export(`index.ts`로 재export), Pages Router(`pages/` 디렉터리), 응답 envelope 변형(`{data}`/`{results}`/`{payload}` 등), `as unknown as Record` 이중 캐스트, 별도 interface로 요청 타입 선언(반드시 `z.infer`). **FP-001~FP-011은 담당 범위 내 모든 생성 파일에 예외 없이 적용된다 — 첫 파일만이 아니라 전체 범위이다.**
 1. **AI/Bedrock 코드는 이 에이전트의 담당이 아니다** — `code-generator-ai`가 `@strands-agents/sdk`로 구현
 2. **Repository 패턴 의무화** — 모든 데이터 접근은 `src/lib/db/store.ts`에 정의된 `Store<T>` 인터페이스를 거친다. 첫 구현은 `InMemoryStore`이지만 `createStore<T>(name)` 팩토리가 `process.env.DATA_SOURCE`를 보고 `memory`(기본) | `dynamodb` 어댑터를 분기 반환한다. `/awsarch` 시 DynamoDB 어댑터만 추가하면 되도록 모든 service/route는 store를 직접 인스턴스화하지 않고 팩토리만 호출한다. `api-manifest.json.repository_paths[]`에 store 인터페이스/구현 파일 경로를 기록한다.
 3. **정렬은 타입 안전 접근자 패턴** — `as unknown as Record` 이중 캐스트 금지. `Record<string, (item: T) => string | number>` 사용

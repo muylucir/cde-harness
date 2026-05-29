@@ -7,7 +7,7 @@ metadata:
   author: path-team
   updated: "2026-05"
   baseline_models:
-    - claude-opus-4-7
+    - claude-opus-4-8
     - claude-sonnet-4-6
     - claude-haiku-4-5
 ---
@@ -256,7 +256,7 @@ Claude 4.6/4.7은 **adaptive thinking**을 사용합니다. 모델이 쿼리 복
 
 ```python
 client.messages.create(
-    model="claude-opus-4-7",
+    model="claude-opus-4-8",
     max_tokens=64000,
     thinking={"type": "adaptive"},
     output_config={"effort": "xhigh"},  # max | xhigh | high | medium | low
@@ -531,7 +531,7 @@ client.messages.create(
 
 # After
 client.messages.create(
-    model="claude-opus-4-7",
+    model="claude-opus-4-8",
     max_tokens=64000,
     thinking={"type": "adaptive"},
     output_config={"effort": "high"},

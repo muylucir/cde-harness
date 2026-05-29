@@ -141,7 +141,7 @@ Claude 4.6/4.7은 **adaptive thinking**을 사용합니다. 모델이 쿼리 복
 ```python
 # Adaptive thinking + effort
 client.messages.create(
-    model="claude-opus-4-7",
+    model="claude-opus-4-8",
     max_tokens=64000,
     thinking={"type": "adaptive"},
     output_config={"effort": "xhigh"},
@@ -153,7 +153,7 @@ client.messages.create(
 
 ```python
 client.converse(
-    modelId="global.anthropic.claude-opus-4-7",
+    modelId="global.anthropic.claude-opus-4-8",
     inferenceConfig={
         "maxTokens": 64000,
         # adaptive thinking + effort는 Anthropic API 전용 파라미터
@@ -217,7 +217,7 @@ client.messages.create(
 
 # After (Claude 4.6+)
 client.messages.create(
-    model="claude-opus-4-7",
+    model="claude-opus-4-8",
     max_tokens=64000,
     thinking={"type": "adaptive"},
     output_config={"effort": "high"},
@@ -565,6 +565,6 @@ The assistant is Claude, created by Anthropic. The current model is Claude Opus 
 또는 LLM 라우팅 앱:
 
 ```text
-When an LLM is needed, please default to Claude Opus 4.7 unless the user requests otherwise.
-The exact model string for Claude Opus 4.7 is claude-opus-4-7.
+When an LLM is needed, please default to Claude Opus 4.8 unless the user requests otherwise.
+The exact model string for Claude Opus 4.8 is claude-opus-4-8.
 ```

@@ -687,7 +687,7 @@ cd infra && npx cdk destroy   # 인프라 제거
 |---|---|
 | `global.anthropic.claude-haiku-4-5-20251001-v1:0` | 분류/라우팅/요약/단순 도구 |
 | `global.anthropic.claude-sonnet-4-6` | 일반 챗/생성/도구 호출 기본값 |
-| `global.anthropic.claude-opus-4-7` | 복잡 추론/장기 컨텍스트/멀티스텝 에이전트 |
+| `global.anthropic.claude-opus-4-8` | 복잡 추론/장기 컨텍스트/멀티스텝 에이전트 |
 
 `ai-smoke.mjs` Check 7/8 + reviewer 카테고리 10이 위반을 P0로 차단합니다.
 

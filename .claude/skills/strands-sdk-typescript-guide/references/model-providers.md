@@ -119,7 +119,7 @@ const bedrock = new BedrockModel({
 |---|---|
 | `global.anthropic.claude-haiku-4-5-20251001-v1:0` | 분류/라우팅/추출/짧은 응답 — 빠르고 저렴 |
 | `global.anthropic.claude-sonnet-4-6` | 사용자 대면 일반 챗 / 균형 — **기본값** |
-| `global.anthropic.claude-opus-4-7` | 멀티스텝 추론/장기 컨텍스트/복잡 RAG |
+| `global.anthropic.claude-opus-4-8` | 멀티스텝 추론/장기 컨텍스트/복잡 RAG |
 
 > 외부 모델(Nova, Llama 등) 또는 다른 Claude 버전은 이 프로토타입에서 사용 금지. 최신 목록 확인은 AWS 콘솔 → Bedrock → Model access.
 

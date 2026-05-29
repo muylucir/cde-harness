@@ -182,7 +182,7 @@ src/
   - `ai-internals.json.architecture.model_id` → 메인 에이전트
   - `ai-internals.json.tools[].model_id` → 도구별 nested agent
   - `ai-internals.json.agent_topology.sub_agents[].model_id` → 서브 에이전트
-  - 허용된 ID 3개: `global.anthropic.claude-haiku-4-5-20251001-v1:0`, `global.anthropic.claude-sonnet-4-6`, `global.anthropic.claude-opus-4-7`
+  - 허용된 ID 3개: `global.anthropic.claude-haiku-4-5-20251001-v1:0`, `global.anthropic.claude-sonnet-4-6`, `global.anthropic.claude-opus-4-8`
   ```typescript
   // 올바름 — ai-internals.json의 model_id 값을 그대로 박는다
   const agent = new Agent({

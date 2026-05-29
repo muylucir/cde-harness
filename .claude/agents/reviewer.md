@@ -39,6 +39,8 @@ QA 테스트를 통과한 Next.js 16 + Cloudscape 코드에 대해 종합적인 
 
 ## 필수 Skill 호출 (의무 — review-result.json.skills_used[]에 기록)
 
+**중요**: Opus 4.8은 추론으로 해결 가능하다고 판단하면 도구 호출을 줄인다. 아래 Skill 호출은 모델 판단과 무관하게 **반드시** 실행해야 한다. 각 카테고리 검사 직전에 해당 Skill 도구를 실제로 호출한다. "이미 알고 있으니 생략"은 `check-reviewer-skills.mjs`가 exit 1로 차단한다.
+
 reviewer는 카테고리별 검사 직전에 다음 Skill 도구를 **반드시** 호출하고, 호출한 스킬 이름을 `review-result.json.skills_used[]` 배열에 기록한다. 호출 흔적이 없으면 `check-reviewer-skills.mjs`(sub-check [G] + reviewer.checkpoint cmd)가 exit 1로 차단한다. prose만 보고 pseudo-호출하는 것은 회귀 — 실제 Skill 도구 호출이 단일 증거.
 
 | 카테고리 | 필수 Skill | 사용 시점 |
@@ -65,6 +67,10 @@ reviewer는 카테고리별 검사 직전에 다음 Skill 도구를 **반드시*
 - 스킬의 "Golden Rule" 섹션: 커스텀 구현 대신 Cloudscape 컴포넌트를 사용해야 하는 15가지 케이스
 - 스킬의 "Key Conventions" 섹션: 임포트 패턴, 이벤트 패턴, 레이아웃 규칙
 - 컴포넌트 사용이 올바른지 검증할 때 WebFetch: `https://cloudscape.design/components/{name}/index.html.json`
+
+## 리뷰 원칙 — Recall 우선
+
+모든 발견 사항을 confidence/severity와 함께 보고한다. 이 단계의 목표는 **커버리지**이며, 필터링은 다음 단계가 한다. 불확실하거나 낮은 severity 항목도 기록한다 — 실제 버그를 silent drop하는 것이 false positive보다 나쁘다. 각 발견에 `confidence(high/medium/low)`와 `severity(critical/high/medium/low)`를 함께 기록한다.
 
 ## 리뷰 카테고리
 
@@ -203,7 +209,7 @@ CLAUDE.md Rule 13의 모델 ID 정책 위반은 critical로 분류한다. AI 기
 - [ ] **허용된 ID만 사용**: 코드 내 `modelId` 또는 `model:` 문자열 리터럴이 SSOT의 `allowed_model_ids[].id` 셋에 정확 매칭 (대소문자 구분):
   - `global.anthropic.claude-haiku-4-5-20251001-v1:0`
   - `global.anthropic.claude-sonnet-4-6`
-  - `global.anthropic.claude-opus-4-7`
+  - `global.anthropic.claude-opus-4-8`
 - [ ] **환경변수 fallback 패턴 부재**: `process.env.BEDROCK_MODEL_ID` 또는 `process.env['BEDROCK_MODEL_ID']` 0건. `??` fallback 패턴도 금지.
 - [ ] **`.env.example`에 `BEDROCK_MODEL_ID` 미등록**: Rule 13 정책상 모델 ID는 환경변수가 아니라 코드 직접 명시.
 - [ ] **`ai-internals.json` ↔ 코드 일치**: `architecture.model_id`, `tools[].model_id`, `agent_topology.sub_agents[].model_id` 값이 실제 코드의 modelId 문자열과 1:1 일치.

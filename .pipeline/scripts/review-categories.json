@@ -96,14 +96,34 @@
       "always_active": false,
       "active_when": "state.json.versions[v].trigger === \"awsarch\" 또는 infra/ 디렉토리 존재",
       "consumers": [".claude/commands/awsarch.md"]
+    },
+    {
+      "id": 12,
+      "key": "ai_streaming_rendering",
+      "title": "AI 스트리밍 마크다운 렌더링",
+      "summary": "react-markdown/remark-gfm 의존성, MarkdownContent 컴포넌트 사용, raw {content}/{msg.content} 직접 렌더링 금지, useAIStreaming 사용처는 반드시 마크다운 렌더링과 페어링",
+      "always_active": false,
+      "active_when": "requirements.json에 AI FR 존재 (has-ai.mjs 판정 true)",
+      "ssot_input": ".claude/skills/cloudscape-design/references/ai-streaming.md",
+      "automated_check": "node .pipeline/scripts/check-markdown-render.mjs",
+      "checks": [
+        "package.json dependencies에 react-markdown + remark-gfm 존재",
+        "src/components/chat/MarkdownContent.tsx (또는 동등 컴포넌트)가 ReactMarkdown + remarkGfm으로 구현됨",
+        "useAIStreaming 훅을 호출하는 컴포넌트는 MarkdownContent JSX 또는 ReactMarkdown JSX와 페어링",
+        "{content} / {msg.content} / {message.content}를 assistant 분기 JSX child로 직접 노출 금지 — 마크다운 원문이 사용자에게 보이는 회귀의 직접 원인",
+        "dangerouslySetInnerHTML로 마크다운 HTML 삽입 금지 (XSS)"
+      ],
+      "consumers": [".claude/agents/code-generator-frontend.md", ".claude/agents/reviewer.md"]
     }
   ],
   "counts": {
-    "total": 11,
+    "total": 12,
     "always_active": 10,
-    "conditional": 1,
+    "conditional": 2,
     "display_label_default": "10개",
-    "display_label_with_awsarch": "10 + 1 (AWS 통합 조건부)"
+    "display_label_with_awsarch": "10 + 1 (AWS 통합 조건부)",
+    "display_label_with_ai": "10 + 1 (AI 스트리밍 마크다운 조건부)",
+    "display_label_with_awsarch_and_ai": "10 + 2 (AWS 통합 + AI 스트리밍 마크다운)"
   },
-  "render_helper": "node .pipeline/scripts/checkpoint.mjs review-categories [--awsarch]"
+  "render_helper": "node .pipeline/scripts/checkpoint.mjs review-categories [--awsarch] [--ai]"
 }

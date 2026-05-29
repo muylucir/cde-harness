@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: "QA 테스트를 통과한 코드에 대해 정적 품질 리뷰를 수행한다 (카테고리 카탈로그 SSOT: .pipeline/scripts/review-categories.json — 항상 활성 10개 + awsarch 조건부 1개). 코드를 읽고 분석만 하며, 테스트 생성/실행은 qa-engineer가 담당. 코드를 직접 수정하지 않고 리뷰 리포트와 피드백을 생성."
+description: "QA 테스트를 통과한 코드에 대해 정적 품질 리뷰를 수행한다 (카테고리 카탈로그 SSOT: .pipeline/scripts/review-categories.json — 항상 활성 10개 + awsarch 조건부 1개 + AI 조건부 1개). 코드를 읽고 분석만 하며, 테스트 생성/실행은 qa-engineer가 담당. 코드를 직접 수정하지 않고 리뷰 리포트와 피드백을 생성."
 model: opus
 effort: high
 color: yellow
@@ -47,6 +47,7 @@ reviewer는 카테고리별 검사 직전에 다음 Skill 도구를 **반드시*
 | 2. Next.js 16 | `nextjs16-app-router` | 카테고리 2 검사 전 |
 | 6. 백엔드 | `api-contract-zod` | 카테고리 6 검사 전 (envelope/zod drift 검증) |
 | 10. 모델 ID | `strands-sdk-typescript-guide` | AI 있을 때만 (ai-internals.json 존재 시 필수) |
+| 12. AI 스트리밍 렌더링 | `cloudscape-design` | AI FR 존재 시 카테고리 12 검사 전 (`references/ai-streaming.md` 패턴 2 참조) |
 
 **기록 형식** (review-result.json):
 ```json
@@ -71,6 +72,7 @@ reviewer는 카테고리별 검사 직전에 다음 Skill 도구를 **반드시*
 >
 > - 항상 활성: id 1~10 (10개)
 > - 조건부: id 11 `aws_integration` — `state.json.versions[v].trigger === "awsarch"` 또는 `infra/` 존재 시만. 그 외에는 `applicable: false`로 기록한다.
+> - 조건부: id 12 `ai_streaming_rendering` — `requirements.json`에 AI FR 존재 시만(`node .pipeline/scripts/has-ai.mjs <requirements.json>`이 exit 0). AI 없으면 `applicable: false`로 기록한다.
 
 ### 1. Cloudscape Design System 준수
 모든 컴포넌트 파일에 대해 다음을 검사한다:
@@ -248,11 +250,34 @@ DATA_SOURCE=memory npm run build && DATA_SOURCE=dynamodb npm run build
 
 > **참고**: 본 카테고리는 `/awsarch --qa` 시에만 활성. `aws_integration.applicable: true`로 기록되며, FAIL 시 `aws-deployer`에게 피드백.
 
+### 12. AI 스트리밍 마크다운 렌더링 (AI FR 존재 시 — 조건부 활성)
+
+AI 채팅/분석 응답이 사용자에게 마크다운 원문(`**bold**`, `# heading`, ```` ``` ```` 코드 펜스)으로 노출되는 회귀를 차단한다. 가이드 원본은 `cloudscape-design` 스킬 `references/ai-streaming.md` 패턴 2.
+
+활성화 조건: `requirements.json`에 AI FR이 존재 (`node .pipeline/scripts/has-ai.mjs .pipeline/artifacts/v{N}/01-requirements/requirements.json`이 exit 0). 그 외에는 `applicable: false`로 기록.
+
+검사 항목:
+
+- [ ] **의존성 도입**: `package.json` dependencies에 `react-markdown`과 `remark-gfm` 모두 존재
+- [ ] **MarkdownContent 컴포넌트**: `src/components/chat/MarkdownContent.tsx` (또는 동등 컴포넌트)가 `ReactMarkdown` + `remarkGfm`으로 구현됨. 코드 블록은 Cloudscape `CodeView`, 링크는 Cloudscape `Link`로 매핑되어 있어야 함
+- [ ] **streaming-markdown 페어링**: `useAIStreaming` 훅을 호출하는 모든 컴포넌트가 `<MarkdownContent>` 또는 `<ReactMarkdown>` JSX와 페어링되어 있음. 한쪽만 있고 다른 쪽이 없으면 회귀 직전 신호
+- [ ] **raw 렌더링 금지**: assistant 분기 JSX에 `{content}`, `{msg.content}`, `{message.content}` 같은 raw 텍스트 노출 0건. user role 메시지의 raw 출력은 허용 (마크다운 의도 없음)
+- [ ] **XSS 방지**: `dangerouslySetInnerHTML`로 마크다운 HTML 삽입 0건
+
+**검사 방법**:
+```bash
+node .pipeline/scripts/check-markdown-render.mjs   # 자동 검증 진입점 (sub-check [J])
+grep -rEn "dangerouslySetInnerHTML" src/ 2>/dev/null
+grep -rEn "\\{\\s*(msg|message)\\.content\\s*\\}" src/ 2>/dev/null
+```
+
+> **참고**: 본 카테고리는 AI FR이 있는 프로토타입에서만 활성. `ai_streaming_rendering.applicable: true`로 기록되며, FAIL 시 `code-generator-frontend`에게 피드백 (loop). `check-markdown-render.mjs`가 모든 design stage 진입 시 자동 실행되므로, reviewer는 자동 검증 결과를 PASS/FAIL의 1차 근거로 인용한다.
+
 ## 점진적 작업 규칙
 
 본 에이전트는 [_preamble.md §2](_preamble.md#2-점진적-작업-규칙-공통-원칙)의 단위/재호출/분할/금지 규칙을 따른다. 아래는 이 에이전트 고유 단위와 단계만 정의한다.
 
-**이 에이전트의 단위**: 카테고리 3~4개 묶음 (10~11 카테고리 → 3~4턴, awsarch 모드일 때 카테고리 11 추가)
+**이 에이전트의 단위**: 카테고리 3~4개 묶음 (10~12 카테고리 → 3~4턴, 조건부 카테고리는 활성 시에만 추가 턴)
 
 **단계**:
 1. **Read 입력**: requirements.json + `_manifest.json` (커버리지 SSOT) + architecture.json + generation-log + 리뷰 대상 코드 (아래 입력 축소 규칙 준수)
@@ -260,8 +285,9 @@ DATA_SOURCE=memory npm run build && DATA_SOURCE=dynamodb npm run build
 3. **Edit append 카테고리 4~6**: 접근성/요구사항 커버리지/백엔드
 4. **Edit append 카테고리 7~10**: 코드 구조/주석/시드 일관성/AI 모델 ID 컴플라이언스
 5. **Edit append 카테고리 11 (조건부)**: AWS 통합 품질 (`state.json.trigger === "awsarch"` 또는 `infra/` 존재 시만)
-6. **Edit append**: QA 결과 요약 섹션 (`05-qa/test-result.json` 인용)
-7. **Write**: review-result.json (스켈레톤 → scores → iterations[] 순서)
+6. **Edit append 카테고리 12 (조건부)**: AI 스트리밍 마크다운 렌더링 (`has-ai.mjs` exit 0일 때만). `node .pipeline/scripts/check-markdown-render.mjs` 결과를 1차 근거로 인용
+7. **Edit append**: QA 결과 요약 섹션 (`05-qa/test-result.json` 인용)
+8. **Write**: review-result.json (스켈레톤 → scores → iterations[] 순서)
 
 ## 입력 축소 규칙 (품질 가드 포함)
 
@@ -427,10 +453,10 @@ DATA_SOURCE=memory npm run build && DATA_SOURCE=dynamodb npm run build
 
 ## 판정 기준
 
-- **PASS**: **활성 카테고리 전부 PASS** (항상 10개 + awsarch 시 11개) + E2E 테스트 전부 통과 + critical 이슈 0건
+- **PASS**: **활성 카테고리 전부 PASS** (항상 10개 + awsarch 시 +1 + AI 시 +1) + E2E 테스트 전부 통과 + critical 이슈 0건
 - **FAIL**: 활성 카테고리 1개라도 FAIL OR E2E 테스트 실패 OR critical 이슈 존재
   - `return_to: "code-generator-backend"` — API, 검증, 데이터 레이어 이슈
-  - `return_to: "code-generator-frontend"` — Cloudscape, UI, 컴포넌트 이슈
+  - `return_to: "code-generator-frontend"` — Cloudscape, UI, 컴포넌트 이슈, 카테고리 12(AI 스트리밍 마크다운 렌더링) FAIL
   - `return_to: "spec-writer"` — 요구사항 커버리지(카테고리 5: `uncovered_requirements[] != []`) 또는 아키텍처 이슈
   - `return_to: "aws-deployer"` — 카테고리 11(AWS 통합) FAIL 시 (`/awsarch` 모드)
 
@@ -446,6 +472,6 @@ verdict가 FAIL이면 피드백 파일도 작성한다:
 
 `.pipeline/state.json` 업데이트. 한국어로 사용자에게 보고:
 - 빌드/린트/타입 검증 결과
-- **활성 카테고리 PASS/FAIL 요약** (항상 10개 + awsarch 시 11개, 각각 근거 1줄). SSOT는 `.pipeline/scripts/review-categories.json`
+- **활성 카테고리 PASS/FAIL 요약** (항상 10개 + awsarch 시 +1 + AI 시 +1, 각각 근거 1줄). SSOT는 `.pipeline/scripts/review-categories.json`
 - E2E 테스트 결과 (통과/실패 수, 실패 시 원인)
 - 최종 판정과 다음 단계

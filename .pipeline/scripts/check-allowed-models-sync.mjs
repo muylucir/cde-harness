@@ -36,6 +36,11 @@
  *       — checkpoint.mjs <subcmd> <stage> 또는 /pipeline-from <stage>로 참조된 모든 stage 이름이
  *         stages.json에 정의되어 있는지 검사. 새 stage 추가 시 stages.json 미반영 silent drift 차단.
  *
+ *   (J) AI 스트리밍 마크다운 렌더링 (check-markdown-render.mjs sub-call)
+ *       — AI FR이 있는 프로토타입에서 assistant 응답이 raw 마크다운 원문으로 노출되는
+ *         회귀를 차단. react-markdown/remark-gfm 의존성, MarkdownContent JSX 도입,
+ *         {content}/{msg.content} raw 렌더링 안티패턴을 정적으로 검출.
+ *
  * 사용법: node .pipeline/scripts/check-allowed-models-sync.mjs
  * 종료 코드: 0 = 모든 SSOT sync, 1 = 어느 하나라도 drift
  */
@@ -146,6 +151,7 @@ function main() {
     { name: '[G] reviewer skills_used[] coverage', script: 'check-reviewer-skills.mjs' },
     { name: '[H] API response envelope shape', script: 'check-envelope.mjs' },
     { name: '[I] stages.json ↔ .claude/* drift', script: 'check-stages-sync.mjs' },
+    { name: '[J] AI streaming markdown rendering', script: 'check-markdown-render.mjs' },
   ];
 
   let totalFailed = failed;
@@ -168,7 +174,7 @@ function main() {
     );
     process.exit(1);
   }
-  console.log('\n✓ 모든 정책 SSOT (모델 ID / store naming / strands Rule 13 / agent models / Bedrock import / spec model_id / reviewer skills / API envelope / stages drift) 동기화 확인.');
+  console.log('\n✓ 모든 정책 SSOT (모델 ID / store naming / strands Rule 13 / agent models / Bedrock import / spec model_id / reviewer skills / API envelope / stages drift / markdown rendering) 동기화 확인.');
   process.exit(0);
 }
 

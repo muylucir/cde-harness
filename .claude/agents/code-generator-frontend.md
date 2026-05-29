@@ -84,7 +84,18 @@ Cloudscape Design System 기반의 UI 코드를 생성하는 에이전트이다.
 
 ## AI 스트리밍 렌더링 필수 규칙
 
-AI 기능이 있으면 `cloudscape-design` 스킬의 `references/ai-streaming.md`를 반드시 참조한다. 채팅은 `react-markdown`으로 마크다운 스트리밍 렌더링, 분석은 `useAIStreaming` 훅으로 실시간 결과 갱신. raw 텍스트 직접 렌더링 및 새로고침 필요 패턴 금지.
+AI 기능이 있으면 (`has-ai.mjs` 판정 true) 아래 4가지를 **모두** 충족해야 한다. `check-markdown-render.mjs` (통합 진입점 sub-check [J])가 이 규칙을 정적으로 강제하며, 위반 시 코드 생성 단계가 FAIL된다. 가이드 원본은 `cloudscape-design` 스킬의 `references/ai-streaming.md`.
+
+1. **의존성**: `package.json`에 `react-markdown`과 `remark-gfm`을 추가한다 (없으면 [J] FAIL).
+2. **표준 컴포넌트 생성**: `src/components/chat/MarkdownContent.tsx`를 ai-streaming.md 패턴 2(L150~195) 그대로 생성한다. 코드 블록은 Cloudscape `CodeView`, 링크는 Cloudscape `Link`로 매핑.
+3. **assistant 메시지 렌더링**: Chat / Analysis / 모든 AI 응답 출력 자리에 `<MarkdownContent content={...} />`를 사용한다. user role 메시지는 raw text 허용 (마크다운 의도 없음).
+4. **금지 안티패턴** (정적 검출 대상):
+   - `useAIStreaming`을 사용하면서 `react-markdown` / `MarkdownContent` import 없이 끝나는 컴포넌트
+   - JSX child로 `{content}`, `{msg.content}`, `{message.content}`를 직접 노출 (assistant 분기에 한정해서라도) — 사용자에게 `**bold**`, `# heading`, ```` ``` ```` 코드 펜스가 원문 그대로 보이는 회귀의 직접 원인
+   - `dangerouslySetInnerHTML`로 마크다운 HTML 삽입 (XSS)
+   - 분석 결과를 SSE 스트리밍 없이 SWR로 한 번에 가져와 새로고침해야 갱신되는 패턴
+
+검증 진입점: `node .pipeline/scripts/check-markdown-render.mjs` (단독 실행) 또는 `node .pipeline/scripts/check-allowed-models-sync.mjs` ([J] sub-check). reviewer 카테고리 12 (`ai_streaming_rendering`)도 동일 규칙을 사람이 다시 본다.
 
 ## 참조 스킬
 

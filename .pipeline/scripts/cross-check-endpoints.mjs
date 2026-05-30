@@ -15,10 +15,16 @@
  *   4. _manifest.json 의 requirements_coverage 의 모든 FR 이
  *      architecture.json 의 requirements_mapped 에 등장하는지 (FR ↔ 컴포넌트 ↔ 라우트 추적성)
  *
+ * 검사 루트 (D7-W2):
+ *   아티팩트(.pipeline/artifacts/v{N})와 산출 코드(src/)는 항상 하네스 루트
+ *   (= 이 스크립트 위치 기준 ../..)에서 찾는다. process.cwd()에 의존하지 않으므로
+ *   어느 디렉토리에서 호출해도 동일한 대상을 검사한다.
+ *
  * 사용법:
  *   node .pipeline/scripts/cross-check-endpoints.mjs <version>
  *
- * exit 0  = PASS, exit 1 = FAIL (체크포인트 실패로 처리)
+ * exit 0 = PASS, exit 1 = FAIL (체크포인트 실패로 처리),
+ * exit 2 = 실행 에러 또는 손상 JSON (fail-closed — D7-W1)
  */
 
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
@@ -28,12 +34,24 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../..');
 
+// 손상 JSON 경로를 누적한다. 하나라도 있으면 fail-closed(exit 2) — D7-W1.
+// "파일 부재"는 여기 기록하지 않으므로 기존 skip 동작이 유지된다.
+const corruptJsonPaths = [];
+
+/**
+ * JSON을 읽되 "파일 부재"와 "존재하나 파싱 실패"를 구분한다 (D7-W1).
+ * - 부재: null 반환 (기존 skip 동작 유지)
+ * - 파싱 실패: corruptJsonPaths에 기록 후 null 반환 → main()이 exit 2로 fail-closed
+ * @param {string} path 읽을 JSON 파일 절대 경로
+ * @returns {unknown|null} 파싱된 값 또는 null(부재/손상)
+ */
 function loadJson(path) {
   if (!existsSync(path)) return null;
   try {
     return JSON.parse(readFileSync(path, 'utf8'));
   } catch (err) {
-    console.error(`  [load] JSON parse error: ${path} — ${err.message}`);
+    console.error(`  [load] JSON parse error (손상): ${path} — ${err.message}`);
+    corruptJsonPaths.push(path.replace(REPO_ROOT + '/', ''));
     return null;
   }
 }
@@ -117,6 +135,18 @@ function main() {
   const _manifest = loadJson(manifestPath);
   const apiManifest = loadJson(apiManifestPath);
   const arch = loadJson(archPath);
+
+  // D7-W1: 손상 JSON은 "부재"와 다르다. skip(silent PASS)으로 흘려보내지 않고
+  // 여기서 즉시 fail-closed(exit 2)한다. 손상된 계약을 신뢰할 수 없기 때문.
+  if (corruptJsonPaths.length > 0) {
+    console.error(
+      `\n✗ cross-check fail-closed: ${corruptJsonPaths.length}개 아티팩트 JSON 파싱 실패 — ${corruptJsonPaths.join(', ')}`,
+    );
+    console.error(
+      '  손상된 계약/매니페스트는 검사를 건너뛰지 않고 즉시 실패 처리한다. 해당 아티팩트를 재생성하세요.',
+    );
+    process.exit(2);
+  }
 
   let failed = 0;
   const results = [];
@@ -322,4 +352,10 @@ function main() {
   process.exit(0);
 }
 
-main();
+try {
+  main();
+} catch (e) {
+  // 예기치 못한 실행 에러도 fail-closed(exit 2). silent PASS 차단.
+  console.error('✗ cross-check-endpoints crashed:', e?.message ?? e);
+  process.exit(2);
+}

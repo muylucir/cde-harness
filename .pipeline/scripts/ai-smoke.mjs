@@ -17,15 +17,21 @@
  *   9. code-generator-ai의 generation-log-ai.json.skills_used[]에 필수 스킬 호출 기록
  *  10. SSE 종결 보장 (정상/catch 경로 모두 done emit 또는 controller.close 도달)
  *
+ * 검사 루트 (D7-W2):
+ *   기본값은 하네스 루트(= 이 스크립트 위치 기준 ../..)로, 나머지 5개 검증 스크립트와
+ *   동일하게 REPO_ROOT를 검사한다(이전엔 process.cwd() 기반이라 호출 위치에 따라
+ *   대상이 달라졌다). 다른 디렉토리를 검사해야 하면 `--root=<경로>`로 명시 override한다.
+ *
  * 사용법:
- *   node .pipeline/scripts/ai-smoke.mjs           # 현재 버전 사용
+ *   node .pipeline/scripts/ai-smoke.mjs           # 현재 버전, 하네스 루트 검사
  *   node .pipeline/scripts/ai-smoke.mjs --v=2     # 특정 버전
  *   node .pipeline/scripts/ai-smoke.mjs --json    # JSON 결과만 stdout
+ *   node .pipeline/scripts/ai-smoke.mjs --root=/path/to/app  # 검사 루트 override
  *
  * 종료 코드:
  *   0 — 모든 검사 통과 (AI 기능 없음 포함)
  *   1 — 하나 이상 실패
- *   2 — 실행 에러 (파일 없음 등)
+ *   2 — 실행 에러 (파일 없음, 손상 JSON 등 — D7-W1 fail-closed)
  */
 
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
@@ -33,23 +39,36 @@ import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-
-// ROOT는 process.cwd() 기반이어서 어느 프로토타입 디렉토리에서 실행해도 해당 앱을 검사한다.
-// 하네스 자체에서 실행하면 AI 스펙이 없으므로 조용히 통과한다.
-const ROOT = process.cwd();
-const STATE_PATH = resolve(ROOT, '.pipeline/state.json');
+const REPO_ROOT = resolve(SCRIPT_DIR, '../..');
 
 const args = process.argv.slice(2);
 const jsonOutput = args.includes('--json');
 const vFlag = args.find((a) => a.startsWith('--v='));
 const versionArg = vFlag ? vFlag.split('=')[1] : null;
 
+// 검사 루트 (D7-W2): 기본은 REPO_ROOT(하네스 루트)로 통일. --root=로 override 허용.
+// 다른 검증 스크립트(cross-check / check-envelope / check-markdown 등)와 동일 기준.
+const rootFlag = args.find((a) => a.startsWith('--root='));
+const ROOT = rootFlag ? resolve(rootFlag.split('=')[1]) : REPO_ROOT;
+const STATE_PATH = resolve(ROOT, '.pipeline/state.json');
+
+// D5-W3: stub/placeholder 탐지 보강. AST 전환 없이 정규식 수준에서
+// (1) 기존 placeholder 문자열 + (2) mock/sample/static/dummy + reply/response 조합
+// (3) AWS 자격증명/리전 부재 시 mock 반환하는 분기 안티패턴을 추가로 잡는다.
 const STUB_PATTERNS = [
   /will be populated/i,
   /TODO:\s*(wire|implement)\s+(the\s+)?(AI|agent)/i,
   /FIXME:\s*implement\s+agent/i,
   /\/\/\s*AI agent will be wired here/i,
   /narrative\s+placeholder/i,
+  // mock/sample/static/dummy 한정자가 reply/response/answer/completion 식별자에 붙은 변수/속성.
+  // 예: const mockReply = ..., mockResponse, sampleAnswer, staticReply, dummyCompletion
+  /\b(?:mock|sample|static|dummy|fake|hardcoded)[_-]?(?:reply|response|answer|completion|message|output)\b/i,
+  // 위 조합의 역순(reply/response 등 뒤에 placeholder 의미). 예: responseStub, replyMock
+  /\b(?:reply|response|answer|completion)[_-]?(?:stub|mock|placeholder|fixture)\b/i,
+  // AWS 자격증명/리전 부재 시 조기 return으로 실제 호출을 우회하는 분기.
+  // 예: if (!process.env.AWS_REGION) return ...; if (!process.env.AWS_ACCESS_KEY_ID) return mock
+  /if\s*\(\s*!\s*process\.env\.AWS_(?:REGION|ACCESS_KEY_ID|SECRET_ACCESS_KEY|PROFILE)\b[^)]*\)\s*(?:\{[^}]*)?return\b/i,
 ];
 
 function log(...a) {
@@ -77,11 +96,25 @@ function walk(dir, filter = () => true) {
   return out;
 }
 
+// 손상 JSON 경로 누적 (D7-W1). "부재"는 기록하지 않으므로 AI-없음 PASS 분기가 유지된다.
+// 손상이 하나라도 있으면 main()이 exit 2로 fail-closed — silent PASS 차단.
+const corruptJsonPaths = [];
+
+/**
+ * JSON을 읽되 "부재"와 "존재하나 파싱 실패"를 구분한다 (D7-W1).
+ * - 부재: null 반환 (AI 미사용 프로토타입 PASS 분기 유지)
+ * - 파싱 실패: corruptJsonPaths에 기록 후 null 반환 → main()이 exit 2로 fail-closed.
+ *   특히 contract/internals가 둘 다 손상일 때 '!contract && !internals → AI 없음 PASS'
+ *   분기가 발동하지 않도록 한다(손상은 부재와 다르다).
+ * @param {string} p 읽을 JSON 파일 절대 경로
+ * @returns {unknown|null} 파싱된 값 또는 null(부재/손상)
+ */
 function readJsonOptional(p) {
   if (!existsSync(p)) return null;
   try {
     return JSON.parse(readFileSync(p, 'utf-8'));
-  } catch {
+  } catch (err) {
+    corruptJsonPaths.push(`${p.replace(ROOT + '/', '')} (${err.message})`);
     return null;
   }
 }
@@ -100,6 +133,26 @@ function main() {
   const internals = readJsonOptional(internalsPath);
 
   const results = [];
+
+  // D7-W1: ai-contract/ai-internals(또는 다른 아티팩트)가 존재하는데 파싱에 실패하면
+  // "부재(=AI 없음 PASS)"로 흘려보내지 않고 즉시 fail-closed(exit 2)한다.
+  // 손상된 contract/internals를 신뢰할 수 없으므로 아래 AI-없음 분기보다 먼저 막는다.
+  if (corruptJsonPaths.length > 0) {
+    if (jsonOutput) {
+      process.stdout.write(
+        JSON.stringify(
+          { passed: false, error: 'corrupt-json', corrupt: corruptJsonPaths },
+          null,
+          2,
+        ) + '\n',
+      );
+    } else {
+      console.error('✗ ai-smoke fail-closed: AI 스펙 JSON 파싱 실패 (손상):');
+      for (const c of corruptJsonPaths) console.error(`    - ${c}`);
+      console.error('  손상된 스펙은 "AI 없음"과 다르다 — 재생성 후 재실행하세요.');
+    }
+    process.exit(2);
+  }
 
   // AI 기능이 없는 경우 — 통과로 처리
   if (!contract && !internals) {
@@ -216,6 +269,33 @@ function main() {
     missingAgentCalls.length ? missingAgentCalls.join(' | ') : null,
   );
 
+  // Check 2b (D5-W4): 계약(ai-contract.api_routes)에 미등재이지만 aiSignalRegex가
+  // 매칭되는 AI 라우트 경고. isAiNamespace 휴리스틱(/api/chat|agents?|ai)이 /api/assistant
+  // 같은 비표준 네임스페이스를 놓치므로, "계약을 우선 신뢰"하되 계약에 없는 AI 흔적
+  // 라우트는 경고로 노출한다. 비차단(passed:true) — 계약이 SSOT이고 오탐 방지.
+  const contractRoutePaths = new Set(
+    apiRoutes
+      .map((r) => (r.path ?? r.route ?? '').replace(/\/route\.ts$/, ''))
+      .filter(Boolean),
+  );
+  const unregisteredAiRoutes = [];
+  for (const f of apiFiles) {
+    // apiFiles는 이미 aiSignalRegex로 필터됨. 파일 경로 → /api/... 라우트 경로 복원.
+    const rel = f.replace(ROOT + '/', '');
+    const routePath = '/' + rel.replace(/^src\/app\//, '').replace(/\/route\.ts$/, '');
+    if (!contractRoutePaths.has(routePath)) {
+      unregisteredAiRoutes.push(routePath);
+    }
+  }
+  collectResult(
+    results,
+    'AI-signal routes are registered in ai-contract.api_routes (advisory)',
+    true, // 비차단: 계약이 SSOT. 경고만 노출.
+    unregisteredAiRoutes.length
+      ? `⚠ ai-contract.api_routes 미등재이나 AI 흔적(Agent/Strands/Bedrock) 감지: ${unregisteredAiRoutes.join(', ')} — 계약에 추가하거나 비-AI면 무시 가능`
+      : null,
+  );
+
   // Check 3: stub 문자열 부재 -------------------------------
   const stubHits = [];
   for (const f of [...libFiles, ...apiFiles]) {
@@ -241,18 +321,89 @@ function main() {
     sseEvents.map((e) => e.event_type).filter(Boolean),
   );
   const emittedEventTypes = new Set();
-  const emitPatterns = [
+  // SSE 컨텍스트가 명확한 패턴 (이벤트명을 직접 캡처):
+  //   - controller.enqueue(encoder.encode(`event: <name>\n ...
+  //   - sendEvent('x') / sendSse('x')
+  //   - emit('x')
+  const directEmitPatterns = [
     /controller\.enqueue\(\s*encoder\.encode\(\s*`event:\s*([a-z_]+)\\n/g,
     /send(?:Event|Sse)\(\s*['"]([a-z_]+)['"]/g,
     /emit\(\s*['"]([a-z_]+)['"]/g,
-    /type:\s*['"]([a-z_]+)['"]/g,
   ];
+  // D7-W4: bare `type:'x'`는 SSE 외(버튼 type:'submit', 테이블 컬럼 type:'text' 등)를
+  // 오수집한다. 따라서 `type:` 캡처는 SSE 전송 컨텍스트(enqueue/encode/sendEvent/emit/
+  // sendSse 호출 인자 블록) 안에서만 한정한다. 컨텍스트 식별자 다음의 균형 잡힌
+  // 인자 스팬을 추출하고, 그 스팬 내부의 `type:'x'`만 이벤트로 본다.
+  const SSE_CONTEXT_NEEDLES = [
+    'controller.enqueue(',
+    'encoder.encode(',
+    'sendEvent(',
+    'sendSse(',
+    'emit(',
+  ];
+
+  /**
+   * src에서 needle 호출의 인자 스팬(괄호 균형)을 모두 추출한다.
+   * 문자열/주석 내부 괄호는 무시한다.
+   * @param {string} src 소스 코드
+   * @param {string} needle 호출 시작 토큰(예: 'controller.enqueue(')
+   * @returns {string[]} 각 호출의 괄호 안 인자 텍스트 배열
+   */
+  function extractCallArgSpans(src, needle) {
+    const spans = [];
+    let i = 0;
+    while ((i = src.indexOf(needle, i)) !== -1) {
+      const start = i + needle.length;
+      let depth = 1;
+      let inStr = null;
+      let j = start;
+      while (j < src.length) {
+        const c = src[j];
+        const nx = src[j + 1];
+        if (inStr) {
+          if (c === '\\') { j += 2; continue; }
+          if (c === inStr) inStr = null;
+          j++;
+          continue;
+        }
+        if (c === '/' && nx === '/') { // 라인 주석 skip
+          const nl = src.indexOf('\n', j);
+          j = nl === -1 ? src.length : nl;
+          continue;
+        }
+        if (c === '/' && nx === '*') { // 블록 주석 skip
+          const end = src.indexOf('*/', j + 2);
+          j = end === -1 ? src.length : end + 2;
+          continue;
+        }
+        if (c === '"' || c === "'" || c === '`') { inStr = c; j++; continue; }
+        if (c === '(' || c === '[' || c === '{') depth++;
+        else if (c === ')' || c === ']' || c === '}') {
+          depth--;
+          if (depth === 0) { spans.push(src.slice(start, j)); break; }
+        }
+        j++;
+      }
+      i = start;
+    }
+    return spans;
+  }
+
+  const sseTypeRegex = /type:\s*['"]([a-z_]+)['"]/g;
   for (const f of apiFiles) {
     const src = readFileSync(f, 'utf-8');
-    for (const pat of emitPatterns) {
+    for (const pat of directEmitPatterns) {
       pat.lastIndex = 0;
       let m;
       while ((m = pat.exec(src))) emittedEventTypes.add(m[1]);
+    }
+    // SSE 전송 컨텍스트 안의 type:'x'만 수집 (버튼/테이블 type 오수집 차단)
+    for (const needle of SSE_CONTEXT_NEEDLES) {
+      for (const span of extractCallArgSpans(src, needle)) {
+        sseTypeRegex.lastIndex = 0;
+        let tm;
+        while ((tm = sseTypeRegex.exec(span))) emittedEventTypes.add(tm[1]);
+      }
     }
   }
   const missingInCode = [...contractEventTypes].filter(
@@ -352,6 +503,14 @@ function main() {
   const ALLOWED_MODEL_IDS = allowedModels.allowed_model_ids.map((m) => m.id);
   const FORBIDDEN_ALIASES = allowedModels.forbidden_aliases_in_sdk;
   const FORBIDDEN_ENV_VAR = allowedModels.forbidden_env_var; // 'BEDROCK_MODEL_ID'
+  // D7-W6: 라벨에 모델 버전을 하드코딩하면(예: 'opus-4-7') SSOT와 drift한다.
+  // allowed-models.json의 id에서 'claude-<family>-<major>-<minor>' 토큰만 뽑아 동적 조립.
+  const ALLOWED_MODEL_LABELS = allowedModels.allowed_model_ids
+    .map((m) => {
+      const mm = String(m.id).match(/claude-([a-z]+)-(\d+)-(\d+)/);
+      return mm ? `${mm[1]}-${mm[2]}-${mm[3]}` : m.alias || m.id;
+    })
+    .join('/');
   // model: '...' / modelId: '...' 형태 리터럴 추출. claude-* 또는 anthropic.* 패턴이 들어간 값만 모델 ID로 간주
   // 주석 사전 제거 — `// model: 'haiku' for triage` 같은 안내 주석이 false positive 만들지 않게
   const stripComments = (s) =>
@@ -374,7 +533,7 @@ function main() {
   }
   collectResult(
     results,
-    'model/modelId uses one of CLAUDE.md Rule 13 allowed IDs (haiku-4-5/sonnet-4-6/opus-4-7); shorthand aliases forbidden',
+    `model/modelId uses one of CLAUDE.md Rule 13 allowed IDs (${ALLOWED_MODEL_LABELS}); shorthand aliases forbidden`,
     invalidModelIds.length === 0,
     invalidModelIds.length ? invalidModelIds.slice(0, 5).join(' | ') : null,
   );
@@ -461,9 +620,19 @@ function main() {
   // agent-patterns / prompt-engineering / strands-sdk-typescript-guide 스킬 호출 흔적이
   // generation-log에 남아있어야 한다. 본문 prose만 보고 호출을 건너뛰는 회귀 차단.
   const aiLogPath = resolve(ROOT, `.pipeline/artifacts/v${version}/04-codegen/generation-log-ai.json`);
+  // D7-W1: 존재하는데 파싱 실패면 손상 → fail (부재와 구분). readJsonOptional이
+  // corruptJsonPaths에 기록하므로, 존재 여부로 부재/손상을 가른다.
+  const aiLogExists = existsSync(aiLogPath);
   const aiLog = readJsonOptional(aiLogPath);
   const REQUIRED_AI_CODEGEN_SKILLS = ['strands-sdk-typescript-guide', 'agent-patterns'];
-  if (aiLog) {
+  if (aiLogExists && !aiLog) {
+    collectResult(
+      results,
+      'code-generator-ai generation-log-ai.json parseable',
+      false,
+      `generation-log-ai.json 존재하나 파싱 실패(손상) — 재생성 필요: ${aiLogPath.replace(ROOT + '/', '')}`,
+    );
+  } else if (aiLog) {
     const used = Array.isArray(aiLog.skills_used) ? aiLog.skills_used : [];
     const missing = REQUIRED_AI_CODEGEN_SKILLS.filter((s) => !used.includes(s));
     collectResult(

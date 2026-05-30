@@ -41,12 +41,22 @@
  *         회귀를 차단. react-markdown/remark-gfm 의존성, MarkdownContent JSX 도입,
  *         {content}/{msg.content} raw 렌더링 안티패턴을 정적으로 검출.
  *
+ *   (K) review-categories.json ↔ reviewer.md / ssot_for drift (check-review-categories.mjs sub-call)
+ *       — 리뷰 카테고리 헤더(id/title)와 항상-활성 카테고리 수 라벨이 문서들과 일치하는지 검증(D2-W1).
+ *
+ *   (L) 하드코딩 모델 리터럴 화이트리스트 (이 파일 본문):
+ *       — .claude/agents/*.md 및 .pipeline/scripts/*.mjs의 `global.anthropic.claude-...` 리터럴이
+ *         allowed-models.json의 id 집합에 속하는지 검증. opus-4-7 같은 stale 라벨 drift 차단(D5-W2).
+ *
+ *   (M) consumers[] 경로 실존 (이 파일 본문):
+ *       — allowed-models.json.consumers[] 항목의 선행 파일 경로가 실제 존재하는지 검증(D2-W4 죽은 메타).
+ *
  * 사용법: node .pipeline/scripts/check-allowed-models-sync.mjs
  * 종료 코드: 0 = 모든 SSOT sync, 1 = 어느 하나라도 drift
  */
 
-import { readFileSync, existsSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
@@ -63,6 +73,29 @@ function fail(msg) {
 
 function pass(msg) {
   console.log(`  ✓ ${msg}`);
+}
+
+/**
+ * 디렉토리 안의 지정 확장자 파일 절대경로 목록을 반환한다(비재귀).
+ * 디렉토리가 없으면 빈 배열.
+ * @param {string} dir 절대경로 디렉토리
+ * @param {string} ext 확장자(예: '.md')
+ * @returns {string[]} 절대경로 배열
+ */
+function listFiles(dir, ext) {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((f) => f.endsWith(ext))
+    .map((f) => join(dir, f));
+}
+
+/**
+ * REPO_ROOT 기준 상대경로 문자열을 반환한다(메시지 가독성용).
+ * @param {string} abs 절대경로
+ * @returns {string} 상대경로
+ */
+function relFromRoot(abs) {
+  return abs.startsWith(REPO_ROOT + '/') ? abs.slice(REPO_ROOT.length + 1) : abs;
 }
 
 function main() {
@@ -134,6 +167,60 @@ function main() {
     pass('shorthand alias warning present in CLAUDE.md');
   }
 
+  // (L) 하드코딩 모델 리터럴 화이트리스트 (D5-W2)
+  // .claude/agents/*.md 와 .pipeline/scripts/*.mjs 안의 `global.anthropic.claude-...` 리터럴이
+  // SSOT id 집합에 속하는지 검증한다. opus-4-7 같은 stale 라벨이 다른 그룹의 수정 누락으로
+  // 남아 있으면 여기서 차단된다. (실제 문자열 수정은 .md=G8, .mjs=G2 담당; 본 체커는 가드.)
+  // 캡처는 넓게 하되, '실제 모델 ID 형태'(claude-<family>-<digit>...)만 정책 대상으로 간주한다.
+  // 이렇게 하면 본 체커/ai-smoke 등의 정규식 소스(`claude-[a-z0-9...`)나 주석의 생략부호
+  // (`claude-...`)는 family 뒤에 숫자가 오지 않으므로 자동 제외되어 오탐을 막는다.
+  const MODEL_LITERAL = /global\.anthropic\.claude-[a-z0-9.\-:_]+/g;
+  const REAL_ID_SHAPE = /^global\.anthropic\.claude-[a-z]+-\d/;
+  const literalTargets = [
+    ...listFiles(resolve(REPO_ROOT, '.claude/agents'), '.md'),
+    ...listFiles(SCRIPT_DIR, '.mjs'),
+  ];
+  const staleLiterals = [];
+  for (const abs of literalTargets) {
+    const body = readFileSync(abs, 'utf-8');
+    for (const m of body.matchAll(MODEL_LITERAL)) {
+      const token = m[0];
+      if (!REAL_ID_SHAPE.test(token)) continue; // 정규식 소스/주석 생략부호 등은 정책 대상 아님
+      if (!ssotIds.has(token)) {
+        staleLiterals.push(`${relFromRoot(abs)} → "${token}"`);
+      }
+    }
+  }
+  if (staleLiterals.length > 0) {
+    for (const s of staleLiterals) {
+      fail(`hardcoded model literal not in SSOT: ${s}`);
+    }
+    failed++;
+  } else {
+    pass(`all hardcoded model literals in .claude/agents/*.md + .pipeline/scripts/*.mjs are SSOT ids`);
+  }
+
+  // (M) consumers[] 선행 경로 실존 (D2-W4 죽은 메타데이터)
+  // consumers[] 항목은 "<path> (note)" 또는 "CLAUDE.md Rule 13 (...)" 같은 자유 텍스트가 섞여 있다.
+  // 첫 공백 토큰이 파일 경로 형태(슬래시 포함 또는 .md/.mjs/.json/.ts/.tsx 확장자)면 존재를 검증한다.
+  const PATH_LIKE = /[\\/]|\.(md|mjs|json|tsx?|js)$/i;
+  const deadConsumers = [];
+  for (const entry of ssot.consumers ?? []) {
+    const firstToken = String(entry).trim().split(/\s+/)[0];
+    if (!PATH_LIKE.test(firstToken)) continue; // 경로 아님 → skip
+    if (!existsSync(resolve(REPO_ROOT, firstToken))) {
+      deadConsumers.push(`"${firstToken}" (from consumers[] entry: ${entry})`);
+    }
+  }
+  if (deadConsumers.length > 0) {
+    for (const d of deadConsumers) {
+      fail(`consumers[] path does not exist: ${d}`);
+    }
+    failed++;
+  } else {
+    pass(`all consumers[] file paths in allowed-models.json exist`);
+  }
+
   // (A) 결과 출력
   if (failed > 0) {
     console.error(`\n[A] ${failed} drift(s) in CLAUDE.md ↔ allowed-models.json.`);
@@ -152,6 +239,7 @@ function main() {
     { name: '[H] API response envelope shape', script: 'check-envelope.mjs' },
     { name: '[I] stages.json ↔ .claude/* drift', script: 'check-stages-sync.mjs' },
     { name: '[J] AI streaming markdown rendering', script: 'check-markdown-render.mjs' },
+    { name: '[K] review-categories.json ↔ reviewer.md / ssot_for', script: 'check-review-categories.mjs' },
   ];
 
   let totalFailed = failed;
@@ -174,7 +262,7 @@ function main() {
     );
     process.exit(1);
   }
-  console.log('\n✓ 모든 정책 SSOT (모델 ID / store naming / strands Rule 13 / agent models / Bedrock import / spec model_id / reviewer skills / API envelope / stages drift / markdown rendering) 동기화 확인.');
+  console.log('\n✓ 모든 정책 SSOT (모델 ID / store naming / strands Rule 13 / agent models / Bedrock import / spec model_id / reviewer skills / API envelope / stages drift / markdown rendering / review categories / hardcoded model literals / consumers paths) 동기화 확인.');
   process.exit(0);
 }
 

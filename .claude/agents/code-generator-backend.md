@@ -71,7 +71,7 @@ src/
 │           └── route.ts      # GET (상세), PUT (수정), DELETE (삭제)
 ├── data/                     # 시드 데이터
 │   └── seed.ts               # 초기 목데이터
-└── proxy.ts                   # Next.js Proxy (구 middleware.ts, 보안 헤더 + 보호 라우트 가드)
+└── proxy.ts                   # Next.js Proxy (보안 헤더 + 보호 라우트 가드, _preamble §11)
 ```
 
 ## 도메인 컨텍스트 활용 (domain-context.json이 있으면)
@@ -94,7 +94,7 @@ src/
 6. **API 계약 준수** — 단일 소스: `CLAUDE.md > API Contract Conventions` (envelope, HTTP 코드, 경로/쿼리 네이밍, zod ↔ TS 바인딩). 본 에이전트는 그 정의를 변형하지 않는다. 추가로 다음 두 가지를 보장한다:
    - `api-contract.json`의 `typeBindings`에 정의된 이름 그대로 `src/types/`에 export (예: `CreateVehicleRequest`, `ListVehiclesResponse`)
    - route handler의 `NextResponse.json<ResponseType>(...)` 제네릭에 정확한 응답 타입 명시
-7. **인증/proxy 패턴**: 인증 FR이 있으면 `nextjs-auth-patterns` 스킬을 호출하여 `src/proxy.ts`(Next.js 16에서 `middleware.ts` → `proxy.ts`로 리네이밍됨), `src/lib/auth/session.ts`, `src/app/api/auth/callback/route.ts` 등을 생성한다. `export function proxy(request)` 시그니처를 사용하며 `middleware.ts`/`export function middleware()` 패턴은 작성 금지(reviewer가 P0 반려). 기본은 `AUTH_PROVIDER=mock` (개발 편의), `/awsarch` 후 `cognito`로 전환된다. 인증 FR이 없으면 proxy는 보안 헤더만 처리한다.
+7. **인증/proxy 패턴**: 인증 FR이 있으면 `nextjs-auth-patterns` 스킬을 호출하여 `src/proxy.ts`(_preamble §11 — 시그니처/모드/리네이밍 규약 단일 정의), `src/lib/auth/session.ts`, `src/app/api/auth/callback/route.ts` 등을 생성한다.
 
 ## 점진적 작업 규칙
 
@@ -159,7 +159,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
    d. **db** — 인메모리 스토어 + repository
    e. **services** — AWS 서비스 래퍼 (필요 시)
    f. **api** — Route Handlers
-   g. **proxy** (`src/proxy.ts`, 구 `middleware.ts`) — 보안 헤더, 인증 가드
+   g. **proxy** (`src/proxy.ts`, _preamble §11) — 보안 헤더, 인증 가드
 3. `npm run build` + `npm run lint` 로 검증 (lint error 0 필수. 실패 시 최대 3회 재시도)
 4. **`api-manifest.json` 추출** (아래 "api-manifest.json 추출" 섹션 참조)
 5. 생성 로그 작성
@@ -178,7 +178,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
    - 함수 본문에서 호출하는 zod 스키마 이름 (요청 스키마)
    - `import type { ... }` 구문으로 임포트하는 타입 이름 목록
 3. `src/lib/validation/schemas.ts`와 `src/types/*.ts`의 export 이름 목록을 수집
-4. `api-contract.json`과 대조: 실제 구현이 계약과 다르면 **실제 구현을 매니페스트에 기록**하고 `drift_notes[]`에 불일치를 남긴다 (계약은 수정하지 않음 — reviewer가 판단)
+4. **자기검증 (필수)**: 위 2단계에서 route.ts로부터 추출한 각 핸들러의 `responseType`/`requestType` 문자열이 3단계에서 수집한 `src/types/*.ts`의 **실제 export 이름**과 1:1 일치하는지 대조한다. 일치하지 않는 항목(예: route는 `ListVehiclesResponse`를 import하는데 `src/types/`에는 그런 export가 없음)은 매니페스트에 그대로 기록하되 `drift_notes[]`에 `{ "endpoint": ..., "manifest_type": "ListVehiclesResponse", "issue": "src/types에 해당 export 없음" }` 형태로 남기고, 가능하면 BE 코드를 고쳐 일치시킨다. **이 추출은 LLM이 route.ts 본문을 읽어 타입/제네릭/zod 이름을 눈으로 식별하는 방식이라 brittle하므로 — 추출 직후 반드시 export 이름 셋과 대조하는 자기검증을 거친다.**
+5. `api-contract.json`과 대조: 실제 구현이 계약과 다르면 **실제 구현을 매니페스트에 기록**하고 `drift_notes[]`에 불일치를 남긴다 (계약은 수정하지 않음 — reviewer가 판단)
+
+> **cross-check-endpoints.mjs의 한계 (명시)**: 다운스트림의 `cross-check-endpoints.mjs`는 FE 훅 ↔ api-contract drift를 **method+path 단위로만** 검증한다 — `responseType`/`requestType` 문자열의 타입 정합까지는 보지 않는다. 따라서 타입 이름 drift는 이 위 4단계 자기검증과 reviewer cat 6(api-contract-zod)이 마지막 방어선이다. 결정론적 타입 추출 스크립트는 아직 없으므로(향후 과제), BE 에이전트는 자기검증을 생략하지 않는다.
 
 ### 포맷 (`.pipeline/artifacts/v{N}/04-codegen/api-manifest.json`)
 
@@ -255,10 +258,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 ### `nextjs16-app-router` — Route Handler / proxy 작성 시 호출
 - async params/searchParams (Next 16 Promise 처리), Server Actions, generateMetadata 패턴
-- `proxy.ts`(구 `middleware.ts`) 파일 컨벤션 — Next.js 16 리네이밍 정책
+- `proxy.ts` 파일 컨벤션 (_preamble §11)
 
 ### `nextjs-auth-patterns` — 인증 FR이 있을 때 호출
-- `src/proxy.ts`(구 `src/middleware.ts`), JWT 검증, Cognito 콜백 라우트 구현 패턴
+- `src/proxy.ts`(_preamble §11), JWT 검증, Cognito 콜백 라우트 구현 패턴
 
 ## 피드백 처리
 

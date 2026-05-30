@@ -419,7 +419,7 @@ grep -rEn "\\{\\s*(msg|message)\\.content\\s*\\}" src/ 2>/dev/null
     "code_organization": { "pass": true, "checked_files": 20, "evidence": "No circular imports, consistent naming, types shared correctly" },
     "comment_language": { "pass": true, "checked_files": 20, "evidence": "All file headers and JSDoc in Korean, code in English" },
     "seed_data_consistency": { "pass": true, "checked_files": 4, "evidence": "All FK references valid, status values match enum definitions, data volume meets NFR" },
-    "model_id_compliance": { "pass": true, "checked_files": 3, "evidence": "All Agent() literals use whitelisted model IDs (haiku-4-5/sonnet-4-6/opus-4-7), no process.env.BEDROCK_MODEL_ID fallback, no shorthand abuse" },
+    "model_id_compliance": { "pass": true, "checked_files": 3, "evidence": "All Agent() literals use whitelisted model IDs (SSOT: allowed-models.json), no process.env.BEDROCK_MODEL_ID fallback, no shorthand abuse" },
     "aws_integration": { "applicable": false, "applicable_when": "/awsarch mode only", "pass": null, "evidence": "Skipped — not in /awsarch mode" }
   },
   "test": {

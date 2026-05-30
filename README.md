@@ -33,7 +33,7 @@ AWS Solutions Architect가 고객 요구사항으로부터 **Next.js 16 + Clouds
 [6a. QA 테스트] → 빌드 + Playwright E2E → 수정 (PASS까지 최대 3회)
     │
     ▼
-[6b. 코드 리뷰] → 동작하는 코드에 대해 11개 카테고리 품질 검증 (10·11은 조건부)
+[6b. 코드 리뷰] → 동작하는 코드에 대해 품질 검증 (항상 활성 10 + 조건부 2, SSOT: review-categories.json)
     │
     ▼
 [7. 보안 점검] → OWASP 기반 보안 감사
@@ -275,11 +275,11 @@ halt 발생 시:
 
 ## 디렉토리 구조
 
-<!-- AUTOGEN:dir-tree:START -->
+<!-- MANUAL:dir-tree — 수동 유지. 자동 생성 스크립트 없음. .claude/ 및 .pipeline/scripts/ 구조 변경 시 직접 동기화 (START) -->
 ```
 cde-harness/
 ├── .claude/
-│   ├── agents/                     # 서브에이전트 정의 (19개, 전원 Opus)
+│   ├── agents/                     # 서브에이전트 정의 (19개, opus 15 + sonnet 4)
 │   │   ├── architect.md              # 아키텍처 설계 (effort: max)
 │   │   ├── aws-architect.md           # AWS 인프라 설계 (effort: max)
 │   │   ├── aws-deployer.md            # CDK 배포 + 데이터 마이그레이션 (effort: max)
@@ -294,7 +294,7 @@ cde-harness/
 │   │   ├── qa-engineer.md             # Playwright E2E 테스트 (effort: high)
 │   │   ├── reconcile-analyzer.md      # 코드→아티팩트 역동기화 - /reconcile (effort: high)
 │   │   ├── requirements-analyst.md    # 요구사항 분석 (effort: high)
-│   │   ├── reviewer.md                # 9카테고리 품질 리뷰 (effort: high)
+│   │   ├── reviewer.md                # 품질 리뷰 (항상 활성 10 + 조건부 2, effort: high)
 │   │   ├── security-auditor-pipeline.md # OWASP 보안 감사 (effort: high)
 │   │   ├── spec-writer-ai.md          # AI 스펙 작성 - 조건부 (effort: high)
 │   │   ├── spec-writer-backend.md     # 백엔드 스펙 작성 (effort: high)
@@ -337,7 +337,7 @@ cde-harness/
 │   │   ├── stages.json               # 스테이지 카탈로그 SSOT (이름/순서/budget)
 │   │   ├── stages.mjs                # stages.json import 진입점 (코드용 SSOT)
 │   │   ├── allowed-models.json       # AI 모델 ID 화이트리스트 (Rule 13 SSOT)
-│   │   ├── review-categories.json    # reviewer 11개 카테고리 SSOT
+│   │   ├── review-categories.json    # reviewer 카테고리 SSOT (항상 활성 10 + 조건부 2)
 │   │   ├── ai-smoke.mjs              # AI 구현 런타임 가드 (stub/SSE/모델ID)
 │   │   ├── cross-check-endpoints.mjs # api-contract ↔ manifest ↔ FE훅 3자 검증
 │   │   ├── check-allowed-models-sync.mjs # CLAUDE.md ↔ allowed-models.json drift 차단
@@ -375,7 +375,7 @@ cde-harness/
 ├── eslint.config.mjs               # ESLint 규칙
 └── .prettierrc                     # Prettier 설정
 ```
-<!-- AUTOGEN:dir-tree:END -->
+<!-- MANUAL:dir-tree (END) -->
 
 ---
 
@@ -440,10 +440,10 @@ cde-harness/
 
 ### 6B. 코드 리뷰 (Reviewer)
 - QA 통과한 코드에 대해 **정적 품질 리뷰만** 수행 (테스트 생성/실행은 QA가 담당)
-- **11개 카테고리** (SSOT: `.pipeline/scripts/review-categories.json`):
-  - 항상 활성 9개: Cloudscape 준수, Next.js 16 규약, TypeScript 품질, 접근성, 요구사항 커버리지, 백엔드 품질, 코드 구조, 주석 언어, 시드 데이터 일관성
-  - 조건부 1개 — 항상 활성: AI 모델 ID 컴플라이언스 (Rule 13 화이트리스트 3개 강제)
+- **카테고리: 항상 활성 10 + 조건부 2** (SSOT: `.pipeline/scripts/review-categories.json` — 정확한 목록/활성 조건은 이 JSON이 단일 소스):
+  - 항상 활성 10개: Cloudscape 준수, Next.js 16 규약, TypeScript 품질, 접근성, 요구사항 커버리지, 백엔드 품질, 코드 구조, 주석 언어, 시드 데이터 일관성, AI 모델 ID 컴플라이언스 (Rule 13 화이트리스트 3개 강제)
   - 조건부 1개 — `/awsarch` 후만 활성: AWS 통합 품질 (DynamoDB/S3/Cognito 패턴 검증)
+  - 조건부 1개 — AI FR 존재 시만 활성: AI 스트리밍 마크다운 렌더링 (react-markdown/remark-gfm 페어링 강제)
 - FAIL 시 수정 → **6A 테스트부터 재실행** (리뷰 수정이 기능을 깨뜨리지 않았는지 확인)
 - **산출물**: `review-report.md`, `test-report.md`, `review-result.json`
 
@@ -568,7 +568,7 @@ Phase 4  state.json 갱신 + reconcile-report.md 생성
 Phase 5  완료 (docs-only) → git commit (아티팩트만)
 
 --qa 옵션 시 추가:
-Phase 6  QA(Playwright) → Review(9카테고리) → Security(OWASP)
+Phase 6  QA(Playwright) → Review(항상 활성 10 + 조건부 2) → Security(OWASP)
 ```
 
 ### 변경 분류
@@ -628,7 +628,7 @@ Phase 5  시드 데이터 DynamoDB 마이그레이션
 완료 → DATA_SOURCE=dynamodb로 전환하여 npm run dev 확인
 
 --qa 옵션 시 추가:
-Phase 6  QA(Playwright) → Review(9카테고리) → Security(OWASP)
+Phase 6  QA(Playwright) → Review(항상 활성 10 + 조건부 2) → Security(OWASP)
 ```
 
 ### 생성되는 infra/ 구조
@@ -693,18 +693,18 @@ cd infra && npx cdk destroy   # 인프라 제거
 
 ### 에이전트 모델 배치
 
-19개 에이전트 전원 **Opus**를 사용하며, **effort** 등급(max/high/medium)으로 품질-속도 트레이드오프를 조절합니다.
+19개 에이전트는 **opus/sonnet을 혼용**하며 (15개 opus + 4개 sonnet), **effort** 등급(max/high/medium)으로 품질-속도 트레이드오프를 조절합니다. 모델 배치 SSOT는 `.claude/agents/_preamble.md` §8이며, `node .pipeline/scripts/check-agent-models.mjs`가 각 에이전트 frontmatter와의 drift를 차단합니다.
 
-| effort | 에이전트 | 역할 |
-|--------|----------|------|
-| **max** | architect, aws-architect, aws-deployer | 설계 + 인프라 |
-| **max** | code-generator-backend, code-generator-ai, code-generator-frontend | 코드 생성 |
-| **high** | requirements-analyst | 요구사항 분석 |
-| **high** | spec-writer-backend, spec-writer-ai, spec-writer-frontend | 명세서 작성 |
-| **high** | qa-engineer, reviewer, security-auditor-pipeline | 품질 검증 |
-| **high** | feedback-analyzer, reconcile-analyzer | 변경 영향 분석 |
-| **medium** | domain-researcher, brief-composer | 리서치 + 문서 조립 |
-| **medium** | git-manager, handover-packager | Git + 핸드오버 |
+| 모델 | effort | 에이전트 | 역할 |
+|------|--------|----------|------|
+| **opus** | **max** | architect, aws-architect, aws-deployer | 설계 + 인프라 |
+| **opus** | **max** | code-generator-backend, code-generator-ai, code-generator-frontend | 코드 생성 |
+| **opus** | **high** | requirements-analyst | 요구사항 분석 |
+| **opus** | **high** | spec-writer-backend, spec-writer-ai, spec-writer-frontend | 명세서 작성 |
+| **opus** | **high** | qa-engineer, reviewer, security-auditor-pipeline | 품질 검증 |
+| **opus** | **high** | feedback-analyzer, reconcile-analyzer | 변경 영향 분석 |
+| **sonnet** | **medium** | domain-researcher, brief-composer | 리서치 + 문서 조립 |
+| **sonnet** | **medium** | git-manager, handover-packager | Git + 핸드오버 |
 
 ---
 
@@ -780,7 +780,7 @@ https://cloudscape.design/patterns/{path}/index.html.md
 
 ## NPM 스크립트
 
-<!-- AUTOGEN:npm-scripts:START -->
+<!-- MANUAL:npm-scripts — 수동 유지. 자동 생성 스크립트 없음. package.json의 scripts 변경 시 직접 동기화 (START) -->
 ```bash
 npm run dev           # next dev --turbopack
 npm run build         # next build
@@ -793,4 +793,4 @@ npm run type-check    # tsc --noEmit
 npm run test:e2e      # playwright test
 npm run test:e2e:ui   # playwright test --ui
 ```
-<!-- AUTOGEN:npm-scripts:END -->
+<!-- MANUAL:npm-scripts (END) -->

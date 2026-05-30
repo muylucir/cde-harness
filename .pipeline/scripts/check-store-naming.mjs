@@ -10,6 +10,9 @@
  *   1. 하네스 문서(.claude/, CLAUDE.md, docs/) 어디에도 `store-factory.ts`/`create-store.ts` 등장 금지
  *   2. 산출물 코드(src/lib/db/) 존재 시 createStore.ts만 허용 (store-factory.ts/create-store.ts 동시 존재 금지)
  *
+ * 검사 루트 (D7-W2): 항상 하네스 루트(= 이 스크립트 위치 기준 ../..)만 검사한다.
+ *   다른 검증 스크립트와 동일 기준이며 process.cwd()에 의존하지 않는다.
+ *
  * 사용법: node .pipeline/scripts/check-store-naming.mjs
  * 종료: 0 = sync, 1 = drift
  */

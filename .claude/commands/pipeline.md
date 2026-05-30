@@ -9,7 +9,7 @@ Execute the complete prototype generation pipeline from customer brief to handov
 ## 절대 규칙 (위반 시 즉시 중단)
 
 1. **코드를 직접 수정하지 마라** — Edit/Write로 `src/` 파일을 수정하는 것은 금지. 반드시 `code-generator-*` 에이전트를 Launch하여 코드를 생성/수정한다.
-2. **Stage 순서를 건너뛰지 마라** — Pre-flight → Stage 1 → 2 → 3 → 4 → 5 → 6a → 6b → 7 순서를 반드시 따른다. (핸드오버는 `/handover` 별도 커맨드)
+2. **Stage 순서를 건너뛰지 마라** — Pre-flight → Stage 1 → 2 → 3 → 4 → 5 → 6a → 6b → 7 → 7+(ai-smoke) 순서를 반드시 따른다. (핸드오버는 `/handover` 별도 커맨드)
 3. **APPROVAL GATE에서 반드시 멈춰라** — 사용자가 응답할 때까지 다음 Stage로 진행하지 않는다 (auto 모드 제외).
 4. **CHECKPOINT를 통과해야 다음 Stage로 간다** — 각 Stage 끝의 검증 조건을 확인한 후에만 다음 Stage로 넘어간다. **auto 모드에서도 CHECKPOINT는 항상 실행한다.**
 5. **APPROVAL GATE는 코드로 기록한다** — 사용자가 통과시킨 직후 즉시 다음 명령을 실행하여 `state.json`에 기록한다.
@@ -185,6 +185,8 @@ Auto 모드에서도 **CHECKPOINT**, **품질 루프(Stage 6)**, **서킷 브레
 
 모든 단계를 순차 실행한다. 코드 생성 후에는 **테스트 루프(기능 검증) → 리뷰(품질 검증)** 순서로 코드 품질을 보장한다.
 
+> **Stage 번호 ↔ stages.json `order` 매핑 (사람용 번호는 묶음 라벨)**: 아래 "Stage N"은 사람이 읽기 쉬운 묶음 라벨이고, `checkpoint.mjs`가 보는 실제 stage 이름/순서는 `.pipeline/scripts/stages.json`의 `order` 필드가 SSOT다. 매핑: Stage 1=`domain-researcher`(order 0), Stage 2=`requirements-analyst`(1), Stage 3=`architect`(2), Stage 4=`spec-writer-backend`(3)/`spec-writer-ai`(4)/`spec-writer-frontend`(5), Stage 5=`code-generator-backend`(6)/`code-generator-ai`(7)/`code-generator-frontend`(8), Stage 6a=`qa-engineer`(9), Stage 6b=`reviewer`(10), Stage 7=`security-auditor-pipeline`(11), Stage 7+=`ai-smoke`(12). 유효 stage 이름은 `node .pipeline/scripts/checkpoint.mjs list-stages`로 조회한다.
+
 ```
 Stage 1   도메인 리서치 ← 승인 게이트 (제안 요구사항)
     ↓
@@ -206,9 +208,11 @@ Stage 6b  리뷰 (동작하는 코드에 대해)
     │  FAIL → 수정 → 6a 테스트부터 재검증
     ↓
 Stage 7   보안 점검
+    ↓
+Stage 7+  AI Smoke (AI 기능 있을 때만, 정식 stage / 없으면 자동 skip)
 ```
 
-> **핸드오버 패키지는 파이프라인 밖**에서 `/handover` 커맨드로 별도 실행한다. `/pipeline`은 Stage 7(보안)로 끝난다.
+> **핸드오버 패키지는 파이프라인 밖**에서 `/handover` 커맨드로 별도 실행한다. `/pipeline`은 Stage 7(보안) → Stage 7+(ai-smoke, AI 있을 때)로 끝난다.
 
 ### Stage 1: Domain Research
 
@@ -538,11 +542,27 @@ node .pipeline/scripts/checkpoint.mjs check security-auditor-pipeline \
   "json-key:.pipeline/artifacts/v{N}/06-security/security-result.json:verdict"
 ```
 
+### Stage 7+: AI Smoke (AI 기능이 있는 경우 필수, 정식 stage)
+
+> `/iterate`·`/reconcile --qa`·`/awsarch --qa`와 4개 플로우를 대칭화한다. ai-smoke는 stages.json의 정식 stage(`order=12`, `optional_gate_cmd`로 `has-ai.mjs`)다. AI 관련 FR이 없으면 `cmdStart`가 자동으로 `status: "skipped"` 엔트리를 push하고 정상 종료하므로 **무조건 호출하면 된다**.
+
+```bash
+node .pipeline/scripts/checkpoint.mjs start ai-smoke
+# → AI 있음: stages[]에 running 엔트리 추가, 아래 check로 검증
+# → AI 없음: stages[]에 skipped 엔트리 추가 (exit 0), 즉시 다음으로
+node .pipeline/scripts/checkpoint.mjs check ai-smoke
+```
+
+- Stage 5b의 code-generator-ai 체크포인트에서도 `ai-smoke.mjs`가 인라인으로 돌지만, 이 정식 stage는 **품질 루프(Stage 6/7)가 코드를 수정한 뒤** stub/모델 ID/Agent 호출/SSE 종결 회귀가 다시 들어오지 않았는지를 종료 직전 1회 재확인한다 (start/check 래핑으로 budget·flip-flop 카운터 안에서 관찰 가능).
+- exit 1이면 `code-generator-ai`에 피드백 → 재생성 (최대 1회). 이후 Stage 6a부터 재검증. budget 초과 시 halt.
+
 ## Completion
 
 When all stages pass:
 1. Mark current version completed — `checkpoint.mjs`로 위임 (LLM은 state.json 직접 쓰지 않음, _preamble §3):
    ```bash
+   # AI 기능이 있으면 마지막 finalized stage가 ai-smoke이므로 --stage=ai-smoke,
+   # AI가 없으면 security-auditor-pipeline. (생략하면 마지막 finalized stage가 자동 사용된다.)
    node .pipeline/scripts/checkpoint.mjs complete \
      --stage=security-auditor-pipeline \
      --notes="all stages green"

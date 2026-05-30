@@ -203,7 +203,9 @@ brief-composer가 생성하는 형식과 동일하게 유지한다. 질문별로
 - **반영 위치**: 답변이 오면 어느 아티팩트/FR에 반영되는지 (예: FR-003 acceptance_criteria, 새 FR-006 description)
 - **답변 란**: 비어있으며 사용자가 직접 채움
 
-파일이 이미 존재하면 (이전 이터레이션에서 남아있는 경우) **덮어쓰지 않고** 이번 리비전용 질문을 append하되, 상단에 `## v{N+1} 이터레이션 질문` 구분선을 둔다. 또는 버전별 별도 파일 `.pipeline/input/clarifications-v{N+1}.md`로 생성해도 된다 (/iterate가 두 경로 모두 점검).
+**권장**: 이번 이터레이션 질문은 버전별 파일 `.pipeline/input/clarifications-v{N+1}.md`로 생성한다. 버전별 파일은 누적 답변 혼선을 막고 이번 리비전 답변만 깔끔하게 분리한다.
+
+**예외 (고정 파일 append)**: 고정 파일 `.pipeline/input/clarifications.md`가 이미 존재하면 (이전 이터레이션에서 남아있는 경우) **덮어쓰지 않고** 이번 리비전용 질문을 append하되, 상단에 `## v{N+1} 이터레이션 질문` 구분선을 둔다. `/iterate` Phase 2는 두 경로(`clarifications-v{N+1}.md`와 고정 `clarifications.md`의 구분선 이하)를 **모두 점검**하므로 어느 쪽이든 답변이 누락되지 않는다.
 
 #### 사용자 대면 보고
 

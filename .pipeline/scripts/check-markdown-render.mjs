@@ -17,16 +17,23 @@
  *   (2) src/ 안에 `useAIStreaming` 훅이 사용되는 컴포넌트가 1개 이상 존재
  *       (= AI 스트리밍 UI가 실제로 구현됐다는 신호)
  *   (3) src/ 안에 `react-markdown` import + `<ReactMarkdown` 또는 `<MarkdownContent` JSX 사용 1개 이상
- *   (4) `useAIStreaming`을 호출하는 컴포넌트는 직접 또는 간접(MarkdownContent 경유)으로
+ *   (4) `useAIStreaming`을 호출하는 컴포넌트는 직접 또는 간접으로
  *       react-markdown을 통해 streaming content를 렌더링해야 함
- *       — 휴리스틱: 그 파일이 react-markdown / MarkdownContent를 import하지 않으면서
- *         JSX 안에 `{content}`, `{msg.content}`, `{message.content}` 같은 raw 렌더링이
- *         assistant 분기에 등장하면 FAIL
+ *       — 휴리스틱 (D7-W3 개선):
+ *         · 같은 파일이 react-markdown/MarkdownContent를 직접 사용하면 OK
+ *         · 같은 파일이 자식 컴포넌트(<ChatBubble> 등)에 렌더링을 위임하고,
+ *           그 자식이 src/ 어딘가에서 markdown 렌더러로 정의돼 있으면 OK (import 그래프 1-hop)
+ *         · 위 둘 다 아니면서 `{content}`/`{msg.content}` 같은 raw 렌더링이 등장하면 FAIL
  *
  * 휴리스틱 한계:
  *   - 정적 grep 기반. 변수명이 다르면 (예: streamingText) false negative 가능
  *   - 그러나 cloudscape-design 스킬이 가이드하는 표준 변수명(`content`, `msg.content`)을
  *     따른 코드는 안정적으로 잡는다
+ *   - 위임 판정은 1-hop만 따른다(자식의 자식까지는 추적 안 함). 그래도 가장 흔한
+ *     "스트리밍 훅은 페이지/패널에, 마크다운 렌더는 ChatBubble에" 구조의 오탐을 제거한다.
+ *
+ * 검사 루트 (D7-W2): 항상 하네스 루트(= 이 스크립트 위치 기준 ../..)의 src/만 검사한다.
+ *   다른 5개 검증 스크립트와 동일 기준이며 process.cwd()에 의존하지 않는다.
  *
  * 사용처:
  *   - check-allowed-models-sync.mjs sub-check [J]에서 통합 호출
@@ -100,6 +107,8 @@ function detectAiFromRequirements() {
 /**
  * 한 파일에서 react-markdown 도입 여부와 raw 렌더링 안티패턴을 측정한다.
  * 반환값은 검증 단계에서 집계에 사용된다.
+ * @param {string} src 파일 소스 텍스트
+ * @returns {object} 분석 결과 플래그 모음
  */
 function analyzeFile(src) {
   const importsReactMarkdown = /from\s+['"`]react-markdown['"`]/.test(src);
@@ -112,7 +121,23 @@ function analyzeFile(src) {
 
   const usesUseAIStreaming = /\buseAIStreaming\s*\(/.test(src);
 
-  // raw 렌더링 안티패턴: assistant 분기 안에 {content} / {msg.content} / {message.content}
+  // 이 파일이 직접 markdown을 렌더링하는가 (react-markdown JSX 또는 MarkdownContent JSX).
+  const rendersMarkdownDirectly =
+    (importsReactMarkdown && usesReactMarkdownJsx) || usesMarkdownContentJsx;
+
+  // D7-W3: 이 파일이 렌더링을 위임하는 "자식 커스텀 컴포넌트" 태그 집합.
+  // PascalCase JSX 태그만 커스텀 컴포넌트로 간주(HTML 태그/소문자 제외).
+  // 예: <ChatBubble ...>, <AssistantMessage/>. ReactMarkdown/MarkdownContent는 제외(직접 렌더).
+  const childComponents = new Set();
+  const jsxTagRegex = /<([A-Z][A-Za-z0-9_]*)[\s/>]/g;
+  let jm;
+  while ((jm = jsxTagRegex.exec(src))) {
+    const tag = jm[1];
+    if (tag === 'ReactMarkdown' || tag === 'MarkdownContent') continue;
+    childComponents.add(tag);
+  }
+
+  // raw 렌더링 안티패턴: {content} / {msg.content} / {message.content} / {m.content}
   // 가 JSX child로 직접 노출되는 경우. 단순 grep으로 잡는다.
   const RAW_RENDER_PATTERNS = [
     /\{\s*content\s*\}/, // {content}
@@ -128,8 +153,22 @@ function analyzeFile(src) {
     usesReactMarkdownJsx,
     usesMarkdownContentJsx,
     usesUseAIStreaming,
+    rendersMarkdownDirectly,
+    childComponents,
     hasRawRender,
   };
+}
+
+/**
+ * 파일 경로에서 컴포넌트 이름 후보를 뽑는다 (PascalCase 파일명 기준).
+ * 예: src/components/chat/ChatBubble.tsx → "ChatBubble".
+ * @param {string} path 파일 경로
+ * @returns {string|null} 컴포넌트 이름 또는 null
+ */
+function componentNameFromPath(path) {
+  const base = path.split('/').pop() ?? '';
+  const name = base.replace(/\.(tsx|ts)$/, '');
+  return /^[A-Z][A-Za-z0-9_]*$/.test(name) ? name : null;
 }
 
 function main() {
@@ -164,44 +203,53 @@ function main() {
     }
   }
 
-  // 3. src/ 파일 분석
+  // 3. src/ 파일 분석 (2-pass: 먼저 전 파일 분석 + markdown 렌더러 컴포넌트 집합 구축,
+  //    그다음 위임 관계를 반영해 위반 판정).
   const files = walk(SRC_DIR, (p) => p.endsWith('.tsx') || p.endsWith('.ts'));
 
+  const analyzed = []; // { rel, a }
+  const markdownRendererComponents = new Set(); // 직접 markdown을 렌더하는 컴포넌트 이름들
   let streamingComponents = 0;
   let markdownComponents = 0;
-  const rawRenderViolators = [];
-  const streamingWithoutMarkdown = [];
 
   for (const f of files) {
     const src = readFileSync(f, 'utf-8');
     const a = analyzeFile(src);
     const rel = f.replace(REPO_ROOT + '/', '');
+    analyzed.push({ rel, a });
 
     if (a.usesUseAIStreaming) streamingComponents++;
-    if (
-      (a.importsReactMarkdown && a.usesReactMarkdownJsx) ||
-      a.usesMarkdownContentJsx
-    ) {
+    if (a.rendersMarkdownDirectly) {
       markdownComponents++;
+      // 이 파일이 컴포넌트라면 이름을 markdown 렌더러 집합에 등록(위임 1-hop 판정용).
+      const name = componentNameFromPath(f);
+      if (name) markdownRendererComponents.add(name);
     }
+  }
 
-    // 안티패턴 1: useAIStreaming을 사용하는데 react-markdown / MarkdownContent
-    // 둘 다 없는 컴포넌트 → assistant 출력이 raw로 나갈 위험.
-    if (
-      a.usesUseAIStreaming &&
-      !a.usesMarkdownContentJsx &&
-      !(a.importsReactMarkdown && a.usesReactMarkdownJsx)
-    ) {
+  const rawRenderViolators = [];
+  const streamingWithoutMarkdown = [];
+
+  /**
+   * 파일이 markdown 렌더러 자식 컴포넌트에 렌더링을 위임하는지 (1-hop).
+   * @param {object} a analyzeFile 결과
+   * @returns {boolean} 위임 여부
+   */
+  const delegatesToMarkdownRenderer = (a) =>
+    [...a.childComponents].some((tag) => markdownRendererComponents.has(tag));
+
+  for (const { rel, a } of analyzed) {
+    // markdown을 직접 렌더하거나, 렌더러 자식 컴포넌트에 위임하면 "충족"으로 본다 (D7-W3).
+    const satisfiesMarkdown = a.rendersMarkdownDirectly || delegatesToMarkdownRenderer(a);
+
+    // 안티패턴 1: useAIStreaming을 사용하는데 직접 렌더도, 위임도 없는 컴포넌트
+    // → assistant 출력이 raw로 나갈 위험.
+    if (a.usesUseAIStreaming && !satisfiesMarkdown) {
       streamingWithoutMarkdown.push(rel);
     }
 
-    // 안티패턴 2: react-markdown 도입 없이 {content}/{msg.content}류를 JSX에 직접 박아 둠.
-    // 단, MarkdownContent를 명시적으로 사용하는 파일은 OK.
-    if (
-      a.hasRawRender &&
-      !a.usesMarkdownContentJsx &&
-      !(a.importsReactMarkdown && a.usesReactMarkdownJsx)
-    ) {
+    // 안티패턴 2: react-markdown 도입/위임 없이 {content}/{msg.content}류를 JSX에 직접 박아 둠.
+    if (a.hasRawRender && !satisfiesMarkdown) {
       rawRenderViolators.push(rel);
     }
   }

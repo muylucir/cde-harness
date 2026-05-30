@@ -10,6 +10,9 @@
  *   1. 모든 에이전트 frontmatter `model:` 값이 _preamble §8 표의 어딘가에 등장
  *   2. _preamble §8 표에 명시된 에이전트가 실제 .claude/agents/에 존재
  *   3. frontmatter `model:` 값이 표의 분류와 일치 (예: brief-composer는 sonnet 행에 있어야 함)
+ *   4. (D2-W3) frontmatter `model:` 값이 allowed-models.json의 alias 집합(haiku/sonnet/opus)에
+ *      속하는 유효한 단축 이름인가. frontmatter와 _preamble 표가 똑같이 오타('opsu')를 갖고 있으면
+ *      (1)~(3)은 통과하므로, alias 화이트리스트로 별도 차단한다.
  *
  * 사용법: node .pipeline/scripts/check-agent-models.mjs
  * 종료: 0 = sync, 1 = drift
@@ -23,6 +26,26 @@ const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, '../..');
 const AGENTS_DIR = resolve(REPO_ROOT, '.claude/agents');
 const PREAMBLE = resolve(AGENTS_DIR, '_preamble.md');
+const ALLOWED_MODELS = resolve(SCRIPT_DIR, 'allowed-models.json');
+
+/**
+ * allowed-models.json에서 유효 alias 집합을 도출한다 (haiku/sonnet/opus).
+ * SSOT가 없거나 파싱 실패 시 null을 반환해 호출 측이 alias 검증을 skip하도록 한다
+ * (이 스크립트의 기본 책임인 표 정합 검증까지 막지 않기 위함).
+ * @returns {Set<string>|null} alias 문자열 집합 또는 null
+ */
+function loadAllowedAliases() {
+  if (!existsSync(ALLOWED_MODELS)) return null;
+  try {
+    const json = JSON.parse(readFileSync(ALLOWED_MODELS, 'utf-8'));
+    const aliases = (json.allowed_model_ids ?? [])
+      .map((m) => m.alias)
+      .filter((a) => typeof a === 'string' && a.length > 0);
+    return aliases.length > 0 ? new Set(aliases) : null;
+  } catch {
+    return null;
+  }
+}
 
 function parseFrontmatter(md) {
   const m = md.match(/^---\n([\s\S]*?)\n---/);
@@ -104,15 +127,27 @@ function main() {
     }
   }
 
+  const allowedAliases = loadAllowedAliases();
+
   let failed = 0;
   console.log('check-agent-models:');
 
   // (1) 모든 에이전트의 frontmatter model이 표와 일치하는지
+  // (4) frontmatter model 값이 allowed-models.json alias 화이트리스트에 속하는지
   for (const file of agentFiles) {
     const path = join(AGENTS_DIR, file);
     const md = readFileSync(path, 'utf-8');
     const fm = parseFrontmatter(md);
     const agentName = basename(file, '.md');
+
+    // (4) alias 유효성: frontmatter==표 일치만으로는 양쪽 동일 오타를 못 잡으므로 별도 화이트리스트 검증.
+    if (allowedAliases && fm.model && !allowedAliases.has(fm.model)) {
+      console.error(
+        `  ✗ ${agentName}: frontmatter model="${fm.model}" is not a valid alias — allowed: ${[...allowedAliases].join('/')} (allowed-models.json)`,
+      );
+      failed++;
+    }
+
     const fmKey = `${fm.model ?? '?'}:${fm.effort ?? '?'}`;
     const expectedKey = tableAgentToKey.get(agentName);
     if (!expectedKey) {
@@ -138,7 +173,12 @@ function main() {
     console.error(`\n${failed} drift(s) detected. _preamble.md §8 표 또는 에이전트 frontmatter를 동기화하세요.`);
     process.exit(1);
   }
-  console.log(`  ✓ all ${agentFiles.length} agent frontmatter model/effort match _preamble §8 table`);
+  const aliasNote = allowedAliases
+    ? ` + valid alias (${[...allowedAliases].join('/')})`
+    : ' (alias whitelist skipped: allowed-models.json unavailable)';
+  console.log(
+    `  ✓ all ${agentFiles.length} agent frontmatter model/effort match _preamble §8 table${aliasNote}`,
+  );
   process.exit(0);
 }
 

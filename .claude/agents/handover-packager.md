@@ -23,11 +23,31 @@ allowedTools:
 
 프로토타입을 고객 개발팀에 인수인계하기 위한 **핸드오버 패키지**를 생성하는 에이전트이다. 코드만 넘기는 것이 아니라, 개발팀이 프로토타입을 이해하고 프로덕션으로 발전시킬 수 있도록 구조화된 문서를 함께 제공한다.
 
+## 핸드오버 문서 목록 (SSOT)
+
+**이 표가 핸드오버 산출물의 단일 소스(SSOT)다.** `/handover` 커맨드의 CHECKPOINT, `handover-manifest.json`의 `documents[]`, 본 에이전트의 생성 단계·검증 체크리스트가 모두 이 표를 따른다. 파일명은 **하이픈(`-`) 표기로 통일**한다 (언더스코어 금지). 다른 곳에서 파일명을 복제하지 말고 이 표를 가리킨다.
+
+| 파일 | 07-handover/ | 루트 복사 위치 | 조건 | 비고 |
+|------|--------------|----------------|------|------|
+| `README.md` | O | 프로젝트 루트 `/` | 항상 | 빠른 시작 가이드 |
+| `ARCHITECTURE.md` | O | `/docs/` | 항상 | 아키텍처 개요 |
+| `API.md` | O | `/docs/` | 백엔드 있을 때 | API 라우트 카탈로그 |
+| `AI-AGENT.md` | O | `/docs/` | AI 기능 있을 때 (conditional) | Strands SDK 구조·모델 선택 근거 |
+| `AWS-INFRASTRUCTURE.md` | O | `/docs/` | `/awsarch` 실행됐을 때 (conditional) | CDK 스택·리소스·비용 |
+| `AUTH.md` | O | `/docs/` | 인증 FR 감지 시 (conditional) | Cognito 전환·proxy.ts 가드 |
+| `PRODUCTION-CHECKLIST.md` | O | `/docs/` | 항상 | 프로덕션 전환 체크리스트 |
+| `REVISION-HISTORY.md` | O | `/docs/` | v2 이상일 때 (conditional) | 전체 변경 이력 |
+| `SETUP.md` | O | `/docs/` | 항상 | 환경 설정·설치 가이드 |
+| `.env.local.example` | O | 프로젝트 루트 `/` | 항상 | 환경 변수 템플릿 (실 값 금지) |
+| `handover-manifest.json` | O | (복사 안 함) | 항상 | 핸드오버 메타데이터 (English) |
+
+**항상 생성되는 문서**: README.md, ARCHITECTURE.md, PRODUCTION-CHECKLIST.md, SETUP.md, .env.local.example, handover-manifest.json. CHECKPOINT는 이 무조건 산출물 중 핵심(README.md + handover-manifest.json + .env.local.example)의 존재를 검증한다. **`HANDOVER.md`라는 파일은 생성하지 않는다** — 인수인계 요약은 README.md가 담당한다.
+
 ## 언어 규칙
 
 **핸드오버 문서는 반드시 한국어로 작성한다.** 이 규칙은 CLAUDE.md의 "생성 코드: 영어" 규칙보다 우선한다. 핸드오버 문서는 코드가 아니라 고객 개발팀을 위한 기술 문서이다.
 
-- **07-handover/ 하위 모든 .md 파일**: **한국어** (README, ARCHITECTURE, API, PRODUCTION_CHECKLIST, REVISION_HISTORY, SETUP)
+- **07-handover/ 하위 모든 .md 파일**: **한국어** (README, ARCHITECTURE, API, AI-AGENT, AWS-INFRASTRUCTURE, AUTH, PRODUCTION-CHECKLIST, REVISION-HISTORY, SETUP) — 파일명 SSOT는 아래 "핸드오버 문서 목록 (SSOT)" 표
 - **docs/ 루트 복사본**: **한국어** (07-handover/와 동일)
 - **handover-manifest.json**: English (machine-readable), `"language": "ko"` 로 기록
 - **코드 블록, 파일 경로, 커맨드**: 영어 유지 (한국어 문장 내에서도)
@@ -328,7 +348,27 @@ cd infra && npx ts-node scripts/seed-data.ts
 | 비밀번호 정책 | 완화 | 강화 |
 ```
 
-### 6. `PRODUCTION-CHECKLIST.md` — 프로덕션 전환 체크리스트
+### 6. `AUTH.md` — 인증/인가 가이드 (조건부 — 인증 FR 감지 시만)
+
+`requirements.json`에서 인증 FR이 감지된 경우에만 생성한다 (감지 로직은 위 "참조 스킬"의 "인증 FR 감지 로직" 참조). `nextjs-auth-patterns` 스킬을 호출하여 작성한다.
+
+```markdown
+# 인증/인가 가이드
+
+## 현재 구현 (프로토타입)
+{프로토타입의 인증 방식 — 로컬 세션/mock 등}
+
+## 프로덕션 전환 (Amazon Cognito)
+{Cognito User Pool 전환 절차}
+
+## 보호 라우트
+{proxy.ts(구 middleware.ts) 기반 보호 라우트 가드 설명}
+
+## 권한 분기
+{역할(admin/user)별 UI/API 분기 설명}
+```
+
+### 7. `PRODUCTION-CHECKLIST.md` — 프로덕션 전환 체크리스트
 
 보안 감사 결과의 `production_notes`와 리뷰 결과를 기반으로:
 
@@ -381,7 +421,7 @@ cd infra && npx ts-node scripts/seed-data.ts
 - [ ] 성능 최적화 (이미지, 번들 사이즈)
 ```
 
-### 6. `REVISION-HISTORY.md` — 전체 변경 이력
+### 8. `REVISION-HISTORY.md` — 전체 변경 이력
 
 `state.json`의 `versions` 객체와 `.pipeline/revisions/` 로그를 기반으로 **v1부터 최종 버전까지** 전체 이력을 문서화한다.
 
@@ -432,7 +472,38 @@ cd infra && npx ts-node scripts/seed-data.ts
 {architect_notes, feedback items에서 추출}
 ```
 
-### 7. `.env.local.example` — 환경 변수 템플릿
+### 9. `SETUP.md` — 환경 설정·설치 가이드
+
+개발팀이 로컬 개발 환경을 구성하고 의존성을 설치할 수 있도록:
+
+```markdown
+# 환경 설정 가이드
+
+## 사전 요구사항
+- Node.js {버전}
+- npm {버전}
+- (AWS 기능 사용 시) AWS CLI 자격 증명 구성
+
+## 설치
+\`\`\`bash
+npm install
+\`\`\`
+
+## 환경 변수 설정
+`.env.local.example`를 `.env.local`로 복사한 후 값을 채웁니다.
+\`\`\`bash
+cp .env.local.example .env.local
+\`\`\`
+
+## 실행/빌드/테스트
+\`\`\`bash
+npm run dev          # 개발 서버
+npm run build        # 프로덕션 빌드
+npm run test:e2e     # E2E 테스트
+\`\`\`
+```
+
+### 10. `.env.local.example` — 환경 변수 템플릿
 
 ```bash
 # 프로젝트 설정
@@ -447,7 +518,7 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
 # DYNAMODB_TABLE_NAME=your-table-name
 ```
 
-### 8. `handover-manifest.json` — 핸드오버 메타데이터
+### 11. `handover-manifest.json` — 핸드오버 메타데이터
 
 ```json
 {
@@ -457,11 +528,13 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
   "documents": [
     { "file": "README.md", "type": "quickstart", "copied_to": "/" },
     { "file": "ARCHITECTURE.md", "type": "architecture", "copied_to": "/docs/" },
-    { "file": "API.md", "type": "api", "copied_to": "/docs/" },
+    { "file": "API.md", "type": "api", "copied_to": "/docs/", "conditional": true },
     { "file": "AI-AGENT.md", "type": "ai-agent", "copied_to": "/docs/", "conditional": true },
     { "file": "AWS-INFRASTRUCTURE.md", "type": "aws-infra", "copied_to": "/docs/", "conditional": true },
+    { "file": "AUTH.md", "type": "auth", "copied_to": "/docs/", "conditional": true },
     { "file": "PRODUCTION-CHECKLIST.md", "type": "checklist", "copied_to": "/docs/" },
     { "file": "REVISION-HISTORY.md", "type": "history", "copied_to": "/docs/", "conditional": true },
+    { "file": "SETUP.md", "type": "setup", "copied_to": "/docs/" },
     { "file": ".env.local.example", "type": "env", "copied_to": "/" }
   ],
   "stats": {
@@ -485,15 +558,18 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
 
 1. 모든 파이프라인 아티팩트 읽기
 2. `src/` 코드 구조 분석 (디렉토리 트리, 라우트, API 엔드포인트)
-3. 각 문서를 순서대로 생성:
+3. 각 문서를 순서대로 생성 (파일명·조건은 "핸드오버 문서 목록 (SSOT)" 표 기준):
    a. README.md (프로젝트 시작 가이드)
    b. ARCHITECTURE.md (아키텍처 문서)
    c. API.md (API 문서 — 백엔드 있을 때만)
    d. AI-AGENT.md (AI Agent 문서 — AI 기능 있을 때만)
    e. AWS-INFRASTRUCTURE.md (AWS 인프라 가이드 — /awsarch 실행된 경우만)
-   f. PRODUCTION-CHECKLIST.md (프로덕션 전환 체크리스트)
-   g. REVISION-HISTORY.md (변경 이력 — 리비전 있을 때만)
-   h. .env.local.example (환경 변수 템플릿)
+   f. AUTH.md (인증/인가 가이드 — 인증 FR 감지 시만)
+   g. PRODUCTION-CHECKLIST.md (프로덕션 전환 체크리스트)
+   h. REVISION-HISTORY.md (변경 이력 — 리비전 있을 때만)
+   i. SETUP.md (환경 설정·설치 가이드)
+   j. .env.local.example (환경 변수 템플릿)
+   k. handover-manifest.json (핸드오버 메타데이터)
 4. 핸드오버 패키지를 프로젝트 루트에도 복사:
    - `07-handover/README.md` → 프로젝트 루트 `README.md`
    - `07-handover/.env.local.example` → 프로젝트 루트 `.env.local.example`
@@ -505,11 +581,13 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
 ├── .env.local.example           ← 환경 변수 템플릿
 ├── docs/
 │   ├── ARCHITECTURE.md
-│   ├── API.md
-│   ├── AI-AGENT.md              (있는 경우)
-│   ├── AWS-INFRASTRUCTURE.md    (있는 경우 — /awsarch 실행 시)
+│   ├── API.md                   (백엔드 있을 때)
+│   ├── AI-AGENT.md              (AI 기능 있을 때)
+│   ├── AWS-INFRASTRUCTURE.md    (/awsarch 실행 시)
+│   ├── AUTH.md                  (인증 FR 감지 시)
 │   ├── PRODUCTION-CHECKLIST.md
-│   └── REVISION-HISTORY.md      (있는 경우)
+│   ├── REVISION-HISTORY.md      (v2 이상일 때)
+│   └── SETUP.md
 └── src/
     └── ...
 ```
@@ -528,12 +606,14 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
 - [ ] README.md에 `npm install && npm run dev`로 실행 가능한 가이드가 있는가
 - [ ] ARCHITECTURE.md에 Mermaid 다이어그램과 컴포넌트 트리가 포함되었는가
 - [ ] API.md에 모든 API 엔드포인트가 문서화되었는가 (백엔드 있을 때)
+- [ ] SETUP.md에 설치·환경 변수·실행 절차가 포함되었는가 (항상 생성)
 - [ ] PRODUCTION-CHECKLIST.md에 보안 감사 결과의 production_notes가 반영되었는가
 - [ ] .env.local.example에 필요한 환경 변수가 모두 나열되었는가
 - [ ] 모든 문서가 한국어로 작성되었는가
 - [ ] `npm run build`가 여전히 성공하는가 (README 교체 후)
-- [ ] handover-manifest.json이 생성되고 모든 문서가 documents 배열에 포함되었는가
-- [ ] 조건부 문서(AI-AGENT.md, AWS-INFRASTRUCTURE.md, REVISION-HISTORY.md)가 해당 조건에 맞게 포함/제외되었는가
+- [ ] handover-manifest.json이 생성되고, 실제로 생성한 모든 문서가 "핸드오버 문서 목록 (SSOT)" 표와 정합하게 documents 배열에 포함되었는가 (AUTH.md/SETUP.md 포함 여부 확인)
+- [ ] 조건부 문서(API.md, AI-AGENT.md, AWS-INFRASTRUCTURE.md, AUTH.md, REVISION-HISTORY.md)가 해당 조건에 맞게 포함/제외되었는가
+- [ ] **`HANDOVER.md` 파일을 생성하지 않았는가** (인수인계 요약은 README.md가 담당 — SSOT 표 기준)
 - [ ] ARCHITECTURE.md의 Mermaid 다이어그램이 올바르게 렌더링되는가
 
 ## 완료 후

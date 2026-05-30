@@ -232,9 +232,9 @@ src/
 - [ ] `node .pipeline/scripts/ai-smoke.mjs` 통과 (stub 금지/이벤트명 일관성/Agent 인스턴스/Bedrock 직접 import 금지)
 - [ ] `@aws-sdk/client-bedrock-runtime` 직접 import가 없는가 (Strands SDK만 사용)
 - [ ] `BedrockModel` 인스턴스로 모델 프로바이더가 설정되었는가
-- [ ] **모든 `modelId` 문자열이 CLAUDE.md Rule 13의 3개 ID(haiku-4-5 / sonnet-4-6 / opus-4-7) 중 하나로 직접 명시되었는가**
+- [ ] **모든 `modelId` 문자열이 CLAUDE.md Rule 13의 3개 ID 중 하나로 직접 명시되었는가** (SSOT: `.pipeline/scripts/allowed-models.json` — haiku / sonnet / opus 단축에 대응하는 정식 ID)
 - [ ] **`process.env.BEDROCK_MODEL_ID` 또는 환경변수 fallback 패턴이 코드에 0건인가**
-- [ ] **각 `modelId`가 `ai-internals.json`의 `model_id` 값과 정확히 일치하는가**
+- [ ] **각 `modelId`가 `ai-internals.json`의 `model_id` 값과 정확히 일치하는가** (자기점검 + reviewer cat 10이 사람 리뷰로 재확인. ai-smoke Check 7/8은 "허용 3개 집합 소속 + env fallback 부재"까지만 자동 검증하며, 도구별 ai-internals 값과의 1:1 대응까지는 보지 않음 — 따라서 이 항목은 생략 금지)
 - [ ] Agent 생성 시 `printer: false`가 설정되었는가
 - [ ] 시스템 프롬프트가 XML 5개 섹션(`<role>`, `<context>`, `<tools>`, `<instructions>`, `<constraints>`)을 따르는가
 - [ ] 도구 정의가 `tool()` + Zod `inputSchema` + `callback` 패턴인가

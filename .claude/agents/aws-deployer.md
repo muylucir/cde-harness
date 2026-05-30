@@ -151,7 +151,8 @@ CDK 컴파일 검증: `cd infra && npx tsc --noEmit` (에러 시 수정, 최대 
 
 1. `cd infra && npx cdk bootstrap` (멱등성)
 2. `cd infra && npx cdk diff` → 변경 사항 확인
-3. `cd infra && npx cdk deploy --require-approval never --outputs-file cdk-outputs.json`
+3. `cd infra && npx cdk deploy --require-approval broadening --outputs-file cdk-outputs.json`
+   > **`--require-approval broadening`** 사용 (awsarch.md Phase 3과 통일): IAM 권한이 확대되는 변경이 감지되면 CDK가 한 번 더 확인을 요청한다. `never`는 IAM 변경도 무조건 통과시키므로 사용하지 않는다.
 4. `cdk-outputs.json` 파싱 → `.env.local` 작성 + `.env.local.example` 작성
 
 ### Step 4: 시드 데이터 마이그레이션 (데이터 서비스만)
@@ -218,7 +219,9 @@ CDK 컴파일 검증: `cd infra && npx tsc --noEmit` (에러 시 수정, 최대 
 
 ## 완료 후
 
-`.pipeline/state.json` 업데이트. 한국어로 보고:
+> **state.json은 직접 쓰지 않는다 (_preamble §3)**: aws_infra 메타와 버전 completed 마킹은 `/awsarch` 오케스트레이터가 `checkpoint.mjs set-aws-infra` / `checkpoint.mjs complete`로 기록한다. 이 에이전트는 `deploy-log.json` / `migration-log.json`(스택명/리전/리소스 수)만 산출하고, 오케스트레이터가 그 값을 추출해 위 서브커맨드로 넘긴다.
+
+한국어로 보고:
 - 배포된 AWS 리소스 목록
 - 수정/생성된 파일 수
 - 듀얼 모드 테스트 방법 (`DATA_SOURCE=memory` vs `DATA_SOURCE=dynamodb`)

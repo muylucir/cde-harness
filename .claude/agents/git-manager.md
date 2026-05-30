@@ -33,7 +33,9 @@ allowedTools:
 
 > **공통 컨벤션**: 언어 규칙·점진적 작업·state.json 처리·공통 에러·금지 패턴 카탈로그(FP-001~FP-011)는 [`_preamble.md`](_preamble.md) 참조. 본문은 이 에이전트 고유 책임만 정의한다.
 
-> **금지 명령 (이 에이전트가 절대 실행하지 않는다)**: `git reset --hard`, `git push --force`(원격 main/master), `git branch -D`(머지되지 않은 브랜치), `git clean -fd`, `git rebase -i`, `git config --global`, **`cdk destroy`(DynamoDB 테이블/Cognito User Pool 등 비가역 데이터 파괴)**, **`aws s3 rb --force`**, **`aws dynamodb delete-table`** 등 파괴적/전역 영향 명령. 사용자가 명시적으로 요청해도 먼저 확인 질문을 한다.
+> **금지 명령 (이 에이전트가 절대 실행하지 않는다)**: `git reset --hard`, `git push --force`(원격 main/master), `git branch -D`(머지되지 않은 브랜치 강제 삭제 — `.claude/settings.json`의 PreToolUse hook이 deny한다), `git clean -fd`, `git rebase -i`, `git config --global`, **`cdk destroy`(DynamoDB 테이블/Cognito User Pool 등 비가역 데이터 파괴)**, **`aws s3 rb --force`**, **`aws dynamodb delete-table`** 등 파괴적/전역 영향 명령. 사용자가 명시적으로 요청해도 먼저 확인 질문을 한다.
+>
+> **취소 절차의 브랜치 삭제는 `git branch -d`(소문자)를 쓴다 — 위 `-D` 금지와 모순 아님**: `cancel-*` 액션은 폐기 직전 미커밋 변경을 모두 `git stash push -u`로 보관하므로, 삭제 시점의 `iterate|reconcile|awsarch/v{N+1}` 브랜치는 main과 동일 커밋(미머지 커밋 없음)이다. 따라서 `git branch -d`(머지 확인 후 안전 삭제, hook 허용)로 삭제 가능하다. `-D`(강제, 미머지 커밋까지 삭제)는 취소 절차에서도 쓰지 않는다.
 >
 > **`cdk destroy` 호출 가드 (사용자가 직접 요청하더라도)**: 이 에이전트는 `cdk destroy`를 직접 실행하지 않는다. 사용자에게 다음을 의무적으로 안내한다:
 > 1. 삭제될 스택명 + 비가역 자원 목록(테이블/버킷/유저풀)을 명시
@@ -59,6 +61,8 @@ allowedTools:
 | cancel-reconcile | `state.json` (current_version), 현재 브랜치 | 브랜치 삭제 + main 복귀 (stash 보관) |
 | post-reconcile | `state.json`, revision logs, 갱신된 아티팩트 | git commit (아티팩트만) |
 | pre-awsarch | `state.json` (current_version) | `awsarch/v{N+1}` 브랜치 |
+| cancel-awsarch | `state.json` (current_version), 현재 브랜치 | 브랜치 삭제 + main 복귀 (stash 보관) |
+| cancel-awsarch-on-failure | `--reason=<short>`, 현재 브랜치 | Pre-flight 차단 등 시스템 가드 위반 시 사용자 확인 없이 자동 롤백 |
 | post-awsarch | `state.json`, `infra/`, 수정된 `src/lib/db/` | git commit |
 | merge | `iterate/v{N}` 또는 `reconcile/v{N}` 또는 `awsarch/v{N}` 브랜치 | `--no-ff` 머지 커밋 |
 | pre-handover | `git status`, working tree, current branch | 클린 여부 + 빌드 통과 여부 보고 |
@@ -145,9 +149,11 @@ allowedTools:
    git stash push -u -m "cancel-iterate-v{N+1}-$STAMP" -- .pipeline/revisions/ .pipeline/artifacts/v{N+1}/ .pipeline/input/ 2>/dev/null || true
    # stash 후 working tree가 깨끗하면 main으로 안전 이동
    git checkout main
-   git branch -D iterate/v{N+1}
+   # stash로 미커밋 변경을 모두 회수했으므로 브랜치는 main과 동일 커밋(미머지 커밋 없음).
+   # 따라서 -d(소문자, 머지 확인 후 안전 삭제, hook 허용)로 삭제한다. -D는 쓰지 않는다.
+   git branch -d iterate/v{N+1}
    ```
-5. `state.json`에서 v{N+1} 엔트리를 제거하거나 `status: "cancelled"`로 표시 (current_version은 v{N}로 되돌림)
+5. **state.json은 손대지 않는다**: cancel-iterate는 `/iterate` Phase 1 APPROVAL GATE(= Phase 4의 `checkpoint.mjs new-version` 이전)에서만 호출되므로 v{N+1} 엔트리는 아직 만들어지지 않았고 `current_version`도 v{N} 그대로다. 직접 jq/Edit로 state.json을 수정하지 않는다(_preamble §3).
 6. 사용자에게 보고:
    ```
    iterate/v{N+1} 브랜치를 삭제하고 main으로 복귀했습니다.
@@ -174,7 +180,8 @@ allowedTools:
    git stash push -u -m "auto-rollback-iterate-v{N+1}-${REASON}-$STAMP" \
      -- .pipeline/revisions/ .pipeline/artifacts/v{N+1}/ .pipeline/input/ 2>/dev/null || true
    git checkout main
-   git branch -D iterate/v{N+1}
+   # stash로 미커밋 변경 회수 후 브랜치는 main과 동일 커밋이므로 -d(안전 삭제, hook 허용)로 삭제.
+   git branch -d iterate/v{N+1}
    ```
 4. state.json에서 부분 추가된 v{N+1} 엔트리가 있으면 제거 — 단, **이 단계는 checkpoint.mjs를 통해서만 수행**:
    ```bash
@@ -254,9 +261,10 @@ allowedTools:
    STAMP=$(date +%Y%m%d-%H%M%S)
    git stash push -u -m "cancel-reconcile-v{N+1}-$STAMP" -- .pipeline/revisions/ .pipeline/artifacts/v{N+1}/ 2>/dev/null || true
    git checkout main
-   git branch -D reconcile/v{N+1}
+   # stash로 미커밋 변경 회수 후 브랜치는 main과 동일 커밋이므로 -d(안전 삭제, hook 허용)로 삭제.
+   git branch -d reconcile/v{N+1}
    ```
-5. `state.json`에서 v{N+1} 엔트리를 제거하거나 `status: "cancelled"`로 표시
+5. **state.json은 손대지 않는다**: cancel-reconcile은 `/reconcile` Phase 1 APPROVAL GATE(= Phase 4의 `checkpoint.mjs new-version` 이전)에서만 호출되므로 v{N+1} 엔트리는 아직 없고 `current_version`도 v{N} 그대로다. 직접 jq/Edit로 state.json을 수정하지 않는다(_preamble §3).
 6. 사용자에게 보고:
    ```
    reconcile/v{N+1} 브랜치를 삭제하고 main으로 복귀했습니다.
@@ -316,6 +324,77 @@ allowedTools:
    git checkout -b awsarch/v{N+1}
    ```
 4. 사용자에게 보고: "awsarch/v{N+1} 브랜치를 생성했습니다"
+
+### 7a-1. `cancel-awsarch` — awsarch 취소 (APPROVAL GATE에서 사용자가 거절)
+
+`/awsarch` Phase 1(비용 확인) 또는 Phase 3(배포 확인) APPROVAL GATE에서 사용자가 취소를 선택하면 호출. **생성된 브랜치와 산출물(`08-aws-infra/` 설계물, 부분 생성된 `infra/`)을 모두 폐기**하여 main을 깨끗하게 유지한다. `cancel-iterate`/`cancel-reconcile`과 동일 패턴(비파괴 stash 기반).
+
+> **주의**: 이 액션은 **CDK 배포 이전**(또는 배포 거부 직후)의 취소에만 사용한다. 이미 `cdk deploy`로 AWS 리소스가 생성된 뒤라면 브랜치 폐기만으로 인프라가 사라지지 않는다 — 이 경우 상단 "`cdk destroy` 호출 가드" 절차를 사용자에게 안내한다(에이전트는 `cdk destroy`를 직접 실행하지 않음).
+
+**동작 (비파괴 — git stash 기반):**
+
+1. 현재 브랜치가 `awsarch/v{N+1}` 패턴인지 확인. 아니면 중단하고 경고.
+2. 워킹 디렉토리의 미커밋 변경 목록을 사용자에게 제시 (08-aws-infra 설계물, 부분 `infra/` 등). **이미 배포된 AWS 리소스가 있으면** 그 사실과 `cdk destroy` 가드 절차를 함께 안내.
+3. 사용자에게 최종 확인:
+   ```
+   awsarch/v{N+1} 브랜치와 산출물을 폐기하고 main으로 복귀합니다.
+
+   - 미커밋 변경은 'cancel-awsarch-v{N+1}-<timestamp>' 이름으로 git stash에 보관됩니다.
+     (필요 시 'git stash list'로 확인, 'git stash pop'으로 복구 가능)
+   - 'awsarch/v{N+1}' 브랜치 자체는 삭제됩니다 (브랜치 위 커밋은 reflog로 30일 복구 가능).
+   - ⚠ 이미 배포된 AWS 리소스는 브랜치 삭제로 사라지지 않습니다. 'cdk destroy' 가드 절차를 따로 안내합니다.
+
+   계속하시겠습니까?
+   ```
+4. 확인 시:
+   ```bash
+   STAMP=$(date +%Y%m%d-%H%M%S)
+   git stash push -u -m "cancel-awsarch-v{N+1}-$STAMP" -- .pipeline/artifacts/v{N+1}/ infra/ src/lib/db/ 2>/dev/null || true
+   git checkout main
+   # stash로 미커밋 변경 회수 후 브랜치는 main과 동일 커밋이므로 -d(안전 삭제, hook 허용)로 삭제.
+   git branch -d awsarch/v{N+1}
+   ```
+5. **state.json은 손대지 않는다**: cancel-awsarch는 `/awsarch`의 APPROVAL GATE에서 호출되며, 설계/배포 거부 경로다. `current_version` 보정이 필요하면 `checkpoint.mjs` 합법 경로(`complete`/`halt`)로만 수행한다. 직접 jq/Edit로 state.json을 수정하지 않는다(_preamble §3).
+6. 사용자에게 보고:
+   ```
+   awsarch/v{N+1} 브랜치를 삭제하고 main으로 복귀했습니다.
+   stash 항목: cancel-awsarch-v{N+1}-<timestamp>
+   복구가 필요하면: git stash list / git stash apply stash@{N}
+   ```
+
+> **금지**: `git clean -fd`, `git checkout -- .` (둘 다 영구 삭제). 폐기는 항상 stash 경유.
+
+### 7a-2. `cancel-awsarch-on-failure` — Pre-flight 차단 시 자동 롤백
+
+`/awsarch` Pre-flight의 `new-version`이 차단(예: 직전 버전이 `in-progress`로 leak되어 `__NEW_VERSION_BLOCKED__` 마커 출력)되면 오케스트레이터가 사용자 확인 없이 호출한다. 사용자 의지에 따른 취소가 아닌 **시스템 사전 조건 위반에 의한 자동 회수**이므로 상호작용 없이 진행한다. `cancel-iterate-on-failure`와 동형.
+
+**전제**: 현재 브랜치가 `awsarch/v{N+1}`이고 Pre-flight 산출물(`08-aws-infra/` 디렉토리 등)이 dirty 상태. main에 누출되기 직전의 회수 단계.
+
+**동작 (사용자 확인 생략, stash로 비파괴):**
+
+1. 현재 브랜치가 `awsarch/v{N+1}` 패턴인지 확인. 아니면 중단(잘못된 호출).
+2. 입력 인자 `--reason=<short-string>` 수신 (예: `preflight-blocked`).
+3. 자동 stash + 브랜치 삭제 + main 복귀:
+   ```bash
+   STAMP=$(date +%Y%m%d-%H%M%S)
+   REASON="${REASON:-auto-rollback}"
+   git stash push -u -m "auto-rollback-awsarch-v{N+1}-${REASON}-$STAMP" \
+     -- .pipeline/artifacts/v{N+1}/ infra/ src/lib/db/ 2>/dev/null || true
+   git checkout main
+   # stash로 미커밋 변경 회수 후 브랜치는 main과 동일 커밋이므로 -d(안전 삭제, hook 허용)로 삭제.
+   git branch -d awsarch/v{N+1}
+   ```
+4. state.json은 직접 수정하지 않는다. cancel-awsarch-on-failure는 `cmdNewVersion`이 v{N+1}을 만들기 전 단계에서 호출되므로 대부분 state.json에 v{N+1}이 아직 없다. 보정이 필요하면 `checkpoint.mjs` 합법 경로만 사용(_preamble §3).
+5. 사용자에게 비대화 보고:
+   ```
+   ⚠ /awsarch 자동 롤백: ${REASON}
+   브랜치 awsarch/v{N+1}을 폐기하고 main으로 복귀했습니다.
+   stash 항목: auto-rollback-awsarch-v{N+1}-${REASON}-<timestamp>
+   복구가 필요하면: git stash list / git stash apply stash@{N}
+   원인 진단 후 /awsarch를 다시 시도하세요.
+   ```
+
+> **차이**: `cancel-awsarch`는 사용자가 의식적으로 거절한 경우(상호작용 1회 필요), `cancel-awsarch-on-failure`는 시스템 가드 위반에 의한 자동 회수(상호작용 없음). 둘 다 stash로 비파괴.
 
 ### 7b. `post-awsarch` — AWS 인프라 전환 완료 후
 
@@ -495,9 +574,13 @@ allowedTools:
 
 /awsarch 시작 → git-manager(pre-awsarch)
     ↓
-인프라 배포 ...
+비용/배포 APPROVAL GATE
+    ├─ 취소 → git-manager(cancel-awsarch) → 브랜치 삭제 후 종료
+    └─ 승인 → 인프라 배포 ...
     ↓
 /awsarch 완료 → git-manager(post-awsarch)
+
+(Pre-flight new-version 차단 시 → git-manager(cancel-awsarch-on-failure) 자동 호출)
 
 /handover 완료 → git-manager(post-handover)
 ```

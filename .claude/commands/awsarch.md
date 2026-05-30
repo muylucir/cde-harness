@@ -164,8 +164,14 @@ node .pipeline/scripts/checkpoint.mjs start aws-architect
 > 진행하시겠습니까? (Y/N)
 ```
 
-- **`--plan` 모드**: APPROVAL GATE 후 여기서 종료. state.json을 `"completed"` + `"mode": "plan"`으로 업데이트.
-- 사용자가 거부: state.json을 `"completed"` + `"mode": "plan"`으로 업데이트, 종료.
+- **`--plan` 모드**: APPROVAL GATE 후 여기서 종료. 현재 버전을 completed로 마킹 — `checkpoint.mjs`로 위임 (state.json 직접 쓰기 금지, _preamble §3):
+  ```bash
+  node .pipeline/scripts/checkpoint.mjs complete \
+    --stage=aws-architect \
+    --notes="awsarch --plan: design only, no deploy"
+  ```
+- 사용자가 거부(설계는 남기고 배포만 보류): `complete --stage=aws-architect --notes="awsarch plan-only: user declined deploy"` 호출 후 종료. (배포가 없었으므로 `set-aws-infra`로 `--data-source=memory --notes="plan-only, no deploy"`를 추가 기록할 수도 있다. 설계 산출물은 `awsarch/v{N+1}` 브랜치에 남으며, 사용자가 머지하거나 폐기를 선택할 수 있다.)
+- 사용자가 전체 취소(설계물까지 폐기하고 main 복귀): Launch `git-manager` agent with action: `cancel-awsarch` — `awsarch/v{N+1}` 브랜치와 `08-aws-infra/` 설계물을 stash로 폐기하고 main으로 복귀 후 종료. (아직 `cdk deploy` 이전이므로 AWS 비용 미발생.)
 - 사용자가 승인: Phase 2로 진행.
 
 **CHECKPOINT (Phase 1)**: 다음 파일이 존재하는지 확인한다. 누락 시 `aws-architect`를 재실행한다 (최대 1회).
@@ -273,17 +279,18 @@ DATA_SOURCE=memory npm run build       # mock 모드 여전히 동작
 - [ ] `npm run build` 성공 (DynamoDB 모드)
 - [ ] `DATA_SOURCE=memory npm run build` 성공 (mock 모드)
 
-**Phase 4 완료 시 state.json 업데이트**:
-```json
-{
-  "aws_infra": {
-    "stack_name": "<from deploy-log.json>",
-    "region": "<region>",
-    "resources_deployed": "<count>",
-    "data_source_mode": "dynamodb"
-  }
-}
+**Phase 4 완료 시 aws_infra 메타 기록** — `checkpoint.mjs set-aws-infra`로 위임 (LLM은 state.json 직접 쓰지 않음, _preamble §3):
+```bash
+# deploy-log.json에서 스택명/리전을 추출하여 인자로 전달한다.
+STACK=$(jq -r '.stack_name' .pipeline/artifacts/v{N+1}/08-aws-infra/deploy-log.json)
+REGION=$(jq -r '.region' .pipeline/artifacts/v{N+1}/08-aws-infra/deploy-log.json)
+node .pipeline/scripts/checkpoint.mjs set-aws-infra \
+  --data-source=dynamodb \
+  --stack="$STACK" \
+  --region="$REGION" \
+  --notes="seed migrated, DynamoDB active"
 ```
+- 현재 버전 `versions[v].aws_infra = { data_source, stack_name, region, deployed_at(자동), notes }` 기록. `--data-source`는 `memory|dynamodb` 중 하나(필수).
 
 `--qa` 모드가 아니면 여기서 Completion으로 진행.
 
@@ -328,13 +335,16 @@ DATA_SOURCE=memory npm run build       # mock 모드 여전히 동작
 
 모든 Phase 통과 시:
 
-1. `.pipeline/state.json` 업데이트:
-   ```json
-   {
-     "status": "completed",
-     "completed_at": "<ISO-8601>"
-   }
+1. 현재 버전을 completed로 마킹 — `checkpoint.mjs`로 위임 (LLM은 state.json 직접 쓰지 않음, _preamble §3):
+   ```bash
+   # --qa 모드면 마지막 finalized stage가 security-auditor-pipeline(또는 ai-smoke), 그 외 모드면 aws-deployer.
+   node .pipeline/scripts/checkpoint.mjs complete \
+     --stage=aws-deployer \
+     --notes="awsarch v{N+1} infra deployed + seed migrated"
    ```
+   - `versions[N].status="completed"` + `state.pipeline_status="completed"` + `completed_at` 기록.
+   - 멱등(idempotent): 이미 completed면 no-op. running stage가 있거나 마지막 finalized가 checkpoint-failed면 거부 → 그 경우 `halt`를 사용한다.
+   - (aws_infra 메타는 Phase 4의 `set-aws-infra` 호출에서 이미 기록되었다.)
 
 2. Launch `git-manager` agent with action: `post-awsarch`
    - `infra/`, 수정된 `src/lib/db/`, `.pipeline/artifacts/`, `package.json` 등 커밋

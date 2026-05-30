@@ -125,5 +125,5 @@
     "display_label_with_ai": "10 + 1 (AI 스트리밍 마크다운 조건부)",
     "display_label_with_awsarch_and_ai": "10 + 2 (AWS 통합 + AI 스트리밍 마크다운)"
   },
-  "render_helper": "node .pipeline/scripts/checkpoint.mjs review-categories [--awsarch] [--ai]"
+  "render_note": "This JSON is the single source of truth for review categories; consume the 'categories' and 'counts' fields directly. No CLI renderer subcommand exists (the former 'checkpoint.mjs review-categories' helper was removed as dead metadata — D2-W4)."
 }

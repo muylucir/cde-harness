@@ -280,6 +280,8 @@
       "group": "security",
       "phase": "security",
       "optional": false,
+      "loops_to": ["code-generator-backend", "code-generator-ai", "code-generator-frontend"],
+      "loop_limit": 1,
       "description": "OWASP 기반 보안 감사 (XSS/인젝션/인증/입력 검증)",
       "prerequisites": [
         ".pipeline/artifacts/v{N}/05-review/review-result.json"
@@ -288,6 +290,12 @@
         ".pipeline/artifacts/v{N}/06-security/security-report.md",
         ".pipeline/artifacts/v{N}/06-security/security-result.json"
       ],
+      "checkpoint": [
+        "json:.pipeline/artifacts/v{N}/06-security/security-result.json",
+        "json-eq:.pipeline/artifacts/v{N}/06-security/security-result.json:verdict:PASS",
+        "json-lte:.pipeline/artifacts/v{N}/06-security/security-result.json:npm_audit.critical:0"
+      ],
+      "checkpoint_notes": "보안 게이트를 코드로 봉인(D3-W2): verdict가 정확히 PASS여야 하고(json-eq), npm audit critical 취약점이 0이어야(json-lte) 통과. verdict가 FAIL이거나 critical>0이면 checkpoint-failed → security-code 루프(loops_to)로 회귀. security-auditor 본문의 판정 규칙(Critical 0건이면 PASS)을 코드 SSOT가 이중 검증한다. 코드 발견 critical count는 verdict에 이미 반영되므로 verdict 게이트로 커버되며, summary 구조가 버전별로 상이(summary.critical / summary.code_findings.critical / null)하여 npm_audit.critical만 직접 게이트한다.",
       "resume_via": "/pipeline-from security-auditor-pipeline"
     },
     {
@@ -384,11 +392,13 @@
       ],
       "outputs": [],
       "checkpoint": [
-        "json-key:.pipeline/artifacts/v{N}/06-security/security-result.json:verdict",
+        "json:.pipeline/artifacts/v{N}/06-security/security-result.json",
+        "json-eq:.pipeline/artifacts/v{N}/06-security/security-result.json:verdict:PASS",
+        "json-lte:.pipeline/artifacts/v{N}/06-security/security-result.json:npm_audit.critical:0",
         "cmd:node .pipeline/scripts/ai-smoke.mjs"
       ],
       "checkpoint_timeout_ms": 120000,
-      "checkpoint_notes": "ai-smoke는 has-ai 게이트가 false면 자체적으로 exit 0이므로 AI 없는 프로토타입에서도 통과한다. 보안 verdict 키 존재만 확인하고, 실제 PASS/FAIL 판단은 handover-packager 본문에서 수행. /handover read-only 사전 검사를 stage로 승격하여 audit trail을 완전화.",
+      "checkpoint_notes": "ai-smoke는 has-ai 게이트가 false면 자체적으로 exit 0이므로 AI 없는 프로토타입에서도 통과한다. 보안 게이트를 코드로 봉인(D3-W2): 기존 json-key(키 존재만 확인)를 json-eq(verdict가 정확히 PASS)로 강화하고 npm_audit.critical<=0을 추가하여, 핸드오버 사전조건을 handover-packager 본문 판단에만 의존하지 않고 stage checkpoint가 직접 fail-closed로 차단한다. /handover read-only 사전 검사를 stage로 승격하여 audit trail을 완전화.",
       "resume_via": "/handover"
     },
     {

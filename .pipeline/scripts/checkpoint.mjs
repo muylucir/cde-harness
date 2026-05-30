@@ -20,13 +20,17 @@
  *   node .pipeline/scripts/checkpoint.mjs record-feedback-loop ...    # feedback_loops[]에 1건 push
  *   node .pipeline/scripts/checkpoint.mjs halt <stage> --reason="..." # 현재 버전을 halted로 마킹 (LLM이 직접 state.json 쓰지 않음)
  *   node .pipeline/scripts/checkpoint.mjs complete [--stage=<name>] [--notes="..."]  # 현재 버전을 completed로 마킹 (정상 종료, idempotent)
+ *   node .pipeline/scripts/checkpoint.mjs set-aws-infra --data-source=<memory|dynamodb> [...]  # /awsarch 전환 메타(aws_infra) 기록
  *
  * check 형식:
- *   file:<path>                    파일 존재 확인
- *   json:<path>                    JSON 파일 유효성 확인
- *   json-key:<path>:<key>          JSON 파일에 특정 키 존재 확인
- *   no-match:<glob>:<pattern>      glob 매칭 파일에서 패턴이 없으면 통과
- *   cmd:<command>                  셸 명령 exit code 0이면 통과
+ *   file:<path>                          파일 존재 확인
+ *   json:<path>                          JSON 파일 유효성 확인
+ *   json-key:<path>:<key>                JSON 파일에 특정 키 존재 확인
+ *   json-eq:<path>:<dotpath>:<expected>  dotpath 값이 expected와 일치하면 통과 (중첩 키 지원)
+ *   json-ne:<path>:<dotpath>:<value>     dotpath 값이 value와 불일치하면 통과
+ *   json-lte:<path>:<dotpath>:<n>        dotpath 숫자 값이 n 이하이면 통과 (보안 critical>0 차단용)
+ *   no-match:<glob>:<pattern>            glob 매칭 파일에서 패턴이 없으면 통과
+ *   cmd:<command>                        셸 명령 exit code 0이면 통과
  *
  * 예시:
  *   node .pipeline/scripts/checkpoint.mjs start domain-researcher
@@ -198,6 +202,79 @@ function formatDuration(ms) {
 
 // ── 체크 실행기 ──────────────────────────────────────────
 
+/**
+ * dotpath(예: "verdict", "summary.critical")로 중첩 객체 값을 조회한다.
+ * 경로 중간이 객체가 아니거나 키가 없으면 { found:false }를 반환한다.
+ * @returns {{ found: boolean, value?: unknown }}
+ */
+function resolveDotPath(obj, dotpath) {
+  const parts = dotpath.split('.');
+  let cur = obj;
+  for (const part of parts) {
+    if (cur === null || typeof cur !== 'object' || !(part in cur)) {
+      return { found: false };
+    }
+    cur = cur[part];
+  }
+  return { found: true, value: cur };
+}
+
+/**
+ * 'json-eq' / 'json-ne' / 'json-lte' 공통 처리.
+ * arg 형식: <file>:<dotpath>:<operand>
+ * - file 부재/파싱 실패 → passed:false + reason (절대 통과시키지 않음 = 보안 게이트 fail-closed).
+ * - dotpath 부재 → passed:false + reason.
+ * - mode='eq': 값을 문자열로 비교(operand와 String(value) 일치 시 pass).
+ * - mode='ne': 불일치 시 pass.
+ * - mode='lte': Number(value) <= Number(operand) 이면 pass. 숫자 변환 실패 시 fail.
+ */
+function runJsonCompare(mode, arg) {
+  // <file>:<dotpath>:<operand> — file 경로에 :가 없다고 가정(아티팩트 경로 규약상 안전).
+  const firstSep = arg.indexOf(':');
+  const secondSep = arg.indexOf(':', firstSep + 1);
+  if (firstSep < 0 || secondSep < 0) {
+    return {
+      check: `${mode}: ${arg}`,
+      passed: false,
+      reason: `format must be ${mode}:<file>:<dotpath>:<operand>`,
+    };
+  }
+  const filePath = arg.slice(0, firstSep);
+  const dotpath = arg.slice(firstSep + 1, secondSep);
+  const operand = arg.slice(secondSep + 1);
+  const label = `${dotpath} ${mode === 'json-eq' ? '==' : mode === 'json-ne' ? '!=' : '<='} ${operand} in ${filePath}`;
+
+  const absPath = resolve(ROOT, filePath);
+  if (!existsSync(absPath)) {
+    return { check: label, passed: false, reason: 'file not found' };
+  }
+  let data;
+  try {
+    data = JSON.parse(readFileSync(absPath, 'utf-8'));
+  } catch (e) {
+    return { check: label, passed: false, reason: `parse error: ${e.message}` };
+  }
+  const { found, value } = resolveDotPath(data, dotpath);
+  if (!found) {
+    return { check: label, passed: false, reason: `dotpath "${dotpath}" not present` };
+  }
+
+  if (mode === 'json-eq') {
+    return { check: label, passed: String(value) === operand, reason: String(value) === operand ? undefined : `got "${String(value)}"` };
+  }
+  if (mode === 'json-ne') {
+    return { check: label, passed: String(value) !== operand, reason: String(value) !== operand ? undefined : `got "${String(value)}" (== forbidden)` };
+  }
+  // json-lte
+  const lhs = Number(value);
+  const rhs = Number(operand);
+  if (!Number.isFinite(lhs) || !Number.isFinite(rhs)) {
+    return { check: label, passed: false, reason: `non-numeric compare (value="${String(value)}", n="${operand}")` };
+  }
+  const passed = lhs <= rhs;
+  return { check: label, passed, reason: passed ? undefined : `got ${lhs} > ${rhs}` };
+}
+
 function runCheck(checkStr, opts = {}) {
   const cmdTimeoutMs = opts.cmdTimeoutMs ?? DEFAULT_CMD_TIMEOUT_MS;
   const [type, ...rest] = checkStr.split(':');
@@ -239,6 +316,13 @@ function runCheck(checkStr, opts = {}) {
         return { check: `json key "${key}" in ${filePath}`, passed: false, reason: e.message };
       }
     }
+
+    case 'json-eq':
+    case 'json-ne':
+    case 'json-lte':
+      // 중첩 dotpath 값 비교. 보안 게이트(verdict==PASS, critical<=0)에 사용.
+      // 파일/경로 부재는 항상 fail-closed.
+      return runJsonCompare(type, arg);
 
     case 'no-match': {
       // 형식: no-match:<glob_or_paths>:<pattern>
@@ -503,11 +587,18 @@ function cmdStart(stageName) {
     }
   }
 
-  // Budget 자동 검사 — 루프 대상 stage(qa-engineer, reviewer, security-auditor-pipeline) 진입 시
-  // 누적/플립플롭/스트릭 임계 초과 여부를 강제 검증한다.
+  // Budget 자동 검사 — 루프 트리거 stage 진입 시 누적/플립플롭/스트릭 임계 초과 여부를 강제 검증한다.
+  // 트리거 집합은 stages.json.loops{}의 trigger_stage에서 파생한다 (하드코딩 배열 제거 — D1-W2/D4-W3).
+  // stages.json이 단일 소스이므로 새 루프를 추가해도 코드 수정 없이 budget 가드가 따라온다.
+  // loops_to 필드가 명시된 stage(레거시 메타)도 포함하여 하위 호환.
   // LLM이 명시적으로 budget을 호출하지 않아도 차단되어 무한 진동 시나리오를 막는다.
   // budget 검사는 read-only이므로 lock 보유 중 호출해도 안전.
-  if (def.loops_to || ['qa-engineer', 'reviewer', 'security-auditor-pipeline'].includes(stageName)) {
+  const loopTriggers = new Set(
+    Object.values(readStages().loops ?? {})
+      .map((l) => l.trigger_stage)
+      .filter(Boolean)
+  );
+  if (def.loops_to || loopTriggers.has(stageName)) {
     deriveBudgetCounters(ver);
     const catalog = readStages();
     const budgets = catalog.budgets ?? {};
@@ -932,8 +1023,11 @@ function copyArtifactsFromPrev(prev, next) {
 }
 
 /**
- * feedback_loops[]에 1건 추가.
- * qa-engineer/reviewer/security-auditor가 codegen에 피드백을 줄 때 호출한다.
+ * feedback_loops[]에 1건 추가 (선택적 보조 기록).
+ *
+ * 주의: 루프 이터레이션의 canonical 카운터는 loop_iterations(deriveLoopIterations가 stages[]에서 파생)이며,
+ * budget 가드도 loop_iterations만 본다. feedback_loops[]는 에이전트가 루프 사유/이슈 수를 audit trail로
+ * 남기고 싶을 때만 쓰는 보조 로그이고, 비어 있어도 무방하다. 카운팅 로직은 이 배열에 의존하지 않는다.
  *
  * 사용 예:
  *   record-feedback-loop --from=qa-engineer --to=code-generator-frontend --iter=1 --issues=3
@@ -964,14 +1058,14 @@ function cmdSchema(args) {
       current_stage: 'stage name (string) | null',
       stages: 'StageEntry[] — append-only, time-ordered. Last entry per stage name is current state.',
       feedback_loops:
-        'FeedbackLoopEntry[] — appended by `record-feedback-loop`. Counts per (from,to) pair are the canonical iteration counters; do NOT introduce per-stage tally fields like test_iterations/review_iterations — derive from this array.',
+        'FeedbackLoopEntry[] — OPTIONAL auxiliary audit log, appended by `record-feedback-loop` if an agent chooses to annotate a loop. NOT the canonical counter and may be empty. The CANONICAL per-loop iteration counter is loop_iterations (derived by deriveLoopIterations() from stages[] + stages.json.loops). Do NOT introduce per-stage tally fields like test_iterations/review_iterations.',
       approvals: 'object<stage, ApprovalEntry> — written by `approve`, verified by `require`',
       total_code_regens:
         'integer — derived by deriveBudgetCounters() from stages[]. Sum of code-generator-* re-executions beyond first run.',
       identical_error_streak:
         'integer — derived. >=2 triggers halt recommendation per CLAUDE.md.',
       loop_iterations:
-        'object<loopName, integer> — derived from stages.json.loops + stages[].',
+        'object<loopName, integer> — CANONICAL loop counter. Derived by deriveLoopIterations() from stages.json.loops + stages[]. Compared against stages.json.loops[name].max_iterations by budget guard.',
       branch: '(optional) string — populated by new-version --branch=...',
       baseline_commit: '(optional) string — populated by new-version --baseline-commit=...',
       mode: '(optional) string — e.g., docs-only|docs-qa|plan|deploy',
@@ -983,6 +1077,8 @@ function cmdSchema(args) {
       halt_report: '(optional) string — path to halt-report.md if provided to `halt --report=...`',
       final_stage: '(optional) string — terminal stage name (set by `complete`; usually security-auditor-pipeline)',
       completion_notes: '(optional) string — free-text note from `complete --notes=...`',
+      aws_infra:
+        '(optional) AwsInfra — set by `set-aws-infra` (written by /awsarch). Records the mock→AWS transition: data source, deployed stack, region, deploy timestamp.',
     },
     StageEntry: {
       stage: 'stage name (must exist in stages.json or be a registered helper)',
@@ -1011,11 +1107,18 @@ function cmdSchema(args) {
       mode: '"interactive" | "auto"',
       notes: 'string | null',
     },
+    AwsInfra: {
+      data_source: '"memory" | "dynamodb" — active DATA_SOURCE after migration',
+      stack_name: 'string | null — deployed CloudFormation stack name',
+      region: 'string | null — AWS region of the deployment',
+      deployed_at: 'ISO-8601 — when set-aws-infra was recorded',
+      notes: '(optional) string | null — free-text (e.g., cost estimate, plan-only marker)',
+    },
     deprecated_fields: {
       test_iterations:
-        'REMOVED — was never written by checkpoint.mjs. Derive count from feedback_loops[].filter(f => f.from === "qa-engineer").length.',
+        'REMOVED — was never written by checkpoint.mjs. The canonical loop counter is loop_iterations (e.g., loop_iterations["qa-code"]), derived from stages[].',
       review_iterations:
-        'REMOVED — was never written by checkpoint.mjs. Derive from feedback_loops[].filter(f => f.from === "reviewer").length.',
+        'REMOVED — was never written by checkpoint.mjs. Use loop_iterations["review-code"] (derived from stages[]).',
     },
   };
 
@@ -1030,7 +1133,7 @@ function cmdSchema(args) {
   console.log('');
   console.log('## Root');
   for (const [k, v] of Object.entries(schema.root)) console.log(`  ${k}: ${v}`);
-  for (const section of ['Version', 'StageEntry', 'CheckpointItem', 'FeedbackLoopEntry', 'ApprovalEntry']) {
+  for (const section of ['Version', 'StageEntry', 'CheckpointItem', 'FeedbackLoopEntry', 'ApprovalEntry', 'AwsInfra']) {
     console.log('');
     console.log(`## ${section}`);
     for (const [k, v] of Object.entries(schema[section])) console.log(`  ${k}: ${v}`);
@@ -1182,6 +1285,51 @@ function cmdComplete(args) {
   console.log(`✓ v${state.current_version} marked completed at ${now}`);
   if (finalStage) console.log(`  Final stage: ${finalStage}`);
   if (opts.notes) console.log(`  Notes: ${opts.notes}`);
+}
+
+/**
+ * 현재 버전에 AWS 인프라 전환 메타(aws_infra)를 기록한다.
+ * /awsarch(aws-deployer)가 mock→AWS 전환 완료 후 호출하는 단일 합법 진입점이다.
+ * state.json 직접 쓰기(_preamble §3 위반) 없이 데이터 소스/스택/리전을 기록한다.
+ *
+ * 옵션:
+ *   --data-source=<memory|dynamodb>   (필수) 마이그레이션 후 활성 DATA_SOURCE
+ *   --stack=<name>                    (선택) 배포된 CloudFormation 스택 이름
+ *   --region=<aws-region>             (선택) 배포 리전
+ *   --notes="..."                     (선택) 자유 텍스트 (비용 추정, --plan 마커 등)
+ *
+ * 사용 예:
+ *   node .pipeline/scripts/checkpoint.mjs set-aws-infra --data-source=dynamodb \
+ *     --stack=DataflowProtoStack --region=us-east-1 --notes="seed migrated, 15 users"
+ *   node .pipeline/scripts/checkpoint.mjs set-aws-infra --data-source=memory --notes="plan-only, no deploy"
+ *
+ * 종료 코드: 0 성공 / 1 활성 버전 없음 또는 --data-source 누락·무효
+ */
+function cmdSetAwsInfra(args) {
+  const opts = parseFlags(args);
+  const dataSource = opts['data-source'];
+  if (!dataSource || !['memory', 'dynamodb'].includes(dataSource)) {
+    console.error(`✗ --data-source required. One of: memory, dynamodb`);
+    console.error(`  Usage: set-aws-infra --data-source=<memory|dynamodb> [--stack=<name>] [--region=<region>] [--notes="..."]`);
+    process.exit(1);
+  }
+
+  acquireLock('set-aws-infra');
+
+  const state = readState();
+  const ver = currentVersion(state);
+  ver.aws_infra = {
+    data_source: dataSource,
+    stack_name: opts.stack ? String(opts.stack) : null,
+    region: opts.region ? String(opts.region) : null,
+    deployed_at: new Date().toISOString(),
+    notes: opts.notes ? String(opts.notes) : null,
+  };
+  writeState(state);
+  console.log(
+    `✓ aws_infra recorded for v${state.current_version} (data_source=${dataSource}` +
+      `${opts.stack ? `, stack=${opts.stack}` : ''}${opts.region ? `, region=${opts.region}` : ''})`,
+  );
 }
 
 function cmdRecordFeedbackLoop(args) {
@@ -1380,6 +1528,11 @@ switch (action) {
     cmdComplete(process.argv.slice(3));
     break;
 
+  case 'set-aws-infra':
+    // stageName 자리는 이 cmd에서 사용하지 않으므로 args 전체를 다시 슬라이스해서 전달한다.
+    cmdSetAwsInfra(process.argv.slice(3));
+    break;
+
   default:
     console.error('Usage: checkpoint.mjs <command> [args...]');
     console.error('');
@@ -1397,12 +1550,16 @@ switch (action) {
     console.error('  schema [--json]            Print state.json schema (SSOT)');
     console.error('  halt <stage> --reason="..." [--report=<path>]   Mark current version halted');
     console.error('  complete [--stage=<name>] [--notes="..."]      Mark current version completed (idempotent)');
+    console.error('  set-aws-infra --data-source=<memory|dynamodb> [--stack --region --notes]   Record /awsarch transition meta');
     console.error('');
     console.error('Check formats:');
-    console.error('  file:<path>                File exists');
-    console.error('  json:<path>                Valid JSON file');
-    console.error('  json-key:<path>:<key>      JSON file contains key');
-    console.error('  no-match:<glob>:<pattern>  No grep match (pass if absent)');
-    console.error('  cmd:<command>              Shell command exits 0');
+    console.error('  file:<path>                          File exists');
+    console.error('  json:<path>                          Valid JSON file');
+    console.error('  json-key:<path>:<key>                JSON file contains key');
+    console.error('  json-eq:<path>:<dotpath>:<expected>  Nested value equals expected (pass)');
+    console.error('  json-ne:<path>:<dotpath>:<value>     Nested value differs from value (pass)');
+    console.error('  json-lte:<path>:<dotpath>:<n>        Nested numeric value <= n (pass)');
+    console.error('  no-match:<glob>:<pattern>            No grep match (pass if absent)');
+    console.error('  cmd:<command>                        Shell command exits 0');
     process.exit(1);
 }

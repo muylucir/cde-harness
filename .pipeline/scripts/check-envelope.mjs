@@ -12,8 +12,12 @@
  *
  * 금지: { data, results, payload, body, response, ... } 같은 변형
  *
+ * 검사 루트 (D7-W2): 항상 하네스 루트(= 이 스크립트 위치 기준 ../..)의 src/app/api/만
+ *   검사한다. 다른 5개 검증 스크립트와 동일 기준이며 process.cwd()에 의존하지 않는다.
+ *
  * 적용 범위:
- *   - src/app/api/**\/route.ts 의 모든 NextResponse.json(<expr>) 호출 인자
+ *   - src/app/api/**\/route.ts 의 모든 NextResponse.json(<expr>) 호출의 첫 인자
+ *   - init 인자(2번째, 예: {status:400})는 검증 대상 아님 (D7-W5: 첫 인자만 1회 집계)
  *   - SSE 스트리밍 라우트 (Response 본문이 ReadableStream)는 envelope 검증에서 제외
  *
  * 휴리스틱 한계:
@@ -73,8 +77,13 @@ function walk(dir, filter, out = []) {
 }
 
 /**
- * 소스에서 NextResponse.json(<expr>, ...) 호출 인자를 정적으로 추출한다.
- * 인자는 1번째 위치만 본다 (init/headers는 2번째). 괄호 균형 추적으로 expr 종료를 찾는다.
+ * 소스에서 NextResponse.json(<expr>, ...) 호출의 첫 번째 인자만 정적으로 추출한다.
+ * init/headers(2번째 인자 이후)는 envelope 검증 대상이 아니므로 무시한다.
+ * 괄호 균형 추적으로 expr 종료를 찾고, 호출당 정확히 1번만 결과를 push한다 (D7-W5:
+ * 이전엔 top-level 콤마에서 push 후 break하지 않아 닫는 괄호에서 같은 인자를 한 번 더
+ * 집계 → 중복 보고가 발생했다).
+ * @param {string} src 라우트 소스 텍스트
+ * @returns {{argText:string, offset:number}[]} 첫 인자 텍스트 + 소스 내 시작 오프셋
  */
 function extractJsonArgs(src) {
   const out = [];
@@ -87,6 +96,7 @@ function extractJsonArgs(src) {
     let inLineComment = false;
     let inBlockComment = false;
     let j = start;
+    let pushed = false; // 이 호출에 대해 인자를 이미 기록했는지
     while (j < src.length) {
       const c = src[j];
       const next = src[j + 1];
@@ -113,20 +123,24 @@ function extractJsonArgs(src) {
       else if (c === ')' || c === ']' || c === '}') {
         depth--;
         if (depth === 0) {
-          // 끝. start..j 가 괄호 안 전체. 첫 번째 인자만 골라낸다 (top-level 콤마 위치).
-          const argText = sliceFirstArg(src.slice(start, j));
-          out.push({ argText, offset: start });
+          // 호출 끝. 아직 top-level 콤마를 못 만났다면(=인자가 하나뿐) 여기서 첫 인자 기록.
+          if (!pushed) {
+            const argText = sliceFirstArg(src.slice(start, j));
+            out.push({ argText, offset: i });
+          }
           break;
         }
-      } else if (c === ',' && depth === 1) {
-        // top-level 콤마 — 첫 인자가 끝남. 이 위치까지를 인자로 취급.
+      } else if (c === ',' && depth === 1 && !pushed) {
+        // top-level 콤마 — 첫 인자가 끝남. 정확히 한 번만 기록하고, 이후엔 닫는 괄호까지
+        // 스킵만 한다(init 인자는 검증 대상 아님). 중복 push 방지를 위해 break하지 않고
+        // pushed 플래그로 가드한다.
         const argText = src.slice(start, j);
-        out.push({ argText, offset: start });
-        // 나머지는 NextResponse.json의 init 인자라 envelope 검증 대상 아님.
-        // 다음 NextResponse.json 호출을 찾기 위해 depth가 0이 될 때까지 진행.
+        out.push({ argText, offset: i });
+        pushed = true;
       }
       j++;
     }
+    // 다음 검색은 이 호출의 닫는 괄호 다음부터. (start로 되돌리면 무한 재매칭 위험)
     i = j + 1;
   }
   return out;
@@ -270,6 +284,7 @@ function main() {
 
   const files = walk(API_DIR, (p) => p.endsWith('route.ts') || p.endsWith('route.tsx'));
   const violations = [];
+  const seen = new Set(); // file:line:keys dedup (D7-W5)
   let scanned = 0;
   let totalCalls = 0;
 
@@ -277,6 +292,7 @@ function main() {
     const src = readFileSync(f, 'utf-8');
     scanned++;
     const calls = extractJsonArgs(src);
+    const rel = f.replace(REPO_ROOT + '/', '');
     for (const { argText, offset } of calls) {
       totalCalls++;
       const { kind, keys } = extractTopLevelKeys(argText);
@@ -286,9 +302,14 @@ function main() {
       }
       const verdict = classifyKeys(keys);
       if (verdict === 'invalid') {
+        const line = lineOf(src, offset);
+        // 동일 file:line:keys 조합은 한 번만 보고 (D7-W5 중복 보고 차단)
+        const dedupKey = `${rel}:${line}:${keys.join(',')}`;
+        if (seen.has(dedupKey)) continue;
+        seen.add(dedupKey);
         violations.push({
-          file: f.replace(REPO_ROOT + '/', ''),
-          line: lineOf(src, offset),
+          file: rel,
+          line,
           keys,
           snippet: argText.slice(0, 120).replace(/\s+/g, ' '),
         });

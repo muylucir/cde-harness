@@ -9,6 +9,9 @@
  *        - `/pipeline-from <stage>`
  *   2. stages.json의 loops[*].trigger_stage / loops[*].target_stages[*] / stages[*].loops_to[*]가
  *      모두 stages.json.stages[*].name 안에 있는가 (자기 참조 정합성).
+ *   3. (D2-W2) stages.json의 stages[*].checkpoint[]와 stages[*].optional_gate_cmd가 참조하는
+ *      `node .pipeline/scripts/X.mjs` 스크립트 경로가 실제로 .pipeline/scripts/ 아래 존재하는가.
+ *      존재하지 않으면 빌드/체크 시점에 ENOENT로 silent skip 되거나 게이트가 무력화되므로 차단한다.
  *
  * check-allowed-models-sync.mjs sub-check [I]로 호출되며, drift가 있으면 exit 1로 차단한다.
  *
@@ -26,6 +29,9 @@ const REPO_ROOT = resolve(SCRIPT_DIR, '../..');
 const CHECKPOINT_PATTERN =
   /checkpoint\.mjs[\s\\]+(?:start|check|require|approve|halt|validate-stage|budget)[\s\\]+([a-z][a-z0-9-]+)/g;
 const PIPELINE_FROM_PATTERN = /\/pipeline-from\s+([a-z][a-z0-9-]+)/g;
+// stages.json checkpoint[]/optional_gate_cmd가 호출하는 스크립트 경로 추출용.
+// 예: "cmd:node .pipeline/scripts/check-envelope.mjs" → ".pipeline/scripts/check-envelope.mjs"
+const SCRIPT_CMD_PATTERN = /node\s+(\.pipeline\/scripts\/[A-Za-z0-9._-]+\.mjs)/g;
 
 /** 디렉토리 안의 모든 .md 파일 경로(상대) 반환. */
 function listMarkdown(dir) {
@@ -101,6 +107,40 @@ function main() {
     failed++;
   } else {
     console.log(`  ✓ stages.json loops/loops_to self-references intact`);
+  }
+
+  // (D2-W2) checkpoint[]/optional_gate_cmd가 참조하는 스크립트 경로 실존 검증.
+  // stages.json의 checkpoint 문자열과 optional_gate_cmd 문자열에서 'node .pipeline/scripts/X.mjs'
+  // 토큰을 추출해 REPO_ROOT 기준 existsSync로 확인한다. 존재하지 않으면 게이트가 무력화되므로 fail.
+  const cmdStrings = [];
+  for (const s of STAGES_CATALOG.stages) {
+    for (const c of s.checkpoint ?? []) {
+      if (typeof c === 'string') cmdStrings.push({ stage: s.name, field: 'checkpoint', text: c });
+    }
+    if (typeof s.optional_gate_cmd === 'string') {
+      cmdStrings.push({ stage: s.name, field: 'optional_gate_cmd', text: s.optional_gate_cmd });
+    }
+  }
+  const missingScripts = [];
+  const seenScripts = new Set();
+  for (const { stage, field, text } of cmdStrings) {
+    for (const m of text.matchAll(SCRIPT_CMD_PATTERN)) {
+      const rel = m[1];
+      if (!existsSync(resolve(REPO_ROOT, rel))) {
+        missingScripts.push(`stages[${stage}].${field} → "${rel}"`);
+      }
+      seenScripts.add(rel);
+    }
+  }
+  if (missingScripts.length > 0) {
+    console.error(`  ✗ stages.json references script(s) that do not exist under .pipeline/scripts/:`);
+    for (const u of missingScripts) console.error(`      ${u}`);
+    console.error(`  → 스크립트를 생성하거나 stages.json의 checkpoint/optional_gate_cmd 경로를 정정하세요.`);
+    failed++;
+  } else {
+    console.log(
+      `  ✓ all ${seenScripts.size} script path(s) in stages.json checkpoint/optional_gate_cmd exist`,
+    );
   }
 
   if (failed > 0) {

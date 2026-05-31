@@ -386,17 +386,17 @@ node .pipeline/scripts/checkpoint.mjs check code-generator-ai \
 
 `check-allowed-models-sync.mjs`는 모델 ID SSOT(`.pipeline/scripts/allowed-models.json`)와 CLAUDE.md Rule 13 표가 drift되지 않았는지 사전 차단한다.
 
-`ai-smoke.mjs`가 검사하는 10개 항목 — AI 기능이 "빌드는 되지만 동작하지 않는" 리그레션을 차단한다:
-1. `@aws-sdk/client-bedrock-runtime` 직접 import 부재 (CLAUDE.md Rule 9)
-2. `ai-contract.api_routes`에서 Agent 호출이 필요한 라우트에 실제 `new Agent()/createXxxAgent()` + `.invoke()/.stream()` 호출 존재
-3. stub 문자열 부재 (`will be populated`, `TODO: wire agent`, `narrative placeholder` 등)
-4. `ai-contract.sse_events[].event_type` ⊆ 라우트가 emit하는 이벤트명 집합
-5. `section_marker_map`의 값이 `ai-internals.system_prompt.template`에 모두 존재 + key 집합이 `sse_events[].event_type`와 일치
-6. nested Agent를 호출하는 도구가 실패 시 `error`/`retriable` 필드를 반환 (template-only fallback 금지)
-7. `model:` / `modelId:` 리터럴이 SSOT(`allowed-models.json`)의 화이트리스트와 정확 매칭, 단축 alias(`'haiku'/'sonnet'/'opus'`) SDK 전달 금지
-8. `process.env.BEDROCK_MODEL_ID` 환경변수 fallback 패턴 부재
-9. `generation-log-ai.json.skills_used[]`에 필수 스킬(`strands-sdk-typescript-guide`, `agent-patterns`) 호출 기록
-10. **SSE 종결 보장** — 채팅 라우트의 정상/catch 경로 모두에서 `done` emit 또는 `controller.close()` 도달 (사용자 화면 회귀 T1 차단)
+`ai-smoke.mjs`가 검사하는 10개 Check (12개 검증 라인 출력 — Check 5·8은 각 2개 라인) — AI 기능이 "빌드는 되지만 동작하지 않는" 리그레션을 차단한다. **Check 번호 SSOT는 `ai-smoke.mjs` 코드 주석**이며, `_preamble.md` FP 카탈로그와 `code-generator-ai.md`/`spec-writer-ai.md`가 이 번호로 참조한다:
+1. **Check 1** — `@aws-sdk/client-bedrock-runtime` 직접 import 부재, `src/` 전역 (CLAUDE.md Rule 9 / FP-007)
+2. **Check 2** — `ai-contract.api_routes`에서 Agent 호출이 필요한 라우트에 실제 `new Agent()/createXxxAgent()` + `.invoke()/.stream()` 호출 존재 (stub 핸들러 금지 / FP-006)
+3. **Check 3** — stub 문자열 부재 (`will be populated`, `TODO: wire agent`, `narrative placeholder` 등 / FP-006)
+4. **Check 4** — `ai-contract.sse_events[].event_type` ⊆ 라우트가 emit하는 이벤트명 집합
+5. **Check 5** — `section_marker_map`의 값이 `ai-internals.system_prompt.template`에 모두 존재 + key 집합이 `sse_events[].event_type`와 일치 (2개 라인)
+6. **Check 6** — nested Agent를 호출하는 도구가 실패 시 `error`/`retriable` 필드를 반환 (template-only fallback 금지)
+7. **Check 7** — `model:` / `modelId:` 리터럴이 SSOT(`allowed-models.json`)의 화이트리스트와 정확 매칭, 단축 alias(`'haiku'/'sonnet'/'opus'`) SDK 전달 금지 (FP-009)
+8. **Check 8** — `process.env.BEDROCK_MODEL_ID` 환경변수 fallback 패턴 부재 (FP-008) + `process.env[<computed>]` 간접 접근 부재 (동적 키 우회 주입 차단) (2개 라인)
+9. **Check 9** — `generation-log-ai.json.skills_used[]`에 필수 스킬(`strands-sdk-typescript-guide`, `agent-patterns`) 호출 기록
+10. **Check 10** — SSE 종결 보장: 채팅 라우트의 정상/catch 경로 모두에서 `done` emit 또는 `controller.close()` 도달 (사용자 화면 회귀 T1 차단)
 
 검사 실패 시 `code-generator-ai`에 피드백 파일을 작성하고 재생성(최대 2회). `total_code_regens`가 budget 초과면 halt.
 

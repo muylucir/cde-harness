@@ -24,7 +24,7 @@
 시작 전 5분 안에 끝내야 하는 확인 사항. Stage 5에서 Bedrock 자격증명 에러로 30분 날리기 전에.
 
 ```bash
-# (1) Claude Code 버전 (Sonnet/Opus 4.7 지원 필요)
+# (1) Claude Code 버전 (Sonnet/Opus 4.8 지원 필요)
 claude --version
 
 # (2) Node 20+ 확인
@@ -292,7 +292,7 @@ npx playwright test e2e/specific-test.spec.ts --headed
 
 ### 1회 `/pipeline` 실행 비용 감각
 
-**기준**: Opus 4.7, 중간 복잡도 프로토타입(FR 15개, 페이지 5개, AI 기능 1개).
+**기준**: Opus 4.8, 중간 복잡도 프로토타입(FR 15개, 페이지 5개, AI 기능 1개).
 
 | 항목 | 예상치 |
 |---|---|
@@ -389,10 +389,10 @@ npm run dev
 | `.pipeline/scripts/checkpoint.mjs` | state.json의 유일한 writer (서브커맨드로만 호출) | 일반 사용자 X |
 | `.pipeline/scripts/ai-smoke.mjs` | AI 구현 런타임 가드 (stub/SSE/모델ID) | 일반 사용자 X |
 | `.pipeline/scripts/allowed-models.json` | AI 모델 ID 화이트리스트 (Rule 13) | 일반 사용자 X |
-| `.pipeline/scripts/review-categories.json` | reviewer 11개 카테고리 SSOT | 일반 사용자 X |
+| `.pipeline/scripts/review-categories.json` | reviewer 카테고리 SSOT (항상 활성 10 + 조건부 2) | 일반 사용자 X |
 | `.claude/policies/auto-safety-gates.md` | `--auto` 안전 게이트 5종 SSOT | 일반 사용자 X |
 
-**드리프트 차단 스크립트**: `check-stages-sync.mjs`, `check-allowed-models-sync.mjs`, `check-spec-model-id.mjs`, `check-agent-models.mjs`, `cross-check-endpoints.mjs`, `check-envelope.mjs`, `check-store-naming.mjs`, `check-strands-rule13.mjs`, `check-bedrock-no-direct-import.mjs`, `check-reviewer-skills.mjs`가 명령/에이전트/코드 ↔ SSOT drift를 자동 차단합니다.
+**드리프트 차단 스크립트**: `check-stages-sync.mjs`, `check-allowed-models-sync.mjs`(통합 진입점), `check-spec-model-id.mjs`, `check-agent-models.mjs`, `cross-check-endpoints.mjs`, `check-envelope.mjs`, `check-store-naming.mjs`, `check-strands-rule13.mjs`, `check-bedrock-no-direct-import.mjs`, `check-reviewer-skills.mjs`, `check-review-categories.mjs`, `check-markdown-render.mjs`가 명령/에이전트/코드 ↔ SSOT drift를 자동 차단합니다. (`check-allowed-models-sync.mjs`가 sub-check [B]~[K]로 대부분을 통합 실행합니다.)
 
 ---
 

@@ -318,7 +318,7 @@ cde-harness/
 │   │   ├── cloudscape-design/          # Cloudscape 컴포넌트/패턴/토큰
 │   │   ├── mermaid-diagrams/           # Flowchart/Sequence 다이어그램
 │   │   ├── nextjs16-app-router/        # App Router 파일 컨벤션
-│   │   ├── nextjs-auth-patterns/       # Cognito + middleware + 보호 라우트
+│   │   ├── nextjs-auth-patterns/       # Cognito + proxy.ts + 보호 라우트
 │   │   ├── playwright-e2e/             # Cloudscape 셀렉터 + E2E 패턴
 │   │   ├── prompt-engineering/         # XML 구조화 + Structured Output
 │   │   └── strands-sdk-typescript-guide/  # Strands SDK TS 종합 가이드
@@ -349,6 +349,8 @@ cde-harness/
 │   │   ├── check-store-naming.mjs    # Repository 패턴 네이밍 강제
 │   │   ├── check-strands-rule13.mjs  # Strands SDK 사용 강제
 │   │   ├── check-reviewer-skills.mjs # reviewer 스킬 호출 강제
+│   │   ├── check-review-categories.mjs # review-categories.json ↔ reviewer.md drift 차단
+│   │   ├── check-markdown-render.mjs # AI 스트리밍 마크다운 렌더링 회귀 차단
 │   │   └── has-ai.mjs                # AI 기능 포함 여부 판정
 │   ├── artifacts/                  # 파이프라인 산출물 (버전별)
 │   │   └── v{N}/
@@ -418,7 +420,7 @@ cde-harness/
 
 ### 5A. 백엔드 코드 생성 (Code Generator — Backend)
 - **입력**: 백엔드 명세서 + 아키텍처
-- **출력**: `src/types/`, `src/lib/`, `src/app/api/`, `src/data/`, `src/middleware.ts`
+- **출력**: `src/types/`, `src/lib/`, `src/app/api/`, `src/data/`, `src/proxy.ts` (Next.js 16 — 구 `middleware.ts`, `_preamble` §11)
 - **기본 패턴**: 인메모리 스토어 + Repository 패턴 (DynamoDB 등으로 교체 가능)
 
 ### 5A-2. AI Agent 코드 생성 (Code Generator — AI) *조건부*
@@ -716,7 +718,7 @@ cd infra && npx cdk destroy   # 인프라 제거
 |------|-------------|----------|
 | `cloudscape-design` | architect, spec-writer-frontend, code-gen-frontend, reviewer | 101개 컴포넌트 카탈로그, 73개 UI 패턴, 코드 예제 5개, 디자인 토큰 |
 | `nextjs16-app-router` | code-gen-backend, code-gen-frontend | Server Components 기본, async params, 라우트 핸들러, generateMetadata |
-| `nextjs-auth-patterns` | code-gen-backend, aws-architect | Cognito Hosted UI, JWT 검증, middleware 보호 라우트, 권한 분기 |
+| `nextjs-auth-patterns` | code-gen-backend, aws-architect | Cognito Hosted UI, JWT 검증, proxy.ts 보호 라우트, 권한 분기 |
 | `api-contract-zod` | spec-writer-backend, code-gen-backend, code-gen-frontend | envelope 형식, HTTP 코드, zod ↔ TypeScript 단일 바인딩(z.infer) |
 | `agent-patterns` | spec-writer-ai, code-gen-ai | AI 에이전트 3계층 택소노미, 18개 패턴 레퍼런스, 자동화 수준 |
 | `prompt-engineering` | spec-writer-ai, code-gen-ai | XML 구조화, Structured Output, Tool Use, Extended Thinking |

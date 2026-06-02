@@ -499,16 +499,21 @@
     </div>
     <p style="font-size:14px; color:#414750; margin:8px 0 24px 0;">InMemoryStore 기반 프로토타입을 실제 AWS(DynamoDB · Aurora · S3 · Cognito · Bedrock AgentCore)로 전환한다. CDK TypeScript 인프라를 생성하고, <strong>듀얼 모드 데이터 레이어</strong>를 구현하여 <code style="background:#fef3c7; padding:1px 4px; border-radius:3px;">DATA_SOURCE</code> 환경 변수만으로 mock/real을 전환할 수 있게 한다.</p>
 
-    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">세 가지 모드</h4>
-    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:24px;">
+    <h4 style="font-size:14px; color:#0f1b2d; margin:0 0 12px 0; text-transform:uppercase; letter-spacing:0.5px;">네 가지 모드</h4>
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:12px; margin-bottom:24px;">
       <div style="background:#f8fafc; border:1px solid #e9ebed; padding:16px; border-radius:6px;">
         <code style="background:#0f1b2d; color:#ff9900; padding:3px 8px; border-radius:3px; font-size:12px; font-family:'SF Mono',monospace;">/awsarch --plan</code>
-        <div style="font-size:12px; color:#475569; font-weight:600; margin:8px 0 4px 0;">설계만 · 배포 없음</div>
-        <div style="font-size:13px; color:#414750;">Phase 1까지만. aws-architecture.json + 비용 추정 산출. 의사결정 자료로 활용.</div>
+        <div style="font-size:12px; color:#475569; font-weight:600; margin:8px 0 4px 0;">설계만 · 비용 $0</div>
+        <div style="font-size:13px; color:#414750;">Phase 1까지만. aws-architecture.json + 비용 추정 산출. CDK 코드 없음. 의사결정 자료로 활용.</div>
+      </div>
+      <div style="background:#f8fafc; border:1px solid #e9ebed; padding:16px; border-radius:6px;">
+        <code style="background:#0f1b2d; color:#ff9900; padding:3px 8px; border-radius:3px; font-size:12px; font-family:'SF Mono',monospace;">/awsarch --cdk</code>
+        <div style="font-size:12px; color:#475569; font-weight:600; margin:8px 0 4px 0;">설계 + CDK 코드 · 비용 $0</div>
+        <div style="font-size:13px; color:#414750;">Phase 1~2. infra/ CDK 프로젝트 + 듀얼 모드 레이어 생성 후 배포 직전 종료. mock 그대로 동작, 나중에 직접 배포 가능.</div>
       </div>
       <div style="background:#f8fafc; border:1px solid #e9ebed; padding:16px; border-radius:6px;">
         <code style="background:#0f1b2d; color:#ff9900; padding:3px 8px; border-radius:3px; font-size:12px; font-family:'SF Mono',monospace;">/awsarch</code>
-        <div style="font-size:12px; color:#be123c; font-weight:600; margin:8px 0 4px 0;">전체 · 기본</div>
+        <div style="font-size:12px; color:#be123c; font-weight:600; margin:8px 0 4px 0;">전체 · 기본 (배포 비용 발생)</div>
         <div style="font-size:13px; color:#414750;">Phase 1~4. 설계 + CDK 배포 + 데이터 레이어 교체 + 시드 마이그레이션.</div>
       </div>
       <div style="background:#f8fafc; border:1px solid #e9ebed; padding:16px; border-radius:6px;">

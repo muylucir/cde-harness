@@ -776,7 +776,7 @@ https://cloudscape.design/patterns/{path}/index.html.md
 고객 브리프에 인증 요구사항을 명시하면 요구사항 분석 에이전트가 NFR로 추출하고, 아키텍처에 Auth Context가 포함됩니다. 다만 실제 인증이 아닌 목업 토큰 기반입니다.
 
 ### 프로토타입에 실제 DB가 필요하면?
-`/awsarch`를 실행하면 InMemoryStore → DynamoDB로 자동 전환됩니다. `--plan` 옵션으로 비용만 먼저 확인할 수 있습니다.
+`/awsarch`를 실행하면 InMemoryStore → DynamoDB로 자동 전환됩니다. `--plan` 옵션으로 설계·비용만 먼저 확인하거나, `--cdk` 옵션으로 배포 없이 CDK 코드와 듀얼 모드 데이터 레이어까지만 생성(AWS 비용 $0)한 뒤 나중에 직접 `cd infra && npx cdk deploy`로 배포할 수 있습니다.
 
 ### `/awsarch` 후 인프라를 삭제하려면?
 `cd infra && npx cdk destroy`로 CloudFormation 스택을 제거합니다. DynamoDB 테이블, S3 버킷 등이 함께 삭제됩니다.

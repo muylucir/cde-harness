@@ -150,7 +150,7 @@ cp ~/Downloads/아키텍처_스케치.png .pipeline/input/raw/
 npm run dev
 ```
 
-`http://localhost:3000`에서 확인. 이 시점부터는 `/iterate`로 반복 개선하거나, `/awsarch`로 실제 AWS 전환하거나, `/handover`로 고객 핸드오프.
+`http://localhost:3000`에서 확인. 이 시점부터는 `/iterate`로 반복 개선하거나, `/awsarch`로 실제 AWS 전환하거나(배포 없이 CDK 코드만 미리 준비하려면 `/awsarch --cdk` — 비용 $0), `/handover`로 고객 핸드오프.
 
 ---
 
@@ -299,6 +299,7 @@ npx playwright test e2e/specific-test.spec.ts --headed
 | 총 소요 시간 | 60-90분 (승인 대기 제외) |
 | 토큰 소비 | 대략 $15-30 (Claude Opus 기준) |
 | AWS 비용 (파이프라인 단계) | $0 (Bedrock은 AI 기능 런타임에만) |
+| `/awsarch --cdk` 추가 시 | +10분, **AWS 비용 $0** (CDK 코드 + 듀얼 모드 레이어만 생성, 배포 안 함) |
 | `/awsarch` 추가 시 | +20분, +$0.5-2 (CloudFormation 배포) |
 
 ### auto 모드 vs 표준 모드

@@ -9,7 +9,7 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
 ## 절대 규칙 (위반 시 즉시 중단)
 
 1. **코드를 직접 수정하지 마라** — Edit/Write로 `src/` 또는 `infra/` 파일을 수정하는 것은 금지. 반드시 `aws-deployer` 에이전트를 Launch하여 코드를 생성/수정한다.
-2. **Phase 순서를 건너뛰지 마라** — Pre-flight → Phase 1 → 2 → 3 → 4 → (5) 순서를 반드시 따른다.
+2. **Phase 순서를 건너뛰지 마라** — Pre-flight → Phase 1 → 2 → 3 → 4 → (5) 순서를 반드시 따른다. 단, 모드별 **조기 종료 지점**이 있다: `--plan`은 Phase 1 APPROVAL GATE 직후 종료, `--cdk`는 **Phase 2 CHECKPOINT 통과 직후 종료**(Phase 3 배포로 진행하지 않음). 조기 종료는 "건너뛰기"가 아니라 "더 진행하지 않고 completed 마킹"이다.
 3. **APPROVAL GATE에서 반드시 멈춰라** — 사용자가 응답할 때까지 다음 Phase로 진행하지 않는다.
 4. **CHECKPOINT를 통과해야 다음 Phase로 간다** — 각 Phase 끝의 검증 조건을 확인한 후에만 다음 Phase로 넘어간다.
 5. **APPROVAL GATE는 코드로 기록한다** — 비용/리소스 검토 후 즉시 다음 명령 실행:
@@ -43,15 +43,22 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
 |---|---|
 | (없음) | 전체: 설계 + CDK 배포 + 마이그레이션 (Phase 1~4) |
 | `--qa` | 전체 + QA/리뷰/보안 재실행 (Phase 1~5) |
-| `--plan` | 설계만: Phase 1까지 (배포 없음) |
+| `--cdk` | 설계 + CDK 코드 생성 + 듀얼 모드 데이터 레이어까지: Phase 1~2 (배포·마이그레이션 없음) |
+| `--plan` | 설계만: Phase 1까지 (CDK 코드·배포 없음) |
 
 ```
 /awsarch             ← 전체: 설계 + CDK 배포 + 마이그레이션 (Phase 1~4)
 /awsarch --qa        ← 전체 + QA/리뷰/보안 재실행 (Phase 1~5)
-/awsarch --plan      ← 설계만: Phase 1까지 (배포 없음)
+/awsarch --cdk       ← 설계 + CDK 코드 생성 (Phase 1~2, 배포 없음)
+/awsarch --plan      ← 설계만 (Phase 1, CDK 코드 없음)
 ```
 
-`--auto`는 지원하지 않는다 (실제 AWS 비용이 발생하므로 APPROVAL GATE를 건너뛰지 않는다).
+> **모드 비교 (배포 비용 발생 지점 기준)**:
+> - `--plan`: 인프라 **설계 문서**(`aws-architecture.json/md`)만. CDK 코드 없음. AWS 비용 $0.
+> - `--cdk`: 설계 + **`infra/` CDK 프로젝트 + 듀얼 모드 데이터 레이어**(`createStore.ts`/`dynamodb-store.ts` + route `await` 수정)까지 생성하고 **`cdk deploy` 직전에 종료**. 디스크에 배포 가능한 CDK 프로젝트가 남고 `DATA_SOURCE=memory`로 mock은 그대로 동작. AWS 비용 $0 (배포 안 함). 나중에 `cd infra && npx cdk deploy`로 직접 배포하거나 `/pipeline-from aws-deployer`로 이어서 배포·마이그레이션.
+> - (없음)/`--qa`: 실제 `cdk deploy` 실행 — **AWS 비용 발생**.
+
+`--auto`는 지원하지 않는다 (실제 AWS 비용이 발생하므로 APPROVAL GATE를 건너뛰지 않는다). `--cdk`/`--plan`도 비용은 없지만 동일하게 APPROVAL GATE(설계 비용 검토)는 거친다 — 사용자가 어떤 인프라를 만들지 검토 없이 코드가 생성되는 것을 막기 위함이다.
 
 ## Pre-flight Checks
 
@@ -78,11 +85,11 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
    - `.pipeline/artifacts/v{N+1}/` 디렉토리 구조 생성 (기존 00~07 복사 + `08-aws-infra/` 신규).
    - **새 버전 생성** — `checkpoint.mjs`로 위임 (LLM은 state.json 직접 쓰지 않음, _preamble §3):
      ```bash
-     # mode는 호출 옵션에 따라 full | qa | plan
+     # mode는 호출 옵션에 따라 full | qa | cdk | plan
      node .pipeline/scripts/checkpoint.mjs new-version \
        --trigger=awsarch \
        --branch="$(git branch --show-current)" \
-       --mode="<full|qa|plan>" \
+       --mode="<full|qa|cdk|plan>" \
        2> /tmp/new-version.err
      NV_EXIT=$?
 
@@ -164,11 +171,11 @@ node .pipeline/scripts/checkpoint.mjs start aws-architect
 > 진행하시겠습니까? (Y/N)
 ```
 
-- **`--plan` 모드**: APPROVAL GATE 후 여기서 종료. 현재 버전을 completed로 마킹 — `checkpoint.mjs`로 위임 (state.json 직접 쓰기 금지, _preamble §3):
+- **`--plan` 모드**: APPROVAL GATE 후 여기서 종료 (설계 문서만 — `infra/` CDK 코드도 생성하지 않는다. CDK 코드까지 원하면 `--cdk`를 사용한다). 현재 버전을 completed로 마킹 — `checkpoint.mjs`로 위임 (state.json 직접 쓰기 금지, _preamble §3):
   ```bash
   node .pipeline/scripts/checkpoint.mjs complete \
     --stage=aws-architect \
-    --notes="awsarch --plan: design only, no deploy"
+    --notes="awsarch --plan: design only, no CDK code, no deploy"
   ```
 - 사용자가 거부(설계는 남기고 배포만 보류): `complete --stage=aws-architect --notes="awsarch plan-only: user declined deploy"` 호출 후 종료. (배포가 없었으므로 `set-aws-infra`로 `--data-source=memory --notes="plan-only, no deploy"`를 추가 기록할 수도 있다. 설계 산출물은 `awsarch/v{N+1}` 브랜치에 남으며, 사용자가 머지하거나 폐기를 선택할 수 있다.)
 - 사용자가 전체 취소(설계물까지 폐기하고 main 복귀): Launch `git-manager` agent with action: `cancel-awsarch` — `awsarch/v{N+1}` 브랜치와 `08-aws-infra/` 설계물을 stash로 폐기하고 main으로 복귀 후 종료. (아직 `cdk deploy` 이전이므로 AWS 비용 미발생.)
@@ -198,13 +205,47 @@ node .pipeline/scripts/checkpoint.mjs start aws-deployer
   - 수정된 `src/lib/db/*.repository.ts`
   - 수정된 `src/app/api/*/route.ts` (await 추가)
 
+> **`--cdk` 모드 주의**: `aws-deployer`를 Launch할 때 프롬프트에 **"CDK 코드 생성 + 듀얼 모드 데이터 레이어까지만 수행하고 `cdk bootstrap`/`cdk deploy`/시드 마이그레이션은 실행하지 마라 (Step 0~2까지, Step 3 배포 이후 금지)"**를 명시한다. 에이전트가 배포를 실행하지 않도록 범위를 좁히는 것이 `--cdk`의 핵심이다.
+
 **CHECKPOINT (Phase 2)**: 다음 조건을 확인한다. 실패 시 `aws-deployer`에 피드백 → 수정 (최대 2회).
 - [ ] `infra/bin/app.ts`와 `infra/lib/main-stack.ts`가 존재하는가
 - [ ] `infra/package.json`이 존재하는가
 - [ ] `src/lib/db/dynamodb-store.ts`가 존재하는가
 - [ ] `src/lib/db/createStore.ts`가 존재하는가
-- [ ] `npm run build` 성공 (Next.js 빌드)
+- [ ] `npm run build` 성공 (Next.js 빌드, DynamoDB 모드)
+- [ ] `DATA_SOURCE=memory npm run build` 성공 (mock 모드 여전히 동작 — `--cdk`는 배포가 없으므로 mock이 기본 동작 경로)
 - [ ] `cd infra && npx tsc --noEmit` 성공 (CDK 컴파일)
+
+- **`--cdk` 모드**: Phase 2 CHECKPOINT 통과 직후 **여기서 종료** (Phase 3 배포로 진행하지 않음). 실제 `cdk deploy`가 없으므로 AWS 비용은 발생하지 않는다. `08-aws-infra/`에는 설계 산출물(`aws-architecture.json/md`)이 있고, `infra/` CDK 프로젝트와 듀얼 모드 데이터 레이어가 디스크에 남는다.
+  ```bash
+  # 배포가 없었으므로 data_source는 memory로 기록 (듀얼 모드 코드는 있으나 DynamoDB 미배포).
+  node .pipeline/scripts/checkpoint.mjs set-aws-infra \
+    --data-source=memory \
+    --notes="awsarch --cdk: CDK 코드 + 듀얼 모드 레이어 생성, 미배포 (cdk deploy 미실행)"
+  node .pipeline/scripts/checkpoint.mjs complete \
+    --stage=aws-deployer \
+    --notes="awsarch --cdk: infra/ CDK 프로젝트 + 듀얼 모드 레이어 생성 완료, 배포 보류"
+  ```
+  그 후 `git-manager`(action: `post-awsarch`)로 `infra/` + 수정된 `src/lib/db/` 등을 커밋하고, 사용자에게 한국어로 다음을 안내한 뒤 종료한다 (Completion 섹션의 전체 요약 대신 `--cdk` 전용 요약):
+  ```
+  ## /awsarch --cdk 완료 (배포 없음)
+
+  ### 생성된 것
+  - `infra/` — 배포 가능한 CDK TypeScript 프로젝트 (DynamoDB/S3/Cognito 등)
+  - 듀얼 모드 데이터 레이어 (`src/lib/db/createStore.ts`, `dynamodb-store.ts`)
+  - 설계 문서: `08-aws-infra/aws-architecture.json/md`
+
+  ### 현재 동작
+  - `DATA_SOURCE=memory npm run dev` — mock 모드로 그대로 동작 (기본)
+  - AWS 리소스는 **아직 생성되지 않음** (비용 $0)
+
+  ### 배포하려면 (나중에, 비용 발생)
+  - `cd infra && npx cdk bootstrap && npx cdk deploy` — 직접 배포, 또는
+  - `/pipeline-from aws-deployer` — 배포 + 시드 마이그레이션을 파이프라인으로 이어서 실행
+
+  ### 정리
+  - 배포한 적이 없으므로 정리할 AWS 리소스 없음. CDK 코드 폐기는 브랜치 삭제로 충분.
+  ```
 
 ## Phase 3: CDK 배포
 

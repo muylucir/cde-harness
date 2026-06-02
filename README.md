@@ -175,7 +175,8 @@ npm run dev
 | `/reconcile --qa` | 아티팩트 역동기화 + QA/리뷰/보안 재실행 |
 | `/awsarch` | mock 프로토타입을 실제 AWS 리소스로 전환 (CDK 배포) |
 | `/awsarch --qa` | AWS 전환 + QA/리뷰/보안 재실행 |
-| `/awsarch --plan` | 인프라 설계만 (배포 없음, 비용 확인용) |
+| `/awsarch --cdk` | 인프라 설계 + CDK 코드 + 듀얼 모드 레이어 생성 (배포 없음, 비용 $0) |
+| `/awsarch --plan` | 인프라 설계만 (CDK 코드·배포 없음, 비용 확인용) |
 | `/handover` | 최종 핸드오버 패키지 생성 (이터레이션 완료 후) |
 | `/pipeline-from {stage}` | 특정 단계부터 재개 |
 | `/pipeline-status` | 현재 진행 상태 + CHECKPOINT 결과 확인 |
@@ -605,9 +606,14 @@ InMemoryStore 기반 mock 프로토타입을 실제 AWS 리소스(DynamoDB, S3, 
 # 위 + QA/리뷰/보안 재검증
 /awsarch --qa
 
-# 설계만 (비용 확인 후 배포 보류)
+# 설계 + CDK 코드 + 듀얼 모드 레이어 생성 (배포 직전 종료, 비용 $0)
+/awsarch --cdk
+
+# 설계만 (CDK 코드·배포 없음, 비용 확인용)
 /awsarch --plan
 ```
+
+> **`--cdk` vs `--plan`**: `--plan`은 인프라 **설계 문서**만 만든다. `--cdk`는 거기에 더해 **`infra/` CDK 프로젝트 + 듀얼 모드 데이터 레이어**까지 생성하고 `cdk deploy` 직전에 멈춘다 — 배포 가능한 코드가 디스크에 남고 mock 모드(`DATA_SOURCE=memory`)는 그대로 동작한다. 나중에 `cd infra && npx cdk deploy` 또는 `/pipeline-from aws-deployer`로 이어서 배포한다.
 
 ### 실행 흐름
 

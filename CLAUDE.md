@@ -71,7 +71,8 @@ node .pipeline/scripts/checkpoint.mjs schema --json
 - AWS Infra: `/awsarch` → mock 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cognito)로 전환
   - `/awsarch` — 인프라 설계 + CDK 배포 + 데이터 마이그레이션
   - `/awsarch --qa` — 위 + QA/리뷰/보안 재실행
-  - `/awsarch --plan` — 인프라 설계만 (배포 없음)
+  - `/awsarch --cdk` — 인프라 설계 + CDK 코드 + 듀얼 모드 레이어 생성 (배포 없음, 비용 $0)
+  - `/awsarch --plan` — 인프라 설계만 (CDK 코드·배포 없음)
 - Resume: `/pipeline-from {stage-name}`
 - Status: `/pipeline-status`
 
@@ -114,7 +115,8 @@ node .pipeline/scripts/checkpoint.mjs schema --json
     → 완료
 
 /awsarch --qa → 위 흐름 + [qa-engineer → reviewer → security-auditor-pipeline]
-/awsarch --plan → aws-architect(설계)만 실행 (배포 없음)
+/awsarch --cdk → aws-architect(설계) → aws-deployer(CDK 코드 + 듀얼 모드 레이어, 배포 직전 종료)
+/awsarch --plan → aws-architect(설계)만 실행 (CDK 코드·배포 없음)
 ```
 
 ## Language Convention

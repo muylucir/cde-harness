@@ -41,8 +41,8 @@ allowedTools:
 
 ### `bedrock-agentcore-guide` — **AI 기능이 있으면 호출** (AgentCore 결정 시 필수)
 - AgentCore 9개 서비스(Runtime/Memory/Gateway/Identity/Observability/Code Interpreter/Browser/Policy/Evaluation) 상세
-- `agentcore deploy` CLI 워크플로우
-- `BedrockAgentCoreApp` 코드 템플릿
+- 표준 도구: `@aws/agentcore` npm CLI + `bedrock-agentcore` SDK(pip) + `agentcore.json`. 배포 흐름은 `agentcore create` → `agentcore dev` → `agentcore deploy`(CDK 기반). 구 `agentcore configure` + `--mode codebuild`는 폐기
+- `BedrockAgentCoreApp` 코드 템플릿 (`from bedrock_agentcore.runtime import BedrockAgentCoreApp`, `@app.entrypoint def invoke(payload)`)
 
 ### `strands-sdk-typescript-guide` — AI 기능이 있으면 호출
 - AgentCore Runtime에 배포될 Strands 에이전트 구조 이해
@@ -129,7 +129,7 @@ allowedTools:
 - 단순 키-값 조회 → DynamoDB
 - 복잡한 관계/JOIN → Aurora Serverless v2
 - 전문 검색 → OpenSearch Serverless
-- 읽기 캐시 → ElastiCache Redis
+- 읽기 캐시 → ElastiCache (Valkey 권장 — Redis 호환, Serverless 기준 ~33% 저렴)
 - 파일 스토리지 → S3
 - 인증 → Cognito
 
@@ -151,7 +151,7 @@ allowedTools:
 - requirements에 "개인화", "대화 이력", "멀티턴", "맥락 유지"
 
 **추가 AgentCore 컴포넌트**:
-- Memory: 대화 이력/사용자 선호 학습 필요 → STM(세션) + LTM(사용자)
+- Memory: 대화 이력/사용자 선호 학습 필요 → STM(세션 이벤트: `create_event` with actorId/sessionId) + LTM(전략 기반 추출: SEMANTIC/SUMMARIZATION/USER_PREFERENCE/EPISODIC). 구 `StoreMemory`/`RetrieveMemory` 단일 호출 모델 아님
 - Gateway: 기존 REST API를 에이전트 도구로 노출 → OpenAPI 스펙 기반 자동 변환
 - Identity: 에이전트 엔드포인트 OAuth/JWT 인증 (Cognito 연동 가능)
 - Observability: 프로토타입 AI 에이전트는 **항상 활성화** (디버깅/평가 필수)
@@ -162,7 +162,7 @@ allowedTools:
 각 선택된 서비스에 대해 스킬의 설계 고려사항을 참조해 상세 설계:
 - **데이터 서비스**: 테이블/인덱스/스키마/GSI/Projection/VPC 등
 - **통합 서비스** (`integration-patterns.md`): SQS(FIFO/DLQ/Visibility) / EventBridge(bus/rule/target) / Step Functions(Standard/Express, state 구조) / Lambda(런타임/타임아웃/트리거)
-- **AI 런타임** (`agentcore-patterns.md`): Runtime 배포 설정 / Memory scope(session/user) / Gateway 도구 매핑 / Identity 연동 / Observability/Evaluation 설정
+- **AI 런타임** (`agentcore-patterns.md`): Runtime 배포 설정 / Memory(STM 세션 이벤트 + LTM 전략 SEMANTIC/SUMMARIZATION 등, actorId/sessionId 기준) / Gateway 도구 매핑 / Identity 연동 / Observability/Evaluation 설정
 - IAM/환경변수/비용 각 단계별로 수집
 
 ### 5단계: 비용 추정
@@ -213,12 +213,12 @@ allowedTools:
       { "name": "...", "type": "standard|express", "definition_summary": "...", "tasks": [...] }
     ] },
     "lambda": { "enabled": true/false, "functions": [
-      { "name": "...", "runtime": "nodejs20.x", "timeout_sec": 30, "memory_mb": 512, "triggers": ["sqs|eventbridge|stream|schedule"], "env": {...} }
+      { "name": "...", "runtime": "nodejs22.x", "timeout_sec": 30, "memory_mb": 512, "triggers": ["sqs|eventbridge|stream|schedule"], "env": {...} }
     ] },
 
     "agentcore": { "enabled": true/false,
       "runtime": { "enabled": true/false, "agent_name": "...", "source": "src/lib/ai/agent.ts", "wrapper": "BedrockAgentCoreApp" },
-      "memory": { "enabled": true/false, "scope": ["session", "user"], "ttl_days": 30 },
+      "memory": { "enabled": true/false, "strategies": ["SEMANTIC", "SUMMARIZATION", "USER_PREFERENCE", "EPISODIC"], "event_expiry_days": 30 },
       "gateway": { "enabled": true/false, "source_api_openapi": "...", "auth": "iam|oauth" },
       "identity": { "enabled": true/false, "idp": "cognito", "user_pool_ref": "..." },
       "observability": { "enabled": true/false, "traces": true, "evaluation": false },

@@ -150,7 +150,8 @@ src/
    - exit 1 → AI FR 없음. **즉시 종료**하고 `generation-log-ai.json`에 `{ "skipped": true, "reason": "no-ai-fr (has-ai.mjs exit 1)" }`를 Write 후 사용자에게 "AI 기능 없음, code-generator-ai 건너뜀" 보고.
    - 오케스트레이터(`/pipeline`, `/iterate`)가 이미 has-ai로 게이트한 경우에도 본 단계는 idempotent하게 다시 확인한다.
 1. **Skill 호출 (필수)** — 코드 합성 전에 다음 2개 스킬을 Skill 도구로 호출. prose 인용으로 대체 금지. 호출 직후 generation-log-ai.json의 `skills_used[]`에 기록.
-   - `Skill(skill: "strands-sdk-typescript-guide")` — `new Agent({...})` 생성, `agent.stream()`/`invoke()` 호출 패턴, SSE Route Handler 통합, tool() + Zod 스키마 정의. **AI 코드 합성의 단일 소스**.
+   - `Skill(skill: "strands-sdk-typescript-guide")` — `new Agent({...})` 생성, `agent.stream()`/`invoke()` 호출 패턴, SSE Route Handler 통합, tool() + Zod 스키마 정의. **AI 코드 합성의 단일 소스**. (HITL 필요 시 `references/safety.md`의 Interrupts(`context.interrupt`/`result.stopReason==='interrupt'`), 재시도 안정성 필요 시 Retry Strategies(`DefaultModelRetryStrategy`) 참조.)
+     > **모델 ID 주의**: 스킬 본문의 모델 ID **예시**(`us.anthropic.claude-sonnet-4-...` 등)를 코드에 복사하지 않는다. `modelId` 문자열은 항상 `ai-internals.json`의 `model_id`(= allowed-models.json 3개 ID 중 하나)를 그대로 박는다.
    - `Skill(skill: "agent-patterns")` — Single Agent / Multi Agent / Reflection / Tool-using 토폴로지를 ai-internals.json의 `agent_topology`에 맞게 구현하는 패턴.
 2. **Read**: `ai-contract.json`(외부 계약) + `ai-internals.json`(내부 구현), _manifest.json, generation-log-backend.json
 3. **Write**: types + prompts 파일 (ai-internals.json의 systemPrompt를 코드 문자열로 그대로 박는다)

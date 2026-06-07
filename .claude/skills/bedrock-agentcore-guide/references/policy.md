@@ -1,452 +1,201 @@
 # AgentCore Policy Engine 가이드
 
-AgentCore Policy Engine은 Cedar 정책 언어를 사용하여 에이전트 도구 호출에 대한 fine-grained 권한 제어를 제공합니다.
+AgentCore Policy는 Cedar 정책 언어로 에이전트의 **도구 호출**에 대한 세밀한(fine-grained) 권한 제어를 제공합니다. Gateway에 연결되어 해당 게이트웨이가 노출하는 도구의 접근을 제어합니다.
+
+> [!IMPORTANT]
+> 정책 엔진/정책은 `agentcore.json`의 최상위 **`policyEngines`** 배열에 선언하고 `agentcore deploy`로 생성합니다. 현재 전용 `agentcore add policy-engine`/`add policy` 서브커맨드는 없으므로 `agentcore.json`을 직접 편집하고 재배포합니다. 대화형 검사/일회성 작업은 MCP `policy_*` 도구를 사용합니다. 예전 자료의 `agentcore policy create-policy-engine`/`attach-policy-engine` CLI와 `from bedrock_agentcore_starter_toolkit.policy import PolicyClient` + `policy_client.evaluate()`는 가공/deprecated된 API입니다.
 
 ## 핵심 개념
 
-### Policy Engine 구성 요소
-
 | 구성 요소 | 설명 |
 |----------|------|
-| **Policy Engine** | 정책 평가 및 결정 엔진 |
-| **Cedar Policy** | 권한 규칙 정의 |
-| **Policy Store** | 정책 저장소 |
-| **Enforcement Mode** | 정책 적용 모드 (ENFORCE/AUDIT) |
+| **Policy Engine** | Cedar 정책들을 담는 최상위 컨테이너. Gateway에 연결 |
+| **Policy** | Cedar 정책 문(누가/무엇을/어디에/조건). 기본 거부, `forbid`가 `permit`을 우선 |
+| **Policy Generation** | 자연어 의도를 Cedar로 변환(AI). 검토 후 실제 정책으로 승격 |
+| **모드** | `LOG_ONLY`(평가·로깅, 차단 안 함) / `ENFORCE`(차단) |
 
-### Cedar 정책 기본 구조
+## agentcore.json — policyEngines 섹션
 
-```cedar
-// 기본 허용 정책
-permit (
-    principal,           // 누가
-    action,              // 무엇을
-    resource             // 어디에
-);
-
-// 조건부 허용 정책
-permit (
-    principal,
-    action,
-    resource
-) when {
-    <조건>
-};
-
-// 거부 정책
-forbid (
-    principal,
-    action,
-    resource
-) when {
-    <조건>
-};
+```json
+{
+  "policyEngines": [
+    {
+      "name": "MyPolicyEngine",
+      "description": "Authorization for production tools",
+      "encryptionKeyArn": "arn:aws:kms:us-east-1:123:key/abc",
+      "tags": { "env": "prod" },
+      "policies": [
+        { "name": "AdminFullAccess",
+          "description": "Admins can invoke all tools",
+          "statement": "permit(principal in Group::\"Admins\", action, resource);",
+          "validationMode": "FAIL_ON_ANY_FINDINGS" },
+        { "name": "RestrictWeatherToBusinessHours",
+          "description": "Weather tool 9am-5pm only",
+          "sourceFile": "policies/business-hours.cedar" }
+      ]
+    }
+  ]
+}
 ```
 
-## CLI 명령어
+**제약:**
+- `policyEngines[].name`: 패턴 `[A-Za-z][A-Za-z0-9_]*`, 1–48자, 필수, 생성 후 불변.
+- `policies[].name`: 패턴 동일, 1–48자, 불변.
+- `policies[].statement`: Cedar 텍스트(API 전송 시 35–10000자). `sourceFile`(`.cedar` 경로)로 대체 가능.
+- `policies[].validationMode`: `FAIL_ON_ANY_FINDINGS`(기본) | `IGNORE_ALL_FINDINGS`.
 
-### Policy Engine 생성
+### Gateway에 연결
+
+게이트웨이 설정에 `policyEngineConfiguration` 블록을 둡니다:
+
+```json
+{
+  "agentCoreGateways": [
+    { "name": "MyGateway",
+      "policyEngineConfiguration": { "policyEngineName": "MyPolicyEngine", "mode": "ENFORCE" } }
+  ]
+}
+```
+
+또는 CLI: `agentcore add gateway --name MyGateway --policy-engine MyPolicyEngine --policy-engine-mode LOG_ONLY`. **항상 `LOG_ONLY`로 먼저 배포 → 로그 검토 → `ENFORCE` 전환.**
+
+## 배포 / 상태
 
 ```bash
-# 기본 Policy Engine 생성
-agentcore policy create-policy-engine \
-  --name my-policy-engine \
-  --description "Agent tool access control"
-
-# 옵션과 함께 생성
-agentcore policy create-policy-engine \
-  --name prod-policy-engine \
-  --description "Production access control" \
-  --tags environment=production
+agentcore deploy -y
+agentcore status --type policy-engine
+agentcore status --type policy
 ```
 
-### 정책 생성
-
-```bash
-# Cedar 정책 파일로 생성
-agentcore policy create-policy \
-  --policy-engine-name my-policy-engine \
-  --policy-name allow-weather-tool \
-  --policy-file ./weather-policy.cedar
-
-# 인라인 정책 생성
-agentcore policy create-policy \
-  --policy-engine-name my-policy-engine \
-  --policy-name allow-all-read \
-  --policy-statement 'permit(principal, action, resource) when { action.name like "*_read*" };'
-```
-
-### 정책 자동 생성 (NL to Cedar)
-
-```bash
-# 자연어에서 Cedar 정책 생성
-agentcore policy start-policy-generation \
-  --policy-engine-name my-policy-engine \
-  --description "Allow users to read weather data but not modify settings"
-
-# 생성 상태 확인
-agentcore policy get-policy-generation-status \
-  --generation-id <generation-id>
-```
-
-### Gateway에 Policy Engine 연결
-
-```bash
-# ENFORCE 모드로 연결 (실제 차단)
-agentcore policy attach-policy-engine \
-  --policy-engine-name my-policy-engine \
-  --gateway-name my-api-gateway \
-  --mode ENFORCE
-
-# AUDIT 모드로 연결 (로깅만)
-agentcore policy attach-policy-engine \
-  --policy-engine-name my-policy-engine \
-  --gateway-name my-api-gateway \
-  --mode AUDIT
-```
-
-### 정책 목록 조회
-
-```bash
-# Policy Engine 목록
-agentcore policy list-policy-engines
-
-# 특정 엔진의 정책 목록
-agentcore policy list-policies --policy-engine-name my-policy-engine
-```
-
-### 정책 삭제
-
-```bash
-# 정책 삭제
-agentcore policy delete-policy \
-  --policy-engine-name my-policy-engine \
-  --policy-name allow-weather-tool
-
-# Policy Engine 삭제
-agentcore policy delete-policy-engine --name my-policy-engine
-```
+비동기 상태(CREATING→ACTIVE 등)는 MCP `policy_engine_get`/`policy_get` 또는 `agentcore status`로 폴링합니다.
 
 ## Cedar 정책 문법
 
-### Action 형식
+### 액션 이름 형식
 
-Gateway 도구에 대한 액션 형식:
-```
-TargetName___tool_name
-```
+Gateway 도구의 액션은 **`타겟명___도구명`**(언더스코어 3개) 형식입니다:
 
-예시:
 ```cedar
 // weather-tool 타겟의 get_weather 도구
-action == TargetName::Action::"weather-tool___get_weather"
-
-// crm-tool 타겟의 모든 도구
-action.name like "crm-tool___*"
+action == AgentCore::Action::"weather-tool___get_weather"
 ```
 
-### 기본 허용 정책
+### 기본/조건부/거부 정책
 
 ```cedar
-// 모든 사용자에게 특정 도구 허용
+// 특정 도구 허용
 permit (
     principal,
-    action == TargetName::Action::"weather-tool___get_weather",
+    action == AgentCore::Action::"weather-tool___get_weather",
     resource
 );
 
-// 모든 읽기 작업 허용
-permit (
-    principal,
-    action,
-    resource
-) when {
-    action.name like "*___get_*" ||
-    action.name like "*___list_*" ||
-    action.name like "*___read_*"
-};
-```
-
-### 조건부 정책
-
-```cedar
-// 특정 역할에만 허용
-permit (
-    principal,
-    action == TargetName::Action::"admin-tool___delete_user",
-    resource
-) when {
-    principal.role == "admin"
-};
-
-// 업무 시간에만 허용
-permit (
-    principal,
-    action,
-    resource
-) when {
-    context.time.hour >= 9 &&
-    context.time.hour <= 18
-};
-
-// 특정 리소스에만 허용
-permit (
-    principal,
-    action == TargetName::Action::"data-tool___access_data",
-    resource
-) when {
-    resource.sensitivity_level <= 2
-};
-```
-
-### 거부 정책
-
-```cedar
-// 특정 액션 명시적 거부
-forbid (
-    principal,
-    action == TargetName::Action::"dangerous-tool___delete_all",
-    resource
-);
-
-// 민감한 데이터 접근 거부
-forbid (
-    principal,
-    action,
-    resource
-) when {
-    resource.contains_pii == true &&
-    principal.clearance_level < 3
-};
-```
-
-### 복잡한 조건
-
-```cedar
-// 여러 조건 조합
-permit (
-    principal,
-    action == TargetName::Action::"finance-tool___transfer_funds",
-    resource
-) when {
-    // 역할 확인
-    principal.role == "finance_manager" &&
-    // 금액 제한
-    context.amount <= 10000 &&
-    // 업무 시간
-    context.time.hour >= 9 &&
-    context.time.hour <= 17 &&
-    // 승인 상태
-    context.is_approved == true
-};
-```
-
-## 정책 파일 예시
-
-### 완전한 정책 파일 (policies.cedar)
-
-```cedar
-// ============================================
-// 읽기 전용 정책 - 모든 사용자
-// ============================================
-permit (
-    principal,
-    action,
-    resource
-) when {
+// 모든 읽기성 도구 허용
+permit ( principal, action, resource )
+when {
     action.name like "*___get_*" ||
     action.name like "*___list_*" ||
     action.name like "*___search_*"
 };
 
-// ============================================
-// 관리자 전용 정책
-// ============================================
+// 역할 + 조건
 permit (
     principal,
-    action == TargetName::Action::"admin___create_user",
+    action == AgentCore::Action::"finance-tool___transfer_funds",
     resource
 ) when {
-    principal.role == "admin"
+    principal.role == "finance_manager" &&
+    context.input.amount <= 10000
 };
 
-permit (
-    principal,
-    action == TargetName::Action::"admin___delete_user",
-    resource
-) when {
-    principal.role == "admin" &&
-    principal.mfa_verified == true
-};
-
-// ============================================
-// 거부 정책 - 위험한 작업
-// ============================================
+// 명시적 거부 (permit보다 우선)
 forbid (
     principal,
-    action == TargetName::Action::"system___shutdown",
+    action == AgentCore::Action::"system___shutdown",
     resource
-) unless {
-    principal.role == "super_admin"
-};
-
-// ============================================
-// 리소스 기반 정책
-// ============================================
-permit (
-    principal,
-    action == TargetName::Action::"data___access",
-    resource
-) when {
-    resource.owner == principal.id ||
-    resource.shared_with.contains(principal.id)
-};
+) unless { principal.role == "super_admin" };
 ```
 
-## 코드 통합
+## 자연어 → Cedar (Policy Generation, MCP)
 
-### 정책 평가 직접 호출
+자연어 의도를 Cedar로 생성하고 검토 후 승격합니다(MCP 도구):
 
 ```python
-from bedrock_agentcore_starter_toolkit.policy import PolicyClient
-
-policy_client = PolicyClient(policy_engine_name="my-policy-engine")
-
-# 정책 평가
-decision = policy_client.evaluate(
-    principal={"id": "user-123", "role": "analyst"},
-    action="data-tool___access_sensitive_data",
-    resource={"id": "data-456", "sensitivity_level": 2},
-    context={"time": {"hour": 14}}
+# 1) 생성 시작
+gen = await policy_generation_start(
+    policy_engine_id="ProdAuth-abcdefghij",
+    name="BusinessHoursGen",
+    content={"rawText": "Allow Admins any tool; Users the weather tool 9am-5pm UTC."},
+    resource={"arn": "arn:aws:bedrock-agentcore:us-east-1:123:gateway/my-gateway-abc"},
 )
-
-if decision.allowed:
-    # 작업 수행
-    result = perform_action()
-else:
-    # 거부됨
-    print(f"Access denied: {decision.reason}")
+# 2) 상태 폴링: policy_generation_get(...) → status == "GENERATED"
+# 3) 자산 검토: policy_generation_list_assets(...) → findings == "VALID"만 승격
+# 4) 승격
+await policy_create(
+    policy_engine_id="ProdAuth-abcdefghij",
+    name="BusinessHoursPolicy",
+    definition={"policyGeneration": {
+        "policyGenerationId": "BusinessHoursGen-abcdefghij",
+        "policyGenerationAssetId": "asset-abcdefghij"}},
+)
 ```
 
-### Gateway와 Policy 통합 에이전트
+> 생성된 자산은 **7일 후 자동 삭제**됩니다. 유용한 자산은 그 전에 정책으로 승격하거나 `agentcore.json`에 영속화하세요.
+
+## MCP로 엔진/정책 직접 다루기
 
 ```python
-from bedrock_agentcore_starter_toolkit import BedrockAgentCoreApp
-from bedrock_agentcore_starter_toolkit.identity import requires_access_token, get_user_context
-from bedrock_agentcore_starter_toolkit.tools import MCPGatewayTool
-from strands import Agent
-from strands.models import BedrockModel
+# 엔진 생성 → policy_engine_get으로 ACTIVE 대기
+await policy_engine_create(name="ProdAuth", description="Production auth")
 
-app = BedrockAgentCoreApp()
-
-@app.entrypoint
-@requires_access_token
-def policy_protected_agent(prompt: str, access_token: str = None) -> str:
-    user = get_user_context(access_token)
-
-    model = BedrockModel(model_id="global.anthropic.claude-sonnet-4-6")
-
-    # Gateway에 Policy Engine이 연결되어 있으면 자동으로 정책 평가
-    gateway_tool = MCPGatewayTool(
-        gateway_name="my-api-gateway",
-        user_context={
-            "id": user.sub,
-            "role": user.get_claim("custom:role"),
-            "department": user.get_claim("custom:department")
-        }
-    )
-
-    agent = Agent(
-        model=model,
-        tools=[gateway_tool]
-    )
-
-    try:
-        response = agent(prompt)
-        return response.message
-    except PolicyDeniedException as e:
-        return f"Access denied: {e.reason}"
-
-if __name__ == "__main__":
-    app.run()
+# Cedar 정책 생성
+await policy_create(
+    policy_engine_id="ProdAuth-abcdefghij",
+    name="AdminAccess",
+    definition={"cedar": {"statement": 'permit(principal in Group::"Admins", action, resource);'}},
+    validation_mode="FAIL_ON_ANY_FINDINGS",
+)
 ```
+
+**삭제 순서**: 엔진은 정책이 0개일 때만 삭제 가능 → 모든 정책 `policy_delete` 후 `policy_engine_delete`.
+
+## 검증 findings
+
+| Finding | 의미 |
+|---------|------|
+| `VALID` | 사용 가능 |
+| `INVALID` | 검증 오류(수정 필요) |
+| `ALLOW_ALL` | 모든 액션 허용(보안 위험) |
+| `DENY_ALL` | 모든 액션 거부(과도) |
+| `ALLOW_NONE`/`DENY_NONE` | 효과 없음 |
+| `NOT_TRANSLATABLE` | 생성 변환 실패 |
+
+`FAIL_ON_ANY_FINDINGS`(기본)는 finding이 있으면 생성을 거부합니다. `IGNORE_ALL_FINDINGS`는 수동 검토 후에만 신중히.
 
 ## Best Practices
 
-### 1. 최소 권한 원칙
-
-```cedar
-// 기본적으로 모든 것을 거부
-forbid (principal, action, resource);
-
-// 필요한 권한만 명시적으로 허용
-permit (
-    principal,
-    action == TargetName::Action::"api___specific_action",
-    resource
-) when {
-    principal.role == "specific_role"
-};
-```
-
-### 2. 역할 기반 정책 구조화
-
-```cedar
-// 역할별 정책 파일 분리
-// roles/viewer.cedar
-permit (principal, action, resource)
-when { principal.role == "viewer" && action.name like "*___get_*" };
-
-// roles/editor.cedar
-permit (principal, action, resource)
-when { principal.role == "editor" && (action.name like "*___get_*" || action.name like "*___update_*") };
-
-// roles/admin.cedar
-permit (principal, action, resource)
-when { principal.role == "admin" };
-```
-
-### 3. 감사 모드 먼저 사용
-
-```bash
-# 1. AUDIT 모드로 시작
-agentcore policy attach-policy-engine \
-  --policy-engine-name my-engine \
-  --gateway-name my-gateway \
-  --mode AUDIT
-
-# 2. 로그 분석
-agentcore policy get-audit-logs --policy-engine-name my-engine
-
-# 3. 정책 조정 후 ENFORCE 모드로 전환
-agentcore policy update-attachment \
-  --policy-engine-name my-engine \
-  --gateway-name my-gateway \
-  --mode ENFORCE
-```
+1. **기본 거부 + 명시적 허용**: 최소 권한 원칙.
+2. **LOG_ONLY 우선**: 운영 영향 없이 결정 로깅 → 정책 조정 → ENFORCE.
+3. **역할 기반 구조화**: viewer/editor/admin 등 역할별 정책 분리.
+4. **선언적 영속화**: 재현성을 위해 정책은 `agentcore.json`에 둠. 생성 자산은 7일 TTL 주의.
 
 ## Troubleshooting
 
-### 정책 거부 디버깅
-
-```bash
-# 정책 평가 로그 확인
-agentcore policy get-evaluation-logs \
-  --policy-engine-name my-engine \
-  --start-time "2024-01-01T00:00:00Z"
-
-# 특정 액션에 대한 정책 확인
-agentcore policy test-policy \
-  --policy-engine-name my-engine \
-  --principal '{"id": "user-123", "role": "analyst"}' \
-  --action "data-tool___access_data" \
-  --resource '{"id": "data-456"}'
-```
-
-### 일반적인 문제
-
 | 문제 | 원인 | 해결 |
 |------|------|------|
-| `PolicyDenied` | 정책 규칙에 의해 차단 | 정책 규칙 확인 |
-| `NoPolicyMatch` | 해당하는 정책 없음 | 기본 거부 정책 확인 |
-| `InvalidPolicy` | Cedar 문법 오류 | 정책 문법 검증 |
-| `EngineNotFound` | Policy Engine 없음 | 엔진 이름 확인 |
+| 엔진 `CREATING` 멈춤 | KMS/권한 | `policy_engine_get` statusReasons, KMS 키 권한 확인 |
+| 정책 `CREATE_FAILED` | 검증 findings | `policy_get` statusReasons 확인, Gateway 먼저 배포 |
+| `ConflictException` | 동일 이름 존재(불변) | 다른 이름 또는 기존 삭제 |
+| 엔진 삭제 불가 | 정책이 남음 | 정책 전부 삭제 후 엔진 삭제 |
+| Generation `ValidationException` | resource ARN/내용 길이 | Gateway ARN 가시성, 내용 1–2000자 |
+
+### IAM 권한
+
+모두 control plane(`bedrock-agentcore-control`): `CreatePolicyEngine/GetPolicyEngine/UpdatePolicyEngine/DeletePolicyEngine/ListPolicyEngines`, `CreatePolicy/GetPolicy/UpdatePolicy/DeletePolicy/ListPolicies`, `StartPolicyGeneration/GetPolicyGeneration/ListPolicyGenerations/ListPolicyGenerationAssets` (리소스 `arn:aws:bedrock-agentcore:*:*:policy-engine/*`). `encryptionKeyArn` 사용 시 해당 KMS 키에 `kms:Encrypt/Decrypt/GenerateDataKey/DescribeKey`.
+
+## 최신 정보 확인
+
+```
+mcp__bedrock-agentcore-mcp-server__get_policy_guide()
+mcp__bedrock-agentcore-mcp-server__search_agentcore_docs(query="cedar policy")
+```

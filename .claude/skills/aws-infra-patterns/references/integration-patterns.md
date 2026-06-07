@@ -150,7 +150,7 @@ Step Functions Standard
 
 ## Lambda 설계 공통 규칙
 
-- **런타임**: Node.js 20 (프로토타입 기본 — Next.js와 일관)
+- **런타임**: Node.js 22 (`NODEJS_22_X`, 최신 LTS — Next.js와 일관)
 - **패키징**: `aws-cdk-lib/aws-lambda-nodejs` `NodejsFunction` (esbuild 자동 번들링)
 - **타임아웃**:
   - API 응답 Lambda: 30초

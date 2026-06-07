@@ -1,33 +1,27 @@
 # AgentCore 프레임워크 통합 가이드
 
-AgentCore Runtime은 Strands, LangGraph, CrewAI 등 다양한 에이전트 프레임워크를 서버리스로 배포할 수 있습니다.
+AgentCore Runtime은 프레임워크에 독립적입니다. CLI(`agentcore create --framework`)가 직접 스캐폴딩하는 프레임워크는 **Strands, LangChain/LangGraph(`LangChain_LangGraph`), Google ADK(`GoogleADK`), OpenAI Agents(`OpenAIAgents`)** 입니다. CrewAI 등 다른 프레임워크도 진입점 컨트랙트만 맞추면(또는 커스텀 컨테이너로) 호스팅할 수 있습니다.
 
-## 지원 프레임워크
-
-| 프레임워크 | 설명 | 특징 |
-|-----------|------|------|
-| **Strands** | AWS 공식 에이전트 SDK | 간단한 설정, 네이티브 통합 |
-| **LangGraph** | LangChain 기반 상태 그래프 | 복잡한 워크플로우, 상태 관리 |
-| **CrewAI** | 멀티 에이전트 협업 | 역할 기반, 팀 협업 |
-| **OpenAI Agents** | OpenAI Agents SDK | 핸드오프 지원 |
+> [!IMPORTANT]
+> 진입점 import는 `from bedrock_agentcore.runtime import BedrockAgentCoreApp` 입니다(`bedrock_agentcore_starter_toolkit` 아님). 배포는 `agentcore create` → `agentcore deploy`(npm CLI)로 합니다. 예전 `agentcore configure --entrypoint`/`agentcore launch` 흐름은 deprecated입니다.
 
 ## 배포 방식 선택
 
-### Option A: SDK 통합 (권장)
-- 빠른 프로토타이핑
-- 자동 HTTP 서버 설정
-- `bedrock-agentcore-starter-toolkit` 사용
+### Option A: CLI 스캐폴딩 (권장)
+- `agentcore create --framework <Framework>`로 시작
+- HTTP 서버·`/ping`·ARM64 등 컨트랙트 자동 처리
+- `agentcore dev`(로컬) → `agentcore deploy`(AWS)
 
-### Option B: 커스텀 구현
-- FastAPI 직접 제어
-- 커스텀 미들웨어
-- Docker 컨테이너 배포
+### Option B: 커스텀 컨테이너
+- FastAPI 등으로 `/invocations`·`/ping` 직접 구현
+- CrewAI 등 CLI 미지원 프레임워크나 특수 요구사항에 사용
+- ARM64 Docker 이미지 + 포트 8080
 
 ---
 
-## Strands 에이전트 통합
+## Strands 통합
 
-### 기본 예제
+### 기본
 
 ```python
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
@@ -38,16 +32,14 @@ agent = Agent()
 
 @app.entrypoint
 def invoke(payload):
-    """Process user input and return a response"""
     user_message = payload.get("prompt", "Hello")
-    result = agent(user_message)
-    return {"result": result.message}
+    return {"result": agent(user_message).message}
 
 if __name__ == "__main__":
     app.run()
 ```
 
-### 스트리밍 예제
+### 스트리밍
 
 ```python
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
@@ -57,18 +49,15 @@ app = BedrockAgentCoreApp()
 agent = Agent()
 
 @app.entrypoint
-async def agent_invocation(payload):
-    """Handler for streaming agent invocation"""
-    user_message = payload.get("prompt", "Hello")
-    stream = agent.stream_async(user_message)
-    async for event in stream:
+async def invoke(payload):
+    async for event in agent.stream_async(payload.get("prompt", "Hello")):
         yield event
 
 if __name__ == "__main__":
     app.run()
 ```
 
-### 도구가 있는 Strands 에이전트
+### 도구가 있는 Strands
 
 ```python
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
@@ -81,18 +70,11 @@ def get_weather(location: str) -> str:
     """Get current weather for a location."""
     return f"Sunny, 22°C in {location}"
 
-@tool
-def search_database(query: str) -> str:
-    """Search the internal database."""
-    return f"Found 5 results for: {query}"
-
-agent = Agent(tools=[get_weather, search_database])
+agent = Agent(tools=[get_weather])
 
 @app.entrypoint
 def invoke(payload):
-    user_message = payload.get("prompt", "Hello")
-    result = agent(user_message)
-    return {"result": result.message}
+    return {"result": agent(payload.get("prompt", "Hello")).message}
 
 if __name__ == "__main__":
     app.run()
@@ -100,9 +82,7 @@ if __name__ == "__main__":
 
 ---
 
-## LangGraph 에이전트 통합
-
-### 기본 LangGraph 에이전트
+## LangGraph 통합
 
 ```python
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
@@ -113,22 +93,17 @@ from typing import Annotated, TypedDict
 
 app = BedrockAgentCoreApp()
 
-# Define state for conversation memory
 class State(TypedDict):
     messages: Annotated[list, add_messages]
 
-# Initialize Bedrock LLM
 llm = ChatBedrock(
     model_id="global.anthropic.claude-sonnet-4-6",
-    model_kwargs={"temperature": 0.7}
+    model_kwargs={"temperature": 0.7},
 )
 
-# Define the chat node
 def chat_node(state: State):
-    response = llm.invoke(state["messages"])
-    return {"messages": [response]}
+    return {"messages": [llm.invoke(state["messages"])]}
 
-# Build the graph
 workflow = StateGraph(State)
 workflow.add_node("chat", chat_node)
 workflow.add_edge(START, "chat")
@@ -137,18 +112,14 @@ graph = workflow.compile()
 
 @app.entrypoint
 def invoke(payload):
-    user_message = payload.get("prompt", "Hello!")
-    result = graph.invoke({
-        "messages": [{"role": "user", "content": user_message}]
-    })
-    last_message = result["messages"][-1]
-    return {"result": last_message.content}
+    result = graph.invoke({"messages": [{"role": "user", "content": payload.get("prompt", "Hello!")}]})
+    return {"result": result["messages"][-1].content}
 
 if __name__ == "__main__":
     app.run()
 ```
 
-### LangGraph with Tools (Web Search)
+### LangGraph + 도구(웹 검색)
 
 ```python
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
@@ -160,42 +131,27 @@ from langchain_community.tools import DuckDuckGoSearchRun
 from typing import Annotated, TypedDict
 
 app = BedrockAgentCoreApp()
+llm = init_chat_model("global.anthropic.claude-sonnet-4-6", model_provider="bedrock_converse")
 
-# Initialize the LLM with Bedrock
-llm = init_chat_model(
-    "global.anthropic.claude-sonnet-4-6",
-    model_provider="bedrock_converse",
-)
-
-# Define search tool
-search = DuckDuckGoSearchRun()
-tools = [search]
+tools = [DuckDuckGoSearchRun()]
 llm_with_tools = llm.bind_tools(tools)
 
-# Define state
 class State(TypedDict):
     messages: Annotated[list, add_messages]
 
-# Build the graph
-graph_builder = StateGraph(State)
-
+gb = StateGraph(State)
 def chatbot(state: State):
     return {"messages": [llm_with_tools.invoke(state["messages"])]}
-
-graph_builder.add_node("chatbot", chatbot)
-tool_node = ToolNode(tools=tools)
-graph_builder.add_node("tools", tool_node)
-graph_builder.add_conditional_edges("chatbot", tools_condition)
-graph_builder.add_edge("tools", "chatbot")
-graph_builder.add_edge(START, "chatbot")
-graph = graph_builder.compile()
+gb.add_node("chatbot", chatbot)
+gb.add_node("tools", ToolNode(tools=tools))
+gb.add_conditional_edges("chatbot", tools_condition)
+gb.add_edge("tools", "chatbot")
+gb.add_edge(START, "chatbot")
+graph = gb.compile()
 
 @app.entrypoint
 def invoke(payload):
-    user_message = payload.get("prompt", "Hello!")
-    result = graph.invoke({
-        "messages": [{"role": "user", "content": user_message}]
-    })
+    result = graph.invoke({"messages": [{"role": "user", "content": payload.get("prompt", "Hello!")}]})
     return {"result": result["messages"][-1].content}
 
 if __name__ == "__main__":
@@ -204,9 +160,9 @@ if __name__ == "__main__":
 
 ---
 
-## CrewAI 에이전트 통합
+## CrewAI 통합 (커스텀 컨테이너)
 
-### 기본 CrewAI 팀
+CrewAI는 CLI 스캐폴딩 목록에는 없지만 진입점 컨트랙트를 맞추면 호스팅할 수 있습니다. CrewAI는 litellm을 쓰므로 모델은 `bedrock/<model-id>` 형식, `AWS_DEFAULT_REGION` 필요.
 
 ```python
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
@@ -214,99 +170,25 @@ from crewai import Agent, Task, Crew, Process
 import os
 
 app = BedrockAgentCoreApp()
-
-# Set AWS region for litellm (used by CrewAI)
 os.environ["AWS_DEFAULT_REGION"] = os.environ.get("AWS_REGION", "us-west-2")
 
-# Create an agent with specific role and capabilities
 researcher = Agent(
     role="Research Assistant",
     goal="Provide helpful and accurate information",
-    backstory="You are a knowledgeable research assistant with expertise in many domains",
-    verbose=False,
-    llm="bedrock/global.anthropic.claude-sonnet-4-6",  # litellm format required
-    max_iter=2  # Limit iterations to control costs
+    backstory="A knowledgeable research assistant.",
+    llm="bedrock/global.anthropic.claude-sonnet-4-6",   # litellm 형식
+    max_iter=2,
 )
 
 @app.entrypoint
 def invoke(payload):
-    user_message = payload.get("prompt", "Hello!")
-
-    # Create a task for the agent
     task = Task(
-        description=user_message,
+        description=payload.get("prompt", "Hello!"),
         agent=researcher,
-        expected_output="A helpful and informative response"
+        expected_output="A helpful and informative response",
     )
-
-    # Create and run the crew
-    crew = Crew(
-        agents=[researcher],
-        tasks=[task],
-        process=Process.sequential,
-        verbose=False
-    )
-
-    result = crew.kickoff()
-    return {"result": result.raw}
-
-if __name__ == "__main__":
-    app.run()
-```
-
-### CrewAI 멀티 에이전트 팀
-
-```python
-from bedrock_agentcore.runtime import BedrockAgentCoreApp
-from crewai import Agent, Task, Crew, Process
-import os
-
-app = BedrockAgentCoreApp()
-os.environ["AWS_DEFAULT_REGION"] = os.environ.get("AWS_REGION", "us-west-2")
-
-# Define specialized agents
-researcher = Agent(
-    role="Researcher",
-    goal="Research and gather comprehensive information",
-    backstory="Expert at finding and synthesizing information",
-    llm="bedrock/global.anthropic.claude-sonnet-4-6",
-    verbose=False
-)
-
-writer = Agent(
-    role="Writer",
-    goal="Write clear and engaging content",
-    backstory="Skilled technical writer with clear communication",
-    llm="bedrock/global.anthropic.claude-sonnet-4-6",
-    verbose=False
-)
-
-@app.entrypoint
-def invoke(payload):
-    topic = payload.get("prompt", "AI agents")
-
-    research_task = Task(
-        description=f"Research the following topic: {topic}",
-        expected_output="Comprehensive research summary",
-        agent=researcher
-    )
-
-    writing_task = Task(
-        description="Write a report based on the research",
-        expected_output="Well-structured report",
-        agent=writer,
-        context=[research_task]
-    )
-
-    crew = Crew(
-        agents=[researcher, writer],
-        tasks=[research_task, writing_task],
-        process=Process.sequential,
-        verbose=False
-    )
-
-    result = crew.kickoff()
-    return {"result": result.raw}
+    crew = Crew(agents=[researcher], tasks=[task], process=Process.sequential)
+    return {"result": crew.kickoff().raw}
 
 if __name__ == "__main__":
     app.run()
@@ -314,136 +196,97 @@ if __name__ == "__main__":
 
 ---
 
-## 배포 워크플로우
-
-### Starter Toolkit 사용 (권장)
+## 배포 워크플로우 (CLI)
 
 ```bash
-# 1. 패키지 설치
-pip install bedrock-agentcore-starter-toolkit
+# 1. CLI 설치 (npm)
+npm install -g @aws/agentcore
 
-# 2. requirements.txt 작성
-cat > requirements.txt << EOF
-strands-agents
-bedrock-agentcore
-# LangGraph 사용 시
-langchain-aws
-langgraph
-# CrewAI 사용 시
-crewai
-crewai-tools
-EOF
+# 2. 프로젝트 생성 (프레임워크 선택)
+agentcore create --name MyAgent --framework Strands --model-provider Bedrock --memory none
+#   --framework LangChain_LangGraph | GoogleADK | OpenAIAgents
 
-# 3. 설정
-agentcore configure --entrypoint my_agent.py
+# 3. 의존성 — app/MyAgent/pyproject.toml 에 추가
+#    Strands:   strands-agents, bedrock-agentcore
+#    LangGraph: langchain-aws, langgraph, langchain-community
+#    관측성:    aws-opentelemetry-distro, strands-agents[otel]
 
-# 4. 로컬 테스트 (선택, Docker 필요)
-agentcore launch --local
-
-# 5. AWS 배포
-agentcore launch
-
-# 6. 테스트
-agentcore invoke '{"prompt": "Hello"}'
+# 4. 로컬 테스트 → 배포 → 호출
+cd MyAgent
+agentcore dev "Hello"
+agentcore deploy
+agentcore invoke --prompt "Hello"
 ```
 
-### boto3 직접 배포
+## boto3로 직접 배포/호출 (커스텀 컨테이너)
+
+CLI 없이 컨테이너 이미지를 직접 배포할 수 있습니다:
 
 ```python
 import boto3
 
-# 에이전트 생성
-client = boto3.client('bedrock-agentcore-control', region_name="us-east-1")
-
-response = client.create_agent_runtime(
-    agentRuntimeName='my-agent',
-    agentRuntimeArtifact={
-        'containerConfiguration': {
-            'containerUri': '123456789012.dkr.ecr.us-east-1.amazonaws.com/my-agent:latest'
-        }
-    },
+control = boto3.client("bedrock-agentcore-control", region_name="us-east-1")
+resp = control.create_agent_runtime(
+    agentRuntimeName="my-agent",
+    agentRuntimeArtifact={"containerConfiguration": {
+        "containerUri": "123456789012.dkr.ecr.us-east-1.amazonaws.com/my-agent:latest"}},
     networkConfiguration={"networkMode": "PUBLIC"},
-    roleArn='arn:aws:iam::123456789012:role/AgentRuntimeRole'
+    roleArn="arn:aws:iam::123456789012:role/AgentRuntimeRole",
 )
-
-print(f"Agent Runtime ARN: {response['agentRuntimeArn']}")
+print("ARN:", resp["agentRuntimeArn"])
 ```
 
 ```python
-import boto3
-import json
-
-# 에이전트 호출
-client = boto3.client('bedrock-agentcore', region_name="us-east-1")
-
-response = client.invoke_agent_runtime(
-    agentRuntimeArn='arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/my-agent',
-    runtimeSessionId='session-123456789012345678901234567890123',  # 33+ chars
-    payload=json.dumps({"prompt": "Hello"})
+import boto3, json, uuid
+data = boto3.client("bedrock-agentcore", region_name="us-east-1")
+resp = data.invoke_agent_runtime(
+    agentRuntimeArn="arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/my-agent",
+    runtimeSessionId=str(uuid.uuid4()),   # 33자 이상
+    payload=json.dumps({"prompt": "Hello"}).encode(),
 )
-
-result = json.loads(response['response'].read())
-print(result)
+print(json.loads(b"".join(resp["response"]).decode()))
 ```
 
----
-
-## Docker 커스텀 배포
+## 커스텀 컨테이너 (FastAPI)
 
 ### Dockerfile (ARM64 필수)
 
 ```dockerfile
 FROM --platform=linux/arm64 ghcr.io/astral-sh/uv:python3.11-bookworm-slim
-
 WORKDIR /app
-
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-cache
-
 COPY agent.py ./
-
 EXPOSE 8080
-
-# Observability 활성화 시
+# 관측성 활성화 시 opentelemetry-instrument 래핑
 CMD ["opentelemetry-instrument", "uv", "run", "uvicorn", "agent:app", "--host", "0.0.0.0", "--port", "8080"]
 ```
 
-### FastAPI 커스텀 에이전트
+### FastAPI 컨트랙트
 
 ```python
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any
-from datetime import datetime, timezone
 from strands import Agent
 
 app = FastAPI(title="Strands Agent Server")
-strands_agent = Agent()
+agent = Agent()
 
 class InvocationRequest(BaseModel):
     input: Dict[str, Any]
 
-class InvocationResponse(BaseModel):
-    output: Dict[str, Any]
-
-@app.post("/invocations", response_model=InvocationResponse)
+@app.post("/invocations")
 async def invoke_agent(request: InvocationRequest):
-    try:
-        user_message = request.input.get("prompt", "")
-        if not user_message:
-            raise HTTPException(status_code=400, detail="No prompt provided")
-
-        result = strands_agent(user_message)
-        return InvocationResponse(output={
-            "message": result.message,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        })
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    user_message = request.input.get("prompt", "")
+    if not user_message:
+        raise HTTPException(status_code=400, detail="No prompt provided")
+    result = agent(user_message)
+    return {"output": {"message": result.message}}
 
 @app.get("/ping")
 async def ping():
-    return {"status": "healthy"}
+    return {"status": "Healthy"}
 
 if __name__ == "__main__":
     import uvicorn
@@ -453,96 +296,35 @@ if __name__ == "__main__":
 ### ECR 배포
 
 ```bash
-# ECR 리포지토리 생성
 aws ecr create-repository --repository-name my-agent --region us-west-2
-
-# 로그인
 aws ecr get-login-password --region us-west-2 | \
   docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-west-2.amazonaws.com
-
-# 빌드 및 푸시
 docker buildx build --platform linux/arm64 \
   -t <account-id>.dkr.ecr.us-west-2.amazonaws.com/my-agent:latest --push .
 ```
 
----
+## 프레임워크 비교
 
-## 프레임워크별 요구사항
-
-### requirements.txt 예시
-
-```txt
-# Core
-bedrock-agentcore
-
-# Strands
-strands-agents
-
-# LangGraph
-langchain-aws
-langgraph
-langchain-community  # for tools
-
-# CrewAI
-crewai
-crewai-tools
-
-# Observability (선택)
-aws-opentelemetry-distro>=0.10.1
-```
-
-### 프레임워크 비교
-
-| 프레임워크 | 최적 사용 사례 | 주요 특징 |
-|-----------|---------------|----------|
-| **Strands** | 간단한 에이전트 | 최소 설정, 내장 도구, 초보자 친화적 |
-| **LangGraph** | 상태 기반 워크플로우 | 그래프 기반 흐름, 상태 관리, 복잡한 라우팅 |
-| **CrewAI** | 멀티 에이전트 팀 | 역할 기반 에이전트, 협업 태스크, 위임 |
-
----
-
-## 에러 처리
-
-```python
-from bedrock_agentcore.runtime import BedrockAgentCoreApp
-import logging
-
-app = BedrockAgentCoreApp()
-logger = logging.getLogger(__name__)
-
-@app.entrypoint
-def invoke(payload):
-    try:
-        user_message = payload.get("prompt", "Hello!")
-        # Agent logic here
-        return {"result": response}
-    except Exception as e:
-        logger.error(f"Agent error: {e}")
-        return {"error": "An error occurred processing your request"}
-
-if __name__ == "__main__":
-    app.run()
-```
-
----
+| 프레임워크 | CLI 지원 | 최적 사용 사례 | 특징 |
+|-----------|:---:|---------------|------|
+| **Strands** | ✓ | 간단~중간 복잡도 에이전트 | 최소 설정, 내장 도구, AgentCore 네이티브 |
+| **LangGraph** | ✓ | 상태 기반 워크플로우 | 그래프 흐름, 상태 관리, 복잡한 라우팅 |
+| **Google ADK** | ✓ | Google 생태계 에이전트 | ADK 패턴 |
+| **OpenAI Agents** | ✓ | OpenAI Agents SDK | 핸드오프 |
+| **CrewAI** | 커스텀 | 멀티 에이전트 팀 | 역할 기반 협업, litellm |
 
 ## Troubleshooting
 
-### 모델 접근 오류
-- Bedrock 콘솔에서 모델 활성화 확인
-- 올바른 모델 ID 형식 사용
-- AWS 리전이 모델 지원 리전인지 확인
+| 영역 | 확인 |
+|------|------|
+| 모델 접근 | Bedrock 콘솔에서 모델 활성화, 모델 ID 형식·리전 |
+| CrewAI | 모델은 `bedrock/<id>`(litellm), `AWS_DEFAULT_REGION` 필수 |
+| 배포 실패 | IAM 권한, `agentcore deploy -v`, CDK 부트스트랩 |
+| 커스텀 컨테이너 | `linux/arm64`, `/invocations`(POST)·`/ping`(GET), 포트 8080 |
 
-### CrewAI 특이사항
-- 모델 형식: `bedrock/model-id` (litellm 형식)
-- `AWS_DEFAULT_REGION` 환경 변수 필수
+## 최신 정보 확인
 
-### 배포 실패
-- IAM 권한 확인
-- 컨테이너 엔진 실행 중인지 확인
-- CloudWatch 로그 확인
-
-### AgentCore Runtime 요구사항
-- 플랫폼: `linux/arm64` 필수
-- 엔드포인트: `/invocations` POST, `/ping` GET 필수
-- 포트: 8080
+```
+mcp__bedrock-agentcore-mcp-server__search_agentcore_docs(query="runtime framework agents")
+mcp__aws-knowledge-mcp-server__aws___search_documentation(search_phrase="AgentCore framework integration")
+```

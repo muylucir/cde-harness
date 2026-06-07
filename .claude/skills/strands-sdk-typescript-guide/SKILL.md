@@ -23,9 +23,11 @@ description: |
   (18) AWS AgentCore 배포, Docker, ECS/Fargate/App Runner/EKS/Lambda
   (19) 안전 및 보안 (guardrails, prompt engineering, responsible AI)
   (20) TypeScript API symbol 탐색
+  (21) Interrupts로 Human-in-the-loop 워크플로우 (tool context.interrupt, result.stopReason==='interrupt', interruptResponse 재개 루프)
+  (22) Retry Strategies (DefaultModelRetryStrategy + ExponentialBackoff/LinearBackoff/ConstantBackoff, jitter)
   사용자가 typescript와 함께 "strands", "에이전트 SDK", "AI 에이전트 개발", "멀티 에이전트", "A2A", "agent-to-agent",
   "@strands-agents/sdk", "Graph", "Swarm", "structured output", "Snapshot", "AgentCore", "guardrails", "observability",
-  "notebook tool", "SSE" 등을 언급하면 이 스킬을 사용한다.
+  "notebook tool", "SSE", "interrupt", "human-in-the-loop", "retryStrategy", "backoff" 등을 언급하면 이 스킬을 사용한다.
 ---
 
 # Strands Agents SDK TypeScript 개발 가이드
@@ -40,7 +42,7 @@ Strands Agents SDK는 AI 에이전트를 빠르게 구축, 관리, 배포할 수
 
 > **SSOT**: `.pipeline/scripts/allowed-models.json`. 갱신 시 CLAUDE.md Rule 13 표를 함께 동기화하며, `node .pipeline/scripts/check-allowed-models-sync.mjs`가 drift를 차단한다. 이 박스의 존재 자체는 `node .pipeline/scripts/check-strands-rule13.mjs`가 검증한다 (3 라운드 연속 미반영 회귀 차단).
 
-`new Agent({ model: '...' })`에 전달할 수 있는 모델 ID는 다음 **3개**뿐이다. 다른 ID/단축 alias 사용 금지.
+이 가이드 본문 다른 곳에 등장하는 모델 ID **예시**(`us.anthropic.claude-*` 등 일반 SDK 가이드용)와 무관하게, **CDE 파이프라인 코드(`src/lib/ai/`)에서 `new Agent({ model: ... })`에 전달할 수 있는 모델 ID는 다음 3개뿐이다.** 다른 ID/단축 alias 사용 금지.
 
 | 모델 ID | 단축 (변수명/문서용) | 용도 | cost |
 |---|---|---|---|
@@ -48,36 +50,17 @@ Strands Agents SDK는 AI 에이전트를 빠르게 구축, 관리, 배포할 수
 | `global.anthropic.claude-sonnet-4-6` | sonnet | 일반 챗/생성/도구 호출 기본값 | medium |
 | `global.anthropic.claude-opus-4-8` | opus | 복잡 추론/멀티스텝 에이전트 | high |
 
-**금지 패턴** (ai-smoke Check 7/8 + ESLint `no-restricted-syntax`가 차단):
-
 ```typescript
+// ✓ 허용 — ID 문자열을 코드에 직접 명시
+new Agent({ model: new BedrockModel({ modelId: 'global.anthropic.claude-sonnet-4-6' }), printer: false })
+
+// ✗ 환경변수 fallback (Rule 13: BEDROCK_MODEL_ID SSOT 패턴 폐기)
+new Agent({ model: process.env.BEDROCK_MODEL_ID ?? '...' })
 // ✗ 단축 alias를 SDK에 전달
 new Agent({ model: 'sonnet' })
-
-// ✗ 환경변수 fallback (Rule 13: SSOT 패턴 폐기)
-new Agent({ model: process.env.BEDROCK_MODEL_ID ?? '...' })
-
-// ✗ indirect 접근 / 문자열 조립
-const k = 'BEDROCK_' + 'MODEL_ID';
-new Agent({ model: process.env[k] })
+// ✗ indirect 조립 (배열 join 등 우회)
 new Agent({ model: ['global', 'anthropic', 'claude-sonnet-4-6'].join('.') })
 ```
-
-**올바른 패턴**:
-
-```typescript
-// ✓ 전체 ID 문자열을 코드에 직접 박는다 (도구/에이전트 단위로 다르게)
-const triageAgent = new Agent({
-  model: 'global.anthropic.claude-haiku-4-5-20251001-v1:0', // 의도 분류
-  tools: [classifyIntent],
-});
-const chatAgent = new Agent({
-  model: 'global.anthropic.claude-sonnet-4-6', // 사용자 대면
-  tools: [searchDocs, getOrderStatus],
-});
-```
-
-**선택 원칙**: 도구 ground truth가 짧고 결정적이면 haiku, 사용자 대면 일반 챗은 sonnet, 추론·도메인 지식 필요하면 opus. **대화 단위가 아니라 도구/에이전트 단위로 모델을 다르게** 가져갈 수 있다.
 
 ## 핵심 개념
 
@@ -102,6 +85,8 @@ console.log(result.lastMessage)
 - **Session Manager**: 상태 및 대화 영속화 (FileStorage, S3Storage) + Immutable Snapshots
 - **Structured Output**: Zod 스키마로 타입 안전 응답 추출 (`structuredOutputSchema`)
 - **Multi-Agent**: Graph(DAG/순환, AND 시맨틱스), Swarm(자율 핸드오프), Agents as Tools, A2A
+- **Interrupts**: `context.interrupt({ name, reason })` (tool/hook), `result.stopReason === 'interrupt'` + `interruptResponse` 재개 루프
+- **Retry**: `new Agent({ retryStrategy: new DefaultModelRetryStrategy({ maxAttempts, backoff }) })` (ExponentialBackoff/LinearBackoff/ConstantBackoff)
 
 ## 빠른 시작
 
@@ -152,7 +137,7 @@ npx tsx src/agent.ts
 - **[state-and-sessions.md](references/state-and-sessions.md)** — Agent State (appState), Session (FileStorage/S3Storage), Immutable Snapshots, Structured Output
 - **[nextjs-integration.md](references/nextjs-integration.md)** — Next.js 16 App Router SSE 스트리밍 패턴, `agent.stream()` → SSE 이벤트 매핑
 - **[deployment.md](references/deployment.md)** — AgentCore Runtime (ECR + IAM), Docker, Lambda/Fargate/App Runner/EKS/EC2 가이드
-- **[safety.md](references/safety.md)** — Bedrock Guardrails (`BedrockGuardrailConfig`), Prompt Engineering, Responsible AI 5원칙
+- **[safety.md](references/safety.md)** — Bedrock Guardrails (`BedrockGuardrailConfig`), Prompt Engineering, Responsible AI 5원칙, Interrupts(HITL), Retry Strategies(Backoff)
 - **[observability.md](references/observability.md)** — `configureLogging()`, `setupTracer()` (OTEL), `AgentMetrics`, `Usage`, `traceAttributes`
 - **[build-with-ai.md](references/build-with-ai.md)** — llms.txt + MCP 서버로 문서를 AI 어시스턴트에 주입하는 워크플로우
 - **[versioning.md](references/versioning.md)** — SemVer 정책, 실험적 기능 핀 고정 권장사항
@@ -177,7 +162,7 @@ TypeScript SDK는 Python SDK와 기능 범위가 다르다. 주요 격차:
 | Conversation Manager (Null, SlidingWindow, Summarizing) | O | O |
 | Structured Output (Zod 기반) | O | O |
 | Session Management (File, S3) | O | O |
-| Immutable Snapshots (time-travel UUID v7) | O | - |
+| Snapshots (`takeSnapshot`/`loadSnapshot`) | O (immutable/time-travel UUID v7) | O |
 | Agent State (appState) | O | O |
 | Multi-Agent: Agents as Tools (`.asTool()`) | O | O |
 | Multi-Agent: A2A (A2AAgent + A2AExpressServer) | O | O |
@@ -189,13 +174,13 @@ TypeScript SDK는 Python SDK와 기능 범위가 다르다. 주요 격차:
 | OpenTelemetry StrandsTelemetry 헬퍼 | - | O |
 | Bedrock Guardrails (`BedrockGuardrailConfig`) | O | O |
 | PII Redaction 전용 플러그인 | - | O |
-| Interrupts (Human-in-the-loop) | - | O |
-| Retry Strategies (`ModelRetryStrategy`) | - | O |
+| Interrupts (Human-in-the-loop) | O | O |
+| Retry Strategies (`DefaultModelRetryStrategy` + Backoff) | O | O |
 | Bidirectional Streaming (Voice/Realtime) | - | O |
 | Skills / Steering / Context-Offloader Plugins | - | O |
 | Evals SDK | - | O |
 
-Python 전용 기능은 CDE 파이프라인에서 지원하지 않는다. CDE는 TypeScript SDK 단일 가이드만 유지한다.
+Python 전용 기능이 필요하면 `strands-sdk-python-guide` 스킬을 참고한다. 단 CDE 파이프라인은 Python SDK를 사용하지 않는다.
 
 ## 베스트 프랙티스 요약
 
@@ -237,7 +222,7 @@ const agent = new Agent({ tools: [bash, fileEditor, httpRequest, notebook] })
 7. **Graph를 Python과 동일하게 가정** — TypeScript Graph는 **AND 시맨틱스** (모든 상위 노드 완료 후 실행). Python은 OR 시맨틱스
 8. **Swarm 핸드오프를 tool-call 방식으로 기대** — TypeScript Swarm은 **Structured Output 라우팅** (`agentId`/`message`/`context`). `description` 필드가 라우팅 결정에 사용되므로 명확히 기술
 9. **MCP Client 수동 `connect()` 시도** — `McpClient`를 `tools`에 전달하면 첫 도구 사용 시 lazy connect 된다
-10. **Python 전용 기능 호출** — Skills, Steering, Interrupts, Workflow tool, PII Redaction 플러그인, Evals SDK는 TS 미지원. 표 참조
+10. **Python 전용 기능 호출** — Skills, Steering, ContextOffloader, Workflow tool, PII Redaction 전용 플러그인, Bidi Streaming, Evals SDK는 TS 미지원. **단 Interrupts와 Retry Strategies는 이제 TS도 지원**하므로 Python으로 우회하지 말 것. 표 참조
 11. **Snapshot을 Agent State와 혼동** — `appState`는 메모리 key-value (프로세스 동안), Snapshot은 디스크/S3 영속 체크포인트
 12. **Agent 재사용 누수** — 대화 히스토리를 초기화하려면 새 `new Agent()` 또는 `sessionManager` 기반 복원 사용
 

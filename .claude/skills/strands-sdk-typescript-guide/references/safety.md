@@ -52,7 +52,7 @@ Amazon Bedrock Guardrails는 네이티브 콘텐츠 필터링(금지 주제, 유
 import { Agent, BedrockModel } from '@strands-agents/sdk'
 
 const bedrock = new BedrockModel({
-  modelId: 'global.anthropic.claude-sonnet-4-6',
+  modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
   region: 'us-west-2',
   guardrailConfig: {
     guardrailIdentifier: 'my-guardrail-id',
@@ -160,82 +160,91 @@ agent.addHook(BeforeToolCallEvent, (event) => {
 })
 ```
 
-## Silent fail 처리 패턴 (사용자 화면 회귀 차단)
+## Interrupts (Human-in-the-loop)
 
-guardrail 차단 / 빈 응답 / stopReason 비정상은 모두 **사용자 화면에서만 드러나는 회귀**다. 다음 3가지 패턴을 모든 SSE 라우트에서 강제한다 (ai-smoke Check 10이 종결 보장만 검증, 의미적 차단은 본문 코드에서 처리).
+도구(또는 hook) 실행 중 사람의 승인/입력을 받기 위해 에이전트 루프를 일시 중지한다.
+`BeforeToolCallEvent.cancel`(단순 차단)과 달리, interrupt는 **외부 응답을 받아 같은 지점에서 재개**한다.
 
-### 패턴 A — guardrail intervened 처리
+### 1. 도구에서 interrupt 발생
+
+`tool()` callback의 두 번째 인자 `context`에 `interrupt<T>()`가 있다. 반환 타입 `T`로 사용자의 응답을 받는다.
 
 ```typescript
-import type { Event } from '@strands-agents/sdk';
+import { Agent, tool } from '@strands-agents/sdk'
+import z from 'zod'
 
-for await (const event of agent.stream(prompt)) {
-  // guardrail이 응답을 차단한 경우 stopReason 또는 별도 이벤트로 통지됨
-  if (event.type === 'modelMessageStopEvent') {
-    const stopReason = event.message?.stopReason;
-    if (stopReason === 'guardrail_intervened') {
-      send({
-        type: 'error',
-        code: 'GUARDRAIL_BLOCKED',
-        message: '안전 정책에 의해 응답이 차단되었습니다. 다른 방식으로 질문해주세요.',
-      });
-      send({ type: 'done' });
-      return;
-    }
-  }
-  // 일반 처리 ...
-}
+const deleteFiles = tool({
+  name: 'delete_files',
+  description: 'Delete files after human approval.',
+  inputSchema: z.object({ paths: z.array(z.string()) }),
+  callback: (input, context) => {
+    const approval = context.interrupt<string>({
+      name: 'myapp-approval',
+      reason: { paths: input.paths }, // 사람에게 보여줄 컨텍스트 (JSON 직렬화 가능)
+    })
+    if (approval.toLowerCase() !== 'y') return 'Deletion cancelled by user.'
+    // ... 실제 삭제 수행
+    return `Deleted ${input.paths.length} file(s).`
+  },
+})
 ```
 
-### 패턴 B — 빈 응답 fallback
+### 2. 에이전트가 interrupt를 표면화
 
-`agent.stream()`이 0 chunks 반환하는 경우(Bedrock 5xx, 네트워크 일시 오류, guardrail silent block) UI에 빈 메시지가 보인다. 다음 카운터로 차단:
+`invoke()`가 반환되면 `result.stopReason`을 확인한다. `'interrupt'`이면 `result.interrupts`에
+보류 중인 `Interrupt` 객체 배열이 담긴다(각 `id`, `name`, `reason`).
 
-```typescript
-let textChunks = 0;
-for await (const event of agent.stream(prompt)) {
-  if (event.type === 'textDelta' && event.text) {
-    textChunks++;
-    send({ type: 'textDelta', text: event.text });
-  }
-  // ...
-}
-if (textChunks === 0) {
-  send({
-    type: 'error',
-    code: 'EMPTY_RESPONSE',
-    message: '응답을 생성하지 못했습니다. 잠시 후 다시 시도해주세요.',
-  });
-}
-send({ type: 'done' });
-```
+### 3. 응답으로 재개
 
-### 패턴 C — nested agent 실패 표준 envelope
-
-도구 안에서 sub-agent를 호출할 때 `try/catch + return null`은 silent fail. 표준 에러 envelope으로 상위에 전파:
+각 interrupt의 `id`로 키된 `interruptResponse` 블록 배열을 만들어 `invoke()`를 다시 호출하면,
+해당 `interrupt()` 호출이 그 값을 반환하며 도구가 이어서 실행된다.
 
 ```typescript
-async function diagnoseTool(input: { symptom: string }) {
-  try {
-    const result = await subAgent.invoke(input.symptom);
-    if (!result || result.text.trim().length === 0) {
-      // sub-agent 빈 응답도 명시적 에러로 처리
-      return { error: { code: 'SUB_AGENT_EMPTY', message: '하위 진단을 완료하지 못함', retriable: true } };
-    }
-    return { diagnosis: result.text };
-  } catch (e) {
+let result = await agent.invoke('Delete the temp files in /tmp/cache')
+
+while (result.stopReason === 'interrupt') {
+  const responses = result.interrupts!.map((interrupt) => {
+    // 실제로는 UI/CLI로 사용자에게 interrupt.reason 을 보여주고 입력을 받는다
+    const userInput = promptUserFor(interrupt) // 'y' | 'n' 등 (JSON 직렬화 가능)
     return {
-      error: {
-        code: 'SUB_AGENT_FAILED',
-        message: e instanceof Error ? e.message : 'Unknown',
-        retriable: false,
+      interruptResponse: {
+        interruptId: interrupt.id,
+        response: userInput,
       },
-    };
-  }
+    }
+  })
+  result = await agent.invoke(responses)
 }
+
+console.log(result.lastMessage)
 ```
 
-상위 Agent의 시스템 프롬프트에 "도구 결과에 `error` 필드가 있으면 사용자에게 그 message를 한국어로 전달하고 다른 접근 시도"를 명시.
+> interrupt의 `source`는 발생 위치(tool callback / agent hook / multi-agent orchestrator hook)를 나타낸다.
+
+## Retry Strategies
+
+모델 호출 실패 시 자동 재시도 정책. `new Agent({ retryStrategy })`로 주입한다.
+
+```typescript
+import { Agent, DefaultModelRetryStrategy, ExponentialBackoff } from '@strands-agents/sdk'
+
+const agent = new Agent({
+  retryStrategy: new DefaultModelRetryStrategy({
+    maxAttempts: 4, // 초기 호출 포함 총 시도 횟수 (기본 6)
+    backoff: new ExponentialBackoff({
+      baseMs: 2_000,
+      maxMs: 60_000,
+      multiplier: 2,
+      jitter: 'full', // 'none' | 'full' | 'equal' | 'decorrelated' (기본 'full')
+    }),
+  }),
+})
+```
+
+- **Backoff 3종**: `ExponentialBackoff`(`baseMs * multiplier^(attempt-1)`), `LinearBackoff`(`baseMs * attempt`), `ConstantBackoff`(고정).
+- `DefaultModelRetryStrategy`는 기본적으로 `ModelThrottledError`만 재시도 대상으로 본다. `isRetryable()`을 오버라이드해 확장한다.
+- **상태는 per-turn**: backoff 타이밍 상태는 매 턴 `attemptCount === 1`에서 리셋된다. **인스턴스를 여러 에이전트가 공유하면 안 되고, 에이전트당 별도 인스턴스**를 만든다.
+- Hook(`AfterModelCallEvent.retry = true`)으로 사용자 정의 재시도를 추가하면 strategy의 backoff보다 먼저 적용된다.
 
 ## TypeScript에서 미지원 (Python-only)
 
@@ -244,8 +253,8 @@ async function diagnoseTool(input: { symptom: string }) {
 | 기능 | 대안 |
 |-----|-----|
 | **PII Redaction 전용 플러그인** | Bedrock Guardrails의 `redaction` 설정으로 부분 대체 |
-| **Interrupts (Human-in-the-loop)** | `BeforeToolCallEvent.cancel`로 조건부 차단 |
-| **`ModelRetryStrategy` (지수 백오프 등)** | `AfterModelCallEvent.retry = true`로 기본 재시도 |
 | **Bedrock Guardrails Shadow Mode Hook** | Python의 `NotifyOnlyGuardrailsHook` 미이식 |
 
-Python 전용 기능이 필수면 별도 Python 에이전트를 A2A로 노출하는 아키텍처를 검토한다. CDE 하네스는 TypeScript SDK만 직접 지원한다.
+> **Interrupts와 Retry Strategies는 더 이상 Python 전용이 아니다** — 위 두 섹션 참조.
+
+Python 전용 기능이 필수면 `strands-sdk-python-guide` 스킬 + A2A 아키텍처 검토.

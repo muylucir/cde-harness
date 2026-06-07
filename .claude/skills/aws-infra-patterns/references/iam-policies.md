@@ -56,7 +56,7 @@ Secrets Manager (Aurora 자격증명) 접근:
 }
 ```
 
-## ElastiCache Redis
+## ElastiCache (Valkey/Redis)
 
 ```json
 {
@@ -229,6 +229,9 @@ CDK에서 `lambda.NodejsFunction`을 생성하면 `AWSLambdaBasicExecutionRole` 
 
 ## AgentCore — 에이전트 호출 및 메모리
 
+> [!IMPORTANT]
+> `bedrock-agentcore:StoreMemory`/`RetrieveMemory`/`ListMemories`는 **존재하지 않는 액션**이다(가공된 이름). 메모리 데이터면의 실제 액션은 `CreateEvent`/`RetrieveMemoryRecords`/`ListEvents`/`Batch*MemoryRecords` 등이다(`service-authorization` 레퍼런스로 검증). 또한 런타임 리소스 ARN은 `runtime/${id}`다(`agent-runtime/` 아님).
+
 **Runtime 호출자 (Next.js API 라우트 등)**:
 
 ```json
@@ -238,26 +241,30 @@ CDK에서 `lambda.NodejsFunction`을 생성하면 `AWSLambdaBasicExecutionRole` 
     "bedrock-agentcore:InvokeAgentRuntime",
     "bedrock-agentcore:GetAgentRuntime"
   ],
-  "Resource": ["arn:aws:bedrock-agentcore:*:*:agent-runtime/${agentId}"]
+  "Resource": [
+    "arn:aws:bedrock-agentcore:*:*:runtime/${agentId}",
+    "arn:aws:bedrock-agentcore:*:*:runtime/${agentId}/*"
+  ]
 }
 ```
 
-**Memory 접근**:
+**Memory 접근 (데이터면 — 보통 AgentCore Runtime 실행 역할에 부여)**:
 
 ```json
 {
   "Effect": "Allow",
   "Action": [
-    "bedrock-agentcore:StoreMemory",
-    "bedrock-agentcore:RetrieveMemory",
-    "bedrock-agentcore:DeleteMemory",
-    "bedrock-agentcore:ListMemories"
+    "bedrock-agentcore:CreateEvent",
+    "bedrock-agentcore:ListEvents",
+    "bedrock-agentcore:GetEvent",
+    "bedrock-agentcore:RetrieveMemoryRecords",
+    "bedrock-agentcore:ListMemoryRecords"
   ],
   "Resource": ["arn:aws:bedrock-agentcore:*:*:memory/${memoryId}"]
 }
 ```
 
-**Gateway 접근** (MCP 클라이언트):
+**Gateway 호출** (MCP 클라이언트 — 보통 JWT 토큰으로 호출하므로 IAM은 워크로드 토큰 발급 권한 위주):
 
 ```json
 {
@@ -273,9 +280,11 @@ CDK에서 `lambda.NodejsFunction`을 생성하면 `AWSLambdaBasicExecutionRole` 
 {
   "Effect": "Allow",
   "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
-  "Resource": ["arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-*"]
+  "Resource": ["arn:aws:bedrock:*::foundation-model/anthropic.claude-*"]
 }
 ```
+
+> 정확한 액션 목록은 자주 갱신된다. AWS Knowledge MCP로 확인: `read_documentation("https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonbedrockagentcore.html")`.
 
 ## CDK에서 권한 부여 패턴
 

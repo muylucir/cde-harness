@@ -67,6 +67,8 @@ node .pipeline/scripts/has-ai.mjs .pipeline/artifacts/v{N}/01-requirements/requi
 
 스펙에 포함할 항목: BedrockModel 프로바이더 설정, tool()+Zod 도구 정의, invoke/stream 호출 방식, `printer: false`, Vended Tools/MCP 연동 여부. 상세 코드 패턴은 스킬 참조.
 
+> **모델 ID 예외**: 스킬 본문의 모델 ID **예시**(`us.anthropic.claude-sonnet-4-...` 등)는 일반 SDK 가이드일 뿐 이 하네스의 SSOT가 아니다. `model_id` 필드는 **반드시 CLAUDE.md Rule 13 / `.pipeline/scripts/allowed-models.json`의 3개 ID 중 하나**만 쓴다 (`global.anthropic.claude-{haiku-4-5-20251001-v1:0|sonnet-4-6|opus-4-8}`). 스킬의 모델 ID 예시를 그대로 복사하지 않는다.
+
 ## 입력
 
 - `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — AI 관련 FR/NFR

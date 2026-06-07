@@ -243,7 +243,7 @@ import { Agent } from '@strands-agents/sdk'
 const agent = new Agent()
 
 // 모델 ID 직접 지정
-const agent2 = new Agent({ model: 'global.anthropic.claude-sonnet-4-6' })
+const agent2 = new Agent({ model: 'us.anthropic.claude-sonnet-4-20250514-v1:0' })
 ```
 
 ### BedrockModel 인스턴스 (파라미터 튜닝)
@@ -252,7 +252,7 @@ const agent2 = new Agent({ model: 'global.anthropic.claude-sonnet-4-6' })
 import { Agent, BedrockModel } from '@strands-agents/sdk'
 
 const bedrock = new BedrockModel({
-  modelId: 'global.anthropic.claude-sonnet-4-6',
+  modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
   region: 'us-west-2',
   temperature: 0.3,
   topP: 0.8,
@@ -337,7 +337,7 @@ Cross-Region Inference가 필요한 모델은 리전 접두사를 붙여야 한�
 const agent = new Agent({ model: 'anthropic.claude-sonnet-4-20250514-v1:0' })
 
 // 올바름
-const agent = new Agent({ model: 'global.anthropic.claude-sonnet-4-6' })
+const agent = new Agent({ model: 'us.anthropic.claude-sonnet-4-20250514-v1:0' })
 ```
 
 사용 가능한 프로파일은 `us.` / `eu.` / `apac.` / `global.` 등. AWS 콘솔의 Bedrock → Cross-region inference에서 확인.

@@ -121,7 +121,7 @@ import { Agent, BedrockModel } from '@strands-agents/sdk'
 
 export const agent = new Agent({
   model: new BedrockModel({
-    modelId: 'global.anthropic.claude-sonnet-4-6',
+    modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
     region: process.env.AWS_REGION ?? 'us-west-2',
   }),
   printer: false,

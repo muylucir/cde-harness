@@ -7,6 +7,9 @@
 - [Tools](#tools)
 - [Models](#models)
 - [Multi-Agent](#multi-agent)
+- [Interrupts](#interrupts)
+- [Retry & Backoff](#retry--backoff)
+- [Sandbox & Code Execution](#sandbox--code-execution)
 - [Session & State](#session--state)
 - [Hooks & Events](#hooks--events)
 - [Errors](#errors)
@@ -42,6 +45,7 @@
 | [`Plugin`](https://strandsagents.com/docs/api/typescript/Plugin/index.md) | 플러그인 인터페이스 (`name`, `initAgent`, `getTools?`) |
 | [`Scope`](https://strandsagents.com/docs/api/typescript/Scope/index.md) | 세션/Hook 스코프 enum |
 | [`CountTokensOptions`](https://strandsagents.com/docs/api/typescript/CountTokensOptions/index.md) | 토큰 카운트 옵션 |
+| [`ProactiveCompressionConfig`](https://strandsagents.com/docs/api/typescript/ProactiveCompressionConfig/index.md) | 컨텍스트 윈도우 선제 압축 설정 |
 
 ## Tools
 
@@ -73,6 +77,10 @@
 | [`JSONSchema`](https://strandsagents.com/docs/api/typescript/JSONSchema/index.md) | JSON Schema 타입 (도구 입력 스키마) |
 | [`JSONValue`](https://strandsagents.com/docs/api/typescript/JSONValue/index.md) | JSON 직렬화 가능한 값 |
 | [`TasksConfig`](https://strandsagents.com/docs/api/typescript/TasksConfig/index.md) | 내부 task 관리 config |
+| [`DirectToolCallOptions`](https://strandsagents.com/docs/api/typescript/DirectToolCallOptions/index.md) | 도구 직접 호출 옵션 (`agent.tool.*`) |
+| [`ToolCallerProxy`](https://strandsagents.com/docs/api/typescript/ToolCallerProxy/index.md) | `agent.tool` 프록시 (이름으로 직접 도구 호출) |
+| [`ToolHandle`](https://strandsagents.com/docs/api/typescript/ToolHandle/index.md) | 등록된 도구 핸들 |
+| [`ToolNotFoundError`](https://strandsagents.com/docs/api/typescript/ToolNotFoundError/index.md) | 직접 호출 시 도구 미존재 |
 
 ### Vended Tools (서브경로)
 
@@ -136,6 +144,58 @@
 - `@strands-agents/sdk/a2a` — `A2AAgent`
 - `@strands-agents/sdk/a2a/express` — `A2AExpressServer`
 
+## Interrupts
+
+Human-in-the-loop. 도구/hook에서 `context.interrupt()`로 일시 중지하고 `interruptResponse`로 재개. 상세는 `safety.md` 참조.
+
+| 심볼 | 한 줄 설명 |
+|-----|---------|
+| [`Interrupt`](https://strandsagents.com/docs/api/typescript/Interrupt/index.md) | 보류 중인 interrupt (`id`, `name`, `reason?`, `response?`, `source`) |
+| [`InterruptEvent`](https://strandsagents.com/docs/api/typescript/InterruptEvent/index.md) | interrupt 발생 이벤트 |
+| [`InterruptParams`](https://strandsagents.com/docs/api/typescript/InterruptParams/index.md) | `context.interrupt({ name, reason? })` 인자 |
+| [`InterruptResponse`](https://strandsagents.com/docs/api/typescript/InterruptResponse/index.md) | 재개 시 전달하는 응답 (`interruptId`, `response`) |
+| [`InterruptResponseContent`](https://strandsagents.com/docs/api/typescript/InterruptResponseContent/index.md) | `invoke()`에 전달하는 `{ interruptResponse }` 블록 |
+| [`InterruptResponseContentData`](https://strandsagents.com/docs/api/typescript/InterruptResponseContentData/index.md) | 직렬화용 |
+| [`InterruptSource`](https://strandsagents.com/docs/api/typescript/InterruptSource/index.md) | 발생 위치 (tool / agent hook / orchestrator hook) |
+| [`InterventionActions`](https://strandsagents.com/docs/api/typescript/InterventionActions/index.md) | 개입 액션 집합 |
+| [`InterventionHandler`](https://strandsagents.com/docs/api/typescript/InterventionHandler/index.md) | 개입 핸들러 인터페이스 |
+| [`LifecycleObserver`](https://strandsagents.com/docs/api/typescript/LifecycleObserver/index.md) | 라이프사이클 관찰자 |
+
+## Retry & Backoff
+
+모델 호출 실패 시 재시도 정책. `new Agent({ retryStrategy })`. 상세는 `safety.md` 참조.
+
+| 심볼 | 한 줄 설명 |
+|-----|---------|
+| [`ModelRetryStrategy`](https://strandsagents.com/docs/api/typescript/ModelRetryStrategy/index.md) | 재시도 전략 인터페이스 |
+| [`DefaultModelRetryStrategy`](https://strandsagents.com/docs/api/typescript/DefaultModelRetryStrategy/index.md) | 기본 구현 (`maxAttempts`, `backoff`; `ModelThrottledError` 재시도) |
+| [`DefaultModelRetryStrategyOptions`](https://strandsagents.com/docs/api/typescript/DefaultModelRetryStrategyOptions/index.md) | `{ maxAttempts?, backoff? }` |
+| [`RetryStrategy`](https://strandsagents.com/docs/api/typescript/RetryStrategy/index.md) | 일반 재시도 전략 베이스 |
+| [`RetryDecision`](https://strandsagents.com/docs/api/typescript/RetryDecision/index.md) | 재시도 여부/지연 결정 |
+| [`BackoffStrategy`](https://strandsagents.com/docs/api/typescript/BackoffStrategy/index.md) | backoff 지연 계산 인터페이스 |
+| [`BackoffContext`](https://strandsagents.com/docs/api/typescript/BackoffContext/index.md) | backoff 계산 컨텍스트 (attempt 등) |
+| [`ExponentialBackoff`](https://strandsagents.com/docs/api/typescript/ExponentialBackoff/index.md) | `baseMs * multiplier^(attempt-1)`, `maxMs` 상한 |
+| [`ExponentialBackoffOptions`](https://strandsagents.com/docs/api/typescript/ExponentialBackoffOptions/index.md) | `{ baseMs, maxMs, multiplier, jitter }` |
+| [`LinearBackoff`](https://strandsagents.com/docs/api/typescript/LinearBackoff/index.md) | `baseMs * attempt`, `maxMs` 상한 |
+| [`LinearBackoffOptions`](https://strandsagents.com/docs/api/typescript/LinearBackoffOptions/index.md) | LinearBackoff 옵션 |
+| [`ConstantBackoff`](https://strandsagents.com/docs/api/typescript/ConstantBackoff/index.md) | 매 재시도 동일 지연 |
+| [`ConstantBackoffOptions`](https://strandsagents.com/docs/api/typescript/ConstantBackoffOptions/index.md) | ConstantBackoff 옵션 |
+| [`JitterKind`](https://strandsagents.com/docs/api/typescript/JitterKind/index.md) | `'none' \| 'full' \| 'equal' \| 'decorrelated'` |
+| [`OnError`](https://strandsagents.com/docs/api/typescript/OnError/index.md) | 에러 핸들링 콜백 타입 |
+
+## Sandbox & Code Execution
+
+도구 실행을 격리하는 샌드박스 (예: `bash` vended tool).
+
+| 심볼 | 한 줄 설명 |
+|-----|---------|
+| [`Sandbox`](https://strandsagents.com/docs/api/typescript/Sandbox/index.md) | 샌드박스 인터페이스 |
+| [`PosixShellSandbox`](https://strandsagents.com/docs/api/typescript/PosixShellSandbox/index.md) | POSIX 셸 기반 샌드박스 구현 |
+| [`ExecuteOptions`](https://strandsagents.com/docs/api/typescript/ExecuteOptions/index.md) | 실행 옵션 |
+| [`ExecutionResult`](https://strandsagents.com/docs/api/typescript/ExecutionResult/index.md) | 실행 결과 (stdout/stderr/exit code) |
+| [`FileInfo`](https://strandsagents.com/docs/api/typescript/FileInfo/index.md) | 샌드박스 파일 메타데이터 |
+| [`OutputFile`](https://strandsagents.com/docs/api/typescript/OutputFile/index.md) | 실행 산출 파일 |
+
 ## Session & State
 
 | 심볼 | 한 줄 설명 |
@@ -150,6 +210,10 @@
 | [`SnapshotLocation`](https://strandsagents.com/docs/api/typescript/SnapshotLocation/index.md) | `{ sessionId, scope, scopeId }` |
 | [`SnapshotTriggerCallback`](https://strandsagents.com/docs/api/typescript/SnapshotTriggerCallback/index.md) | 스냅샷 생성 트리거 시그니처 |
 | [`SnapshotTriggerParams`](https://strandsagents.com/docs/api/typescript/SnapshotTriggerParams/index.md) | 트리거 콜백에 전달되는 파라미터 |
+| [`SnapshotField`](https://strandsagents.com/docs/api/typescript/SnapshotField/index.md) | 스냅샷에 포함할 필드 (messages/state/systemPrompt 등) |
+| [`SnapshotPreset`](https://strandsagents.com/docs/api/typescript/SnapshotPreset/index.md) | 스냅샷 필드 프리셋 (`'session'` 등) |
+| [`SNAPSHOT_SCHEMA_VERSION`](https://strandsagents.com/docs/api/typescript/SNAPSHOT_SCHEMA_VERSION/index.md) | 스냅샷 스키마 버전 상수 |
+| [`TakeSnapshotOptions`](https://strandsagents.com/docs/api/typescript/TakeSnapshotOptions/index.md) | `agent.takeSnapshot({ preset, fields })` 옵션 |
 | [`StateStore`](https://strandsagents.com/docs/api/typescript/StateStore/index.md) | `appState` get/set/delete 인터페이스 |
 
 ### 서브경로

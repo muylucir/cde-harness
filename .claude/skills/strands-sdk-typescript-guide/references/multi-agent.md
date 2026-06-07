@@ -586,5 +586,6 @@ controller.abort()
 다음 Python-only 패턴은 TypeScript 미지원. 필요 시 Python 에이전트를 A2A로 노출하고 TypeScript 측에서 `A2AAgent`로 호출한다.
 
 - **Workflow tool** — DAG 기반 결정적 도구 (Python `workflow`). TypeScript에서는 `Graph`로 대체 가능
-- **Interrupts** (Human-in-the-loop) — Python `event.interrupt`, `tool_context.interrupt`
 - **Bidirectional Streaming** — Voice / Realtime (Nova Sonic, Gemini Live, OpenAI Realtime)
+
+> **Interrupts(Human-in-the-loop)는 이제 TypeScript도 지원**한다(도구 `context.interrupt`, multi-agent orchestrator hook 포함). `safety.md`의 "Interrupts (Human-in-the-loop)" 섹션 참조.

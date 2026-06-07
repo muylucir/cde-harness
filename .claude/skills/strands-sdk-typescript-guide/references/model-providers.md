@@ -22,7 +22,7 @@ TypeScript SDK가 공식 제공하는 프로바이더:
 | Vercel AI SDK | `npm install @ai-sdk/...` | `@strands-agents/sdk/vercel` → `VercelModel` | Vercel 생태계 프로바이더 래핑 |
 | Custom | - | `Model` 인터페이스 구현 | 자체 LLM 엔드포인트 |
 
-> Python 전용 프로바이더(Anthropic 직접, Ollama, LiteLLM, llama.cpp, Mistral, SageMaker, Writer, OpenAI Responses 등)는 CDE 하네스에서 지원하지 않는다. TypeScript에서는 위 표의 프로바이더만 사용한다.
+> Python 전용 프로바이더(Anthropic 직접, Ollama, LiteLLM, llama.cpp, Mistral, SageMaker, Writer, OpenAI Responses 등)는 `strands-sdk-python-guide` 참조.
 
 ## Amazon Bedrock
 
@@ -38,7 +38,7 @@ const agent = new Agent()
 
 // 모델 ID 문자열 전달
 const agent2 = new Agent({
-  model: 'global.anthropic.claude-sonnet-4-6',
+  model: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
 })
 ```
 
@@ -48,7 +48,7 @@ const agent2 = new Agent({
 import { Agent, BedrockModel } from '@strands-agents/sdk'
 
 const bedrock = new BedrockModel({
-  modelId: 'global.anthropic.claude-sonnet-4-6',
+  modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
   region: 'us-west-2',
   temperature: 0.3,
   topP: 0.8,
@@ -79,7 +79,7 @@ const agent = new Agent({ model: bedrock })
 
 ```typescript
 const bedrock = new BedrockModel({
-  modelId: 'global.anthropic.claude-sonnet-4-6',
+  modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
   region: 'us-east-1',
 })
 ```
@@ -88,7 +88,7 @@ const bedrock = new BedrockModel({
 
 ```typescript
 const bedrock = new BedrockModel({
-  modelId: 'global.anthropic.claude-sonnet-4-6',
+  modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
   cacheConfig: { strategy: 'auto' },
 })
 ```
@@ -111,23 +111,19 @@ const bedrock = new BedrockModel({
 })
 ```
 
-### 모델 ID — CLAUDE.md Rule 13 (CDE Harness 프로토타입에서 허용된 3개)
+### 주요 모델 ID (2026년 초 기준)
 
-작업 성격에 따라 아래 3개 중 하나를 코드에 **직접** 명시한다. 환경변수 fallback 패턴 금지.
+- Claude: `us.anthropic.claude-sonnet-4-20250514-v1:0`, `global.anthropic.claude-opus-4-6-v1`, `anthropic.claude-3-5-haiku-20241022-v1:0`
+- Nova: `us.amazon.nova-premier-v1:0`, `us.amazon.nova-pro-v1:0`
+- Llama: `us.meta.llama3-2-90b-instruct-v1:0`
 
-| 모델 ID | 용도 |
-|---|---|
-| `global.anthropic.claude-haiku-4-5-20251001-v1:0` | 분류/라우팅/추출/짧은 응답 — 빠르고 저렴 |
-| `global.anthropic.claude-sonnet-4-6` | 사용자 대면 일반 챗 / 균형 — **기본값** |
-| `global.anthropic.claude-opus-4-8` | 멀티스텝 추론/장기 컨텍스트/복잡 RAG |
-
-> 외부 모델(Nova, Llama 등) 또는 다른 Claude 버전은 이 프로토타입에서 사용 금지. 최신 목록 확인은 AWS 콘솔 → Bedrock → Model access.
+최신 목록은 AWS 콘솔 → Bedrock → Model access에서 확인.
 
 ### Guardrails
 
 ```typescript
 const bedrock = new BedrockModel({
-  modelId: 'global.anthropic.claude-sonnet-4-6',
+  modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
   guardrailConfig: {
     guardrailIdentifier: 'my-guardrail-id',
     guardrailVersion: 'DRAFT',
@@ -207,7 +203,7 @@ import { VercelModel } from '@strands-agents/sdk/vercel'
 import { bedrock } from '@ai-sdk/amazon-bedrock'
 
 const vercel = new VercelModel({
-  model: bedrock('global.anthropic.claude-sonnet-4-6'),
+  model: bedrock('us.anthropic.claude-sonnet-4-20250514-v1:0'),
 })
 
 const agent = new Agent({ model: vercel })

@@ -1,486 +1,103 @@
-# AgentCore Evaluation 평가 가이드
+# AgentCore Evaluations 평가 가이드
 
-AgentCore Evaluation은 에이전트의 품질을 평가하고 프로덕션에서 실시간 모니터링을 제공합니다.
+AgentCore Evaluations는 에이전트·도구의 품질을 자동 평가하는 관리형 서비스입니다. Strands·LangGraph 등 프레임워크의 트레이스를 **OpenTelemetry/OpenInference** 계측으로 수집해 통일 형식으로 변환하고, **LLM-as-a-Judge** 기법(내장·커스텀 평가자)으로 채점합니다.
 
-## 핵심 개념
+> [!IMPORTANT]
+> 평가는 이제 `@aws/agentcore` CLI의 `agentcore add evaluator` / `agentcore add online-eval` / `agentcore run`(온디맨드) / `agentcore evals`(결과) / `agentcore pause`·`resume`(온라인 설정) 명령으로 다룹니다. 예전 자료의 `agentcore eval run`/`agentcore eval online create`/`agentcore eval evaluator register` CLI와 `from bedrock_agentcore_starter_toolkit.evaluation import EvaluationRunner, CustomEvaluator, OnlineEvaluation` 클래스는 **deprecated/가공된 API**입니다.
 
-### 평가 유형
+## 평가 모드
 
-| 유형 | 설명 | 사용 사례 |
-|------|------|----------|
-| **Offline Evaluation** | 테스트 데이터셋으로 평가 | 배포 전 품질 검증 |
-| **Online Evaluation** | 프로덕션 트래픽 샘플링 평가 | 실시간 품질 모니터링 |
+| 모드 | 설명 | 용도 |
+|------|------|------|
+| **Online** | 프로덕션 트래픽(트레이스)을 샘플링해 지속 평가 | 실시간 품질 모니터링 |
+| **On-demand** | 즉시 1회 실행 | CI/CD 파이프라인, 배포 전 검증 |
+| **Batch** | 다수 트레이스 일괄 평가 | 대규모 회귀 검사 |
+| **Dataset** | 테스트 데이터셋 기반 평가 | 골든셋 품질 검증 |
+| **Simulation** | 시뮬레이션된 상호작용 평가 | 시나리오/엣지케이스 |
 
-### 평가 레벨
+## 평가자
 
-| 레벨 | 설명 | 평가 대상 |
-|------|------|----------|
-| **SESSION** | 전체 세션 평가 | 대화 전체의 품질 |
-| **TRACE** | 단일 요청-응답 평가 | 개별 응답 품질 |
-| **TOOL_CALL** | 도구 호출 평가 | 도구 사용 정확성 |
+### 내장 평가자
 
-### 내장 평가자 (13개)
+ID 형식은 **`Builtin.EvaluatorName`** 입니다(예: `Builtin.Helpfulness`). 온라인·온디맨드 모두에서 사용 가능하며 공개되어 모든 사용자가 접근할 수 있습니다. 평가자 모델·프롬프트 템플릿은 수정할 수 없습니다.
 
-| 평가자 | 설명 |
-|--------|------|
-| **Helpfulness** | 응답의 유용성 |
-| **GoalSuccessRate** | 목표 달성률 |
-| **Correctness** | 정확성 |
-| **Faithfulness** | 컨텍스트 충실도 |
-| **Relevance** | 관련성 |
-| **Coherence** | 일관성 |
-| **Fluency** | 유창성 |
-| **Harmfulness** | 유해성 검사 |
-| **Toxicity** | 독성 검사 |
-| **ToolUseAccuracy** | 도구 사용 정확도 |
-| **ResponseLatency** | 응답 지연 시간 |
-| **TokenEfficiency** | 토큰 효율성 |
-| **ContextUtilization** | 컨텍스트 활용도 |
+대표적인 내장 평가자(전체 목록·레벨은 docs에서 확인): `Builtin.Helpfulness`, `Builtin.Correctness`, `Builtin.Faithfulness`, `Builtin.Relevance`, `Builtin.Coherence`, `Builtin.GoalSuccessRate`, `Builtin.ToolUseAccuracy` 등.
 
-## CLI 명령어
+평가자 ARN 형식:
+```
+arn:aws:bedrock-agentcore:::evaluator/Builtin.Helpfulness        # 내장(공개)
+arn:aws:bedrock-agentcore:region:account:evaluator/my-evaluator   # 커스텀(비공개)
+```
 
-### 오프라인 평가 실행
+### 커스텀 평가자
+
+- **LLM-as-a-Judge**: 모델·평가 척도·지시문을 정의.
+- **코드 기반(Lambda)**: AWS Lambda를 평가 엔진으로 사용해 결정적·도메인 특화 검증(스키마 검증, 수치 정확성, 워크플로우 준수, PII 탐지 등). LLM 판단보다 코드가 적합한 경우에 사용하며, 내장 평가자와 조합 가능.
+
+커스텀 평가 리소스는 비공개이며 IAM 자격증명/리소스 기반 정책으로 접근을 제어합니다.
+
+## CLI 워크플로우
 
 ```bash
-# 기본 평가 실행
-agentcore eval run \
-  --agent-name my-agent \
-  --dataset-file ./test_data.jsonl \
-  --evaluators Helpfulness,Correctness
+# 평가자 추가(프로젝트 구성)
+agentcore add evaluator
 
-# 상세 옵션과 함께 실행
-agentcore eval run \
-  --agent-name my-agent \
-  --dataset-file ./test_data.jsonl \
-  --evaluators Helpfulness,Correctness,Faithfulness \
-  --output-file ./eval_results.json \
-  --concurrency 5
+# 온라인 평가 설정 추가 → 배포
+agentcore add online-eval
+agentcore deploy
+
+# 온디맨드 평가 실행
+agentcore run
+
+# 결과 조회
+agentcore evals
+
+# 온라인 설정 일시중지 / 재개
+agentcore pause
+agentcore resume
 ```
 
-**옵션:**
-| 옵션 | 설명 |
-|------|------|
-| `--agent-name` | 평가할 에이전트 이름 |
-| `--dataset-file` | 테스트 데이터셋 파일 (JSONL) |
-| `--evaluators` | 사용할 평가자 목록 |
-| `--output-file` | 결과 출력 파일 |
-| `--concurrency` | 동시 실행 수 |
+> `agentcore add` 명령은 설정을 스캐폴딩하고 필요한 값을 프롬프트로 받습니다. 추가 후 `agentcore deploy`로 프로비저닝합니다.
 
-### 테스트 데이터셋 형식
+## 온라인 평가 (CDK / 선언적)
 
-```jsonl
-{"input": "What is the capital of France?", "expected_output": "Paris", "context": "Geography question"}
-{"input": "Calculate 15% of 200", "expected_output": "30", "context": "Math calculation"}
-{"input": "Summarize this article...", "expected_output": "...", "context": "Summarization task", "metadata": {"category": "news"}}
-```
+온라인 평가 설정은 트레이스 데이터 소스(CloudWatch Logs 또는 Agent Endpoint), 적용할 평가자 목록, 샘플링 비율·필터·실행 역할을 정의합니다. CDK로도 구성할 수 있습니다(`aws-cdk-lib/aws-bedrockagentcore`의 `OnlineEvaluationConfig`).
 
-### 평가자 목록 조회
+필수 파라미터: 설정 이름, 평가자 목록, 데이터 소스. 선택: `samplingPercentage`, `filters`, `executionStatus`, IAM 역할.
 
-```bash
-# 사용 가능한 평가자 목록
-agentcore eval evaluator list
+> 기본 한도(리전·계정당): 평가 설정 최대 1,000개, 동시 활성 최대 100개. 대형 리전에서 분당 입력/출력 최대 100만 토큰.
 
-# 특정 평가자 상세 정보
-agentcore eval evaluator describe --name Helpfulness
-```
+## 적절한 샘플링
 
-### 온라인 평가 설정
-
-```bash
-# 온라인 평가 생성
-agentcore eval online create \
-  --name prod-monitoring \
-  --agent-name my-agent \
-  --evaluators Helpfulness,Toxicity,ResponseLatency \
-  --sampling-rate 0.1 \
-  --level TRACE
-
-# 상세 옵션
-agentcore eval online create \
-  --name detailed-monitoring \
-  --agent-name my-agent \
-  --evaluators Helpfulness,GoalSuccessRate,ToolUseAccuracy \
-  --sampling-rate 0.05 \
-  --level SESSION \
-  --cloudwatch-namespace AgentCore/MyAgent
-```
-
-**옵션:**
-| 옵션 | 설명 | 기본값 |
-|------|------|--------|
-| `--sampling-rate` | 샘플링 비율 (0.0-1.0) | 0.1 |
-| `--level` | 평가 레벨 | TRACE |
-| `--cloudwatch-namespace` | CloudWatch 네임스페이스 | - |
-
-### 온라인 평가 관리
-
-```bash
-# 온라인 평가 목록
-agentcore eval online list
-
-# 온라인 평가 상태 확인
-agentcore eval online get --name prod-monitoring
-
-# 샘플링 비율 업데이트
-agentcore eval online update \
-  --name prod-monitoring \
-  --sampling-rate 0.2
-
-# 온라인 평가 비활성화
-agentcore eval online disable --name prod-monitoring
-
-# 온라인 평가 삭제
-agentcore eval online delete --name prod-monitoring
-```
-
-### 평가 결과 조회
-
-```bash
-# 최근 평가 결과
-agentcore eval results \
-  --agent-name my-agent \
-  --start-time "2024-01-01T00:00:00Z" \
-  --end-time "2024-01-31T23:59:59Z"
-
-# 특정 평가자 결과만
-agentcore eval results \
-  --agent-name my-agent \
-  --evaluator Helpfulness \
-  --output json
-```
-
-## 커스텀 평가자 생성
-
-### LLM-as-a-Judge 평가자
-
-```python
-from bedrock_agentcore_starter_toolkit.evaluation import (
-    CustomEvaluator,
-    EvaluationResult,
-    register_evaluator
-)
-
-class DomainExpertEvaluator(CustomEvaluator):
-    """도메인 전문가 관점의 평가자"""
-
-    name = "DomainExpertness"
-    description = "Evaluates responses from a domain expert perspective"
-
-    def __init__(self, domain: str):
-        self.domain = domain
-        self.judge_prompt = f"""
-You are an expert in {domain}. Evaluate the following response for:
-1. Technical accuracy
-2. Appropriate use of domain terminology
-3. Completeness of the answer
-
-Input: {{input}}
-Response: {{response}}
-Context: {{context}}
-
-Score from 1-5 and explain your reasoning.
-"""
-
-    async def evaluate(
-        self,
-        input: str,
-        response: str,
-        context: str = None,
-        expected_output: str = None
-    ) -> EvaluationResult:
-        # LLM을 사용하여 평가
-        evaluation = await self.call_judge_llm(
-            self.judge_prompt.format(
-                input=input,
-                response=response,
-                context=context or ""
-            )
-        )
-
-        return EvaluationResult(
-            score=evaluation.score,
-            reasoning=evaluation.reasoning,
-            metadata={"domain": self.domain}
-        )
-
-# 평가자 등록
-register_evaluator(DomainExpertEvaluator(domain="finance"))
-```
-
-### 규칙 기반 평가자
-
-```python
-from bedrock_agentcore_starter_toolkit.evaluation import (
-    CustomEvaluator,
-    EvaluationResult,
-    register_evaluator
-)
-
-class ResponseLengthEvaluator(CustomEvaluator):
-    """응답 길이 평가자"""
-
-    name = "ResponseLength"
-    description = "Evaluates if response length is appropriate"
-
-    def __init__(self, min_length: int = 50, max_length: int = 500):
-        self.min_length = min_length
-        self.max_length = max_length
-
-    async def evaluate(
-        self,
-        input: str,
-        response: str,
-        **kwargs
-    ) -> EvaluationResult:
-        length = len(response)
-
-        if length < self.min_length:
-            score = 0.5
-            reasoning = f"Response too short ({length} chars, min: {self.min_length})"
-        elif length > self.max_length:
-            score = 0.7
-            reasoning = f"Response too long ({length} chars, max: {self.max_length})"
-        else:
-            score = 1.0
-            reasoning = f"Response length appropriate ({length} chars)"
-
-        return EvaluationResult(
-            score=score,
-            reasoning=reasoning,
-            metadata={"length": length}
-        )
-
-register_evaluator(ResponseLengthEvaluator())
-```
-
-### CLI에서 커스텀 평가자 사용
-
-```bash
-# 커스텀 평가자 등록
-agentcore eval evaluator register \
-  --name DomainExpertness \
-  --script ./custom_evaluators.py \
-  --class DomainExpertEvaluator
-
-# 커스텀 평가자로 평가 실행
-agentcore eval run \
-  --agent-name my-agent \
-  --dataset-file ./test_data.jsonl \
-  --evaluators Helpfulness,DomainExpertness
-```
+| 환경 | 권장 샘플링 | 이유 |
+|------|------------|------|
+| 개발 | 100% | 모든 트레이스 평가 |
+| 스테이징 | ~50% | 충분한 샘플 |
+| 프로덕션 | 5–10% | 비용 최적화 |
 
 ## CloudWatch 연동
 
-### GenAI Observability 대시보드
-
-온라인 평가 결과는 CloudWatch GenAI Observability 대시보드에서 확인할 수 있습니다.
-
-```python
-import boto3
-
-cloudwatch = boto3.client('cloudwatch')
-
-# 평가 메트릭 대시보드 생성
-dashboard_body = {
-    "widgets": [
-        {
-            "type": "metric",
-            "properties": {
-                "title": "Helpfulness Score",
-                "metrics": [
-                    ["AgentCore/MyAgent", "Helpfulness", "AgentName", "my-agent"]
-                ],
-                "period": 300,
-                "stat": "Average"
-            }
-        },
-        {
-            "type": "metric",
-            "properties": {
-                "title": "Goal Success Rate",
-                "metrics": [
-                    ["AgentCore/MyAgent", "GoalSuccessRate", "AgentName", "my-agent"]
-                ],
-                "period": 300,
-                "stat": "Average"
-            }
-        },
-        {
-            "type": "metric",
-            "properties": {
-                "title": "Toxicity Alerts",
-                "metrics": [
-                    ["AgentCore/MyAgent", "Toxicity", "AgentName", "my-agent"]
-                ],
-                "period": 60,
-                "stat": "Maximum"
-            }
-        }
-    ]
-}
-
-cloudwatch.put_dashboard(
-    DashboardName='AgentCore-Evaluation',
-    DashboardBody=json.dumps(dashboard_body)
-)
-```
-
-### 평가 알람 설정
-
-```python
-# 낮은 품질 점수 알람
-cloudwatch.put_metric_alarm(
-    AlarmName='LowHelpfulnessScore',
-    MetricName='Helpfulness',
-    Namespace='AgentCore/MyAgent',
-    Statistic='Average',
-    Period=300,
-    EvaluationPeriods=3,
-    Threshold=0.7,
-    ComparisonOperator='LessThanThreshold',
-    AlarmActions=['arn:aws:sns:us-east-1:123456789012:alerts']
-)
-
-# 높은 독성 점수 알람
-cloudwatch.put_metric_alarm(
-    AlarmName='HighToxicityScore',
-    MetricName='Toxicity',
-    Namespace='AgentCore/MyAgent',
-    Statistic='Maximum',
-    Period=60,
-    EvaluationPeriods=1,
-    Threshold=0.5,
-    ComparisonOperator='GreaterThanThreshold',
-    AlarmActions=['arn:aws:sns:us-east-1:123456789012:critical-alerts']
-)
-```
-
-## 코드 통합
-
-### 프로그래매틱 평가 실행
-
-```python
-from bedrock_agentcore_starter_toolkit.evaluation import (
-    EvaluationRunner,
-    Evaluator
-)
-
-runner = EvaluationRunner(agent_name="my-agent")
-
-# 테스트 케이스 정의
-test_cases = [
-    {
-        "input": "What is machine learning?",
-        "expected_output": "Machine learning is...",
-        "context": "Technical explanation"
-    },
-    {
-        "input": "How do I reset my password?",
-        "expected_output": "To reset your password...",
-        "context": "Customer support"
-    }
-]
-
-# 평가 실행
-results = await runner.run(
-    test_cases=test_cases,
-    evaluators=[
-        Evaluator.HELPFULNESS,
-        Evaluator.CORRECTNESS,
-        Evaluator.FLUENCY
-    ]
-)
-
-# 결과 분석
-for result in results:
-    print(f"Input: {result.input}")
-    print(f"Scores: {result.scores}")
-    print(f"Average: {result.average_score}")
-    print("---")
-```
-
-### 온라인 평가 SDK 사용
-
-```python
-from bedrock_agentcore_starter_toolkit.evaluation import OnlineEvaluation
-
-# 온라인 평가 설정
-online_eval = OnlineEvaluation(
-    name="api-monitoring",
-    agent_name="my-agent",
-    evaluators=["Helpfulness", "Toxicity"],
-    sampling_rate=0.1,
-    level="TRACE"
-)
-
-# 활성화
-online_eval.enable()
-
-# 수동으로 평가 기록
-online_eval.record_evaluation(
-    input="User question",
-    response="Agent response",
-    metadata={"user_id": "user-123"}
-)
-
-# 결과 조회
-metrics = online_eval.get_metrics(
-    start_time=datetime(2024, 1, 1),
-    end_time=datetime.utcnow()
-)
-```
+온라인 평가 결과는 CloudWatch에 메트릭으로 발행되어 GenAI Observability 대시보드/알람과 연동됩니다. 낮은 품질·높은 독성 점수에 대한 알람은 표준 `put_metric_alarm`으로 설정합니다(`references/observability.md` 참조).
 
 ## Best Practices
 
-### 1. 다양한 평가자 조합
-
-```bash
-# 품질 종합 평가
-agentcore eval run \
-  --evaluators Helpfulness,Correctness,Coherence,Fluency
-
-# 안전성 평가
-agentcore eval run \
-  --evaluators Harmfulness,Toxicity
-
-# 도구 사용 평가
-agentcore eval run \
-  --evaluators ToolUseAccuracy,GoalSuccessRate
-```
-
-### 2. 적절한 샘플링 비율
-
-| 환경 | 권장 비율 | 이유 |
-|------|----------|------|
-| 개발 | 1.0 | 모든 요청 평가 |
-| 스테이징 | 0.5 | 충분한 샘플 확보 |
-| 프로덕션 | 0.05-0.1 | 비용 최적화 |
-
-### 3. 평가 레벨 선택
-
-| 레벨 | 사용 시점 |
-|------|----------|
-| SESSION | 대화형 에이전트, 목표 달성 평가 |
-| TRACE | 개별 응답 품질 평가 |
-| TOOL_CALL | 도구 사용 정확도 평가 |
+1. **모드 조합**: 배포 전 On-demand/Dataset로 검증, 배포 후 Online으로 지속 모니터링.
+2. **평가자 조합**: 품질(Helpfulness/Correctness/Coherence) + 안전성 + 도구 사용(ToolUseAccuracy/GoalSuccessRate).
+3. **코드 평가자 활용**: 스키마/수치/규정 준수처럼 결정적 검증은 Lambda 코드 기반 평가자가 LLM 판단보다 신뢰적.
+4. **계측 확인**: Strands/LangGraph의 OTEL/OpenInference 계측이 트레이스를 방출하는지 먼저 확인(`references/observability.md`).
 
 ## Troubleshooting
 
-### 평가 실패
-
-```bash
-# 평가 로그 확인
-agentcore eval logs --agent-name my-agent
-
-# 데이터셋 검증
-agentcore eval validate-dataset --file ./test_data.jsonl
-```
-
-### 일반적인 문제
-
 | 문제 | 원인 | 해결 |
 |------|------|------|
-| `InvalidDataset` | 데이터 형식 오류 | JSONL 형식 확인 |
-| `EvaluatorNotFound` | 존재하지 않는 평가자 | evaluator list로 확인 |
-| `QuotaExceeded` | 평가 한도 초과 | 샘플링 비율 감소 |
-| `LowSampleSize` | 샘플 부족 | 샘플링 비율 증가 |
+| 평가 결과 없음 | 트레이스 미수집 | OTEL 계측·Transaction Search 활성화 확인 |
+| `EvaluatorNotFound` | 잘못된 ID | `Builtin.X` 형식/커스텀 ARN 확인 |
+| 활성 설정 한도 초과 | 100개 초과 | 불필요한 온라인 설정 pause/삭제 |
+| 커스텀 평가자 접근 거부 | IAM 정책 | 리소스/자격증명 기반 정책 확인 |
+
+## 최신 정보 확인
+
+```
+mcp__aws-knowledge-mcp-server__aws___search_documentation(search_phrase="AgentCore evaluations built-in evaluators")
+mcp__bedrock-agentcore-mcp-server__search_agentcore_docs(query="evaluation online evaluator")
+```

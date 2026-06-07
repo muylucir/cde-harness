@@ -4,7 +4,7 @@
 
 ## 스토리지 서비스 비교
 
-| 기준 | DynamoDB | Aurora Serverless v2 | ElastiCache Redis | OpenSearch Serverless |
+| 기준 | DynamoDB | Aurora Serverless v2 | ElastiCache (Valkey/Redis) | OpenSearch Serverless |
 |------|----------|---------------------|------------------|---------------------|
 | **데이터 모델** | Key-Value / Document | Relational (SQL) | Key-Value / Hash / List | Document (JSON) + 역인덱스 |
 | **쿼리 언어** | PartiQL / API | SQL (PostgreSQL) | Redis 명령어 | OpenSearch DSL / SQL |

@@ -521,7 +521,7 @@ import { Agent, BedrockModel, SlidingWindowConversationManager } from '@strands-
 
 const agent = new Agent({
   model: new BedrockModel({
-    modelId: 'global.anthropic.claude-sonnet-4-6',
+    modelId: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
     region: 'us-west-2',
     temperature: 0.3,
   }),

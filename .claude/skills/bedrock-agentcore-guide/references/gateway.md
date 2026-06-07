@@ -1,356 +1,211 @@
 # AgentCore Gateway 서비스 가이드
 
-AgentCore Gateway는 기존 API를 MCP(Model Context Protocol) 도구로 변환하여 에이전트가 사용할 수 있게 합니다.
+AgentCore Gateway는 백엔드 도구 — AWS Lambda, API Gateway REST API, OpenAPI/Smithy로 기술된 서비스, 원격 MCP 서버 — 를 에이전트가 발견·호출할 수 있는 **단일 MCP(Model Context Protocol) 엔드포인트**로 노출하는 관리형 MCP 서버입니다. 인바운드 인증(JWT/IAM/없음), 아웃바운드 인증(IAM/OAuth/API Key), 프로토콜 변환, 의미 기반 도구 검색을 처리합니다.
+
+> [!IMPORTANT]
+> 예전 자료의 `agentcore gateway create-mcp-gateway` / `create-mcp-gateway-target` CLI와 `from bedrock_agentcore_starter_toolkit.tools import MCPGatewayTool` 클래스는 **deprecated/가공된 API**입니다. 현재는 `agentcore add gateway` / `agentcore add gateway-target` CLI + `agentcore.json`로 구성하고, 에이전트는 게이트웨이의 **MCP 엔드포인트**에 일반 MCP 클라이언트(예: Strands `MCPClient`)로 연결합니다.
 
 ## 핵심 개념
 
-### Gateway 구성 요소
-
 | 구성 요소 | 설명 |
 |----------|------|
-| **MCP Gateway** | API를 MCP 프로토콜로 노출하는 게이트웨이 |
-| **Target** | Gateway에 연결된 실제 API 백엔드 |
-| **Policy Engine** | 도구 호출에 대한 권한 제어 |
-| **Authentication** | OAuth2, JWT, Cognito 인증 |
+| **Gateway** | 도구를 노출하는 MCP 엔드포인트 |
+| **Target** | 게이트웨이에 연결된 백엔드(도구 공급원) |
+| **인바운드 인증** | 게이트웨이 호출자 인증: `NONE` / `AWS_IAM` / `CUSTOM_JWT` |
+| **아웃바운드 인증** | 게이트웨이→백엔드 인증: IAM 역할 / OAuth / API Key |
+| **의미 검색** | 도구 카탈로그에서 관련 도구를 의미 기반으로 선택 |
 
-### 지원되는 Target 유형
+### Target 유형
 
-| 유형 | 설명 | 사용 사례 |
+| 유형(CLI `--type`) | agentcore.json `targetType` | 사용 사례 |
 |------|------|----------|
-| **Lambda** | AWS Lambda 함수 | 커스텀 로직, 데이터 처리 |
-| **OpenAPI** | OpenAPI 스펙 기반 REST API | 기존 REST API 통합 |
-| **Smithy** | AWS Smithy 모델 | AWS 서비스 스타일 API |
+| `lambda-function-arn` | `lambdaFunctionArn` / `lambda` | Lambda + 인라인 도구 스키마 |
+| `mcp-server` | `mcpServer` | 원격 MCP 서버(HTTPS) |
+| `api-gateway` | `apiGateway` | API Gateway REST API |
+| `open-api-schema` | `openApiSchema` | OpenAPI 스펙 기반 HTTP API |
+| `smithy-model` | `smithyModel` | AWS/Smithy 스타일 API |
+
+### 아웃바운드 인증 지원 매트릭스
+
+| Target | IAM 역할 | OAuth CC(2LO) | OAuth AC(3LO) | API Key | None |
+|--------|----------|----------|----------|---------|------|
+| apiGateway | ✓ | ✗ | ✗ | ✓ | ✗ |
+| lambda | ✓ | ✗ | ✗ | ✗ | ✗ |
+| mcpServer | ✗ | ✓ | ✗ | ✗ | ✓ |
+| openApiSchema | ✗ | ✓ | ✓ | ✓ | ✗ |
+| smithyModel | ✓ | ✓ | ✓ | ✗ | ✗ |
 
 ## CLI 워크플로우
 
-### 1. MCP Gateway 생성
+### 1. Gateway 추가
 
 ```bash
-# 기본 게이트웨이 생성
-agentcore gateway create-mcp-gateway --name my-api-gateway
+# 인증 없음(개발/테스트)
+agentcore add gateway --name MyGateway
 
-# 설명과 함께 생성
-agentcore gateway create-mcp-gateway \
-  --name customer-service-gateway \
-  --description "Customer service API tools"
+# CUSTOM_JWT(프로덕션)
+agentcore add gateway --name MyGateway \
+  --authorizer-type CUSTOM_JWT \
+  --discovery-url https://idp.example.com/.well-known/openid-configuration \
+  --allowed-audience my-api \
+  --allowed-clients my-client-id
 ```
 
-**Create 옵션:**
-| 옵션 | 설명 | 필수 |
-|------|------|------|
-| `--name` | 게이트웨이 이름 | Yes |
-| `--description` | 설명 | No |
-| `--tags` | 태그 (key=value) | No |
+주요 플래그: `--name`, `--description`, `--authorizer-type`(`NONE`|`AWS_IAM`|`CUSTOM_JWT`), `--discovery-url`, `--allowed-audience`, `--allowed-clients`, `--allowed-scopes`, `--no-semantic-search`, `--exception-level`(`NONE`|`DEBUG`), `--policy-engine`, `--policy-engine-mode`(`LOG_ONLY`|`ENFORCE`).
 
-### 2. Lambda Target 추가
+### 2. Target 추가
 
 ```bash
-# Lambda 함수를 타겟으로 추가
-agentcore gateway create-mcp-gateway-target \
-  --gateway-name my-api-gateway \
-  --target-name weather-tool \
-  --type lambda \
-  --lambda-arn arn:aws:lambda:us-east-1:123456789012:function:GetWeather \
-  --description "Get current weather for a location"
+# 원격 MCP 서버
+agentcore add gateway-target --name WeatherTools --type mcp-server \
+  --endpoint https://mcp.example.com/mcp --gateway MyGateway
+
+# Lambda + 도구 스키마 파일
+agentcore add gateway-target --name MyLambdaTools --type lambda-function-arn \
+  --lambda-arn arn:aws:lambda:us-east-1:123:function:my-func \
+  --tool-schema-file tools.json --gateway MyGateway
+
+# OpenAPI + OAuth(미리 만든 명명 자격증명 사용)
+agentcore add gateway-target --name PetStoreAPI --type open-api-schema \
+  --schema specs/petstore.json --gateway MyGateway \
+  --outbound-auth oauth --credential-name MyOAuth
 ```
 
-**Lambda Target 옵션:**
-| 옵션 | 설명 |
-|------|------|
-| `--gateway-name` | 게이트웨이 이름 |
-| `--target-name` | 타겟 이름 (도구 이름) |
-| `--type` | `lambda` |
-| `--lambda-arn` | Lambda 함수 ARN |
-| `--description` | 도구 설명 |
+### 3. 자격증명 생성 (비밀값은 CLI로)
 
-### 3. OpenAPI Target 추가
+OpenAPI/MCP OAuth·API Key 타겟은 자격증명을 **먼저** 만들고 이름으로 참조합니다. 비밀값을 인라인 파라미터로 넘기지 마세요(LLM 컨텍스트 노출 위험).
 
 ```bash
-# OpenAPI 스펙 기반 타겟 추가
-agentcore gateway create-mcp-gateway-target \
-  --gateway-name my-api-gateway \
-  --target-name rest-api \
-  --type openapi \
-  --openapi-spec-url https://api.example.com/openapi.json \
-  --base-url https://api.example.com
+agentcore add credential --name OpenAI --api-key sk-...
+agentcore add credential --name MyOAuth --type oauth \
+  --client-id ... --client-secret ... --discovery-url ...
 ```
 
-**OpenAPI Target 옵션:**
-| 옵션 | 설명 |
-|------|------|
-| `--openapi-spec-url` | OpenAPI 스펙 URL 또는 파일 경로 |
-| `--base-url` | API 베이스 URL |
-| `--operations` | 포함할 작업 목록 (선택적) |
-
-### 4. Smithy Target 추가
+### 4. 배포 / 상태
 
 ```bash
-# Smithy 모델 기반 타겟 추가
-agentcore gateway create-mcp-gateway-target \
-  --gateway-name my-api-gateway \
-  --target-name smithy-api \
-  --type smithy \
-  --smithy-model-path ./model.smithy \
-  --endpoint https://api.example.com
+agentcore deploy -y
+agentcore status --type gateway
 ```
 
-### 5. Gateway 목록 조회
-
-```bash
-# 모든 게이트웨이 목록
-agentcore gateway list-mcp-gateways
-
-# JSON 출력
-agentcore gateway list-mcp-gateways --output json
-```
-
-### 6. Gateway 상세 조회
-
-```bash
-# 특정 게이트웨이 정보
-agentcore gateway get-mcp-gateway --name my-api-gateway
-```
-
-### 7. Target 목록 조회
-
-```bash
-# 게이트웨이의 모든 타겟 목록
-agentcore gateway list-mcp-gateway-targets --gateway-name my-api-gateway
-```
-
-### 8. Gateway 삭제
-
-```bash
-# 게이트웨이 삭제 (타겟도 함께 삭제됨)
-agentcore gateway delete-mcp-gateway --name my-api-gateway
-
-# 타겟만 삭제
-agentcore gateway delete-mcp-gateway-target \
-  --gateway-name my-api-gateway \
-  --target-name weather-tool
-```
-
-## 코드 통합
-
-### Gateway 도구 사용
-
-```python
-from bedrock_agentcore_starter_toolkit import BedrockAgentCoreApp
-from bedrock_agentcore_starter_toolkit.tools import MCPGatewayTool
-from strands import Agent
-from strands.models import BedrockModel
-
-app = BedrockAgentCoreApp()
-
-@app.entrypoint
-def gateway_agent(prompt: str) -> str:
-    model = BedrockModel(model_id="global.anthropic.claude-sonnet-4-6")
-
-    # Gateway 도구 생성
-    gateway_tool = MCPGatewayTool(gateway_name="my-api-gateway")
-
-    # Agent에 도구 추가
-    agent = Agent(
-        model=model,
-        tools=[gateway_tool],
-        system_prompt="You can use external APIs through the gateway tools."
-    )
-
-    response = agent(prompt)
-    return response.message
-
-if __name__ == "__main__":
-    app.run()
-```
-
-### 다중 Gateway 사용
-
-```python
-from bedrock_agentcore_starter_toolkit.tools import MCPGatewayTool
-
-# 여러 Gateway 도구 생성
-weather_gateway = MCPGatewayTool(gateway_name="weather-gateway")
-calendar_gateway = MCPGatewayTool(gateway_name="calendar-gateway")
-crm_gateway = MCPGatewayTool(gateway_name="crm-gateway")
-
-# Agent에 모든 도구 추가
-agent = Agent(
-    model=model,
-    tools=[weather_gateway, calendar_gateway, crm_gateway]
-)
-```
-
-## Lambda 함수 예시
-
-### 도구용 Lambda 함수
-
-```python
-# lambda_function.py
-import json
-
-def lambda_handler(event, context):
-    """MCP Gateway에서 호출되는 Lambda 함수"""
-
-    # 입력 파라미터 추출
-    params = event.get("parameters", {})
-    location = params.get("location", "Unknown")
-
-    # 비즈니스 로직 실행
-    weather_data = get_weather(location)
-
-    # 응답 반환
-    return {
-        "statusCode": 200,
-        "body": json.dumps({
-            "location": location,
-            "temperature": weather_data["temp"],
-            "conditions": weather_data["conditions"]
-        })
-    }
-
-def get_weather(location: str) -> dict:
-    # 실제 날씨 API 호출
-    return {"temp": 22, "conditions": "Sunny"}
-```
-
-### Lambda 함수 스키마 정의
+## agentcore.json — agentCoreGateways 섹션
 
 ```json
 {
-    "name": "get_weather",
-    "description": "Get current weather for a specified location",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "location": {
-                "type": "string",
-                "description": "City name or coordinates"
-            }
-        },
-        "required": ["location"]
+  "agentCoreGateways": [
+    {
+      "name": "MyGateway",
+      "description": "Gateway for agent tools",
+      "targets": [
+        { "name": "WeatherTools", "targetType": "mcpServer",
+          "endpoint": "https://mcp.example.com/mcp" },
+        { "name": "MyLambdaTools", "targetType": "lambdaFunctionArn",
+          "lambdaArn": "arn:aws:lambda:us-east-1:123:function:f",
+          "toolDefinitions": [
+            { "name": "get_weather", "description": "Get weather for a location",
+              "inputSchema": { "type": "object",
+                "properties": { "location": { "type": "string" } },
+                "required": ["location"] } }
+          ] }
+      ]
     }
+  ]
 }
 ```
 
-## 인증 설정
+**제약/주의:**
+- 게이트웨이 `name`: 패턴 `^[0-9a-zA-Z](?:[0-9a-zA-Z-]*[0-9a-zA-Z])?$`, 최대 100자.
+- 노출되는 도구 이름은 **`타겟명___도구명`**(언더스코어 3개) 형식 — Cedar 정책의 액션 이름과 일치해야 함.
+- mcpServer 타겟의 도구 스키마는 자기완결적이어야 함(`$ref`, `$defs`, `$anchor`, `$dynamicRef`, `$dynamicAnchor` 불가).
 
-### OAuth2 인증
+## 에이전트에서 Gateway 도구 사용
 
-```bash
-# OAuth2 인증 설정
-agentcore gateway update-mcp-gateway \
-  --name my-api-gateway \
-  --auth-type oauth2 \
-  --auth-config '{
-    "client_id": "your-client-id",
-    "client_secret_arn": "arn:aws:secretsmanager:...",
-    "token_url": "https://auth.example.com/token",
-    "scopes": ["read", "write"]
-  }'
+Gateway는 표준 MCP 엔드포인트이므로 일반 MCP 클라이언트로 연결합니다. 인바운드 인증이 있으면 JWT 베어러 토큰이 필요합니다.
+
+```python
+from strands import Agent
+from strands.models import BedrockModel
+from strands.tools.mcp import MCPClient
+from mcp.client.streamable_http import streamablehttp_client
+
+gateway_url = "https://<gateway-id>.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp"
+token = "<jwt-access-token>"  # AgentCore Identity 등에서 획득
+
+gateway = MCPClient(lambda: streamablehttp_client(
+    gateway_url, headers={"Authorization": f"Bearer {token}"}
+))
+
+with gateway:
+    tools = gateway.list_tools_sync()
+    agent = Agent(
+        model=BedrockModel(model_id="global.anthropic.claude-sonnet-4-6"),
+        tools=tools,
+        system_prompt="You can use external APIs through the gateway tools.",
+    )
+    print(agent("샌프란시스코 날씨 알려줘").message)
 ```
 
-### API Key 인증
+## 도구용 Lambda 예시
 
-```bash
-# API Key 인증 설정
-agentcore gateway update-mcp-gateway \
-  --name my-api-gateway \
-  --auth-type api_key \
-  --auth-config '{
-    "api_key_secret_arn": "arn:aws:secretsmanager:...",
-    "header_name": "X-API-Key"
-  }'
+```python
+# lambda_function.py — Gateway가 호출
+def lambda_handler(event, context):
+    # Gateway는 도구 입력을 event로 전달
+    location = event.get("location", "Unknown")
+    weather = get_weather(location)
+    return {"location": location, "temperature": weather["temp"],
+            "conditions": weather["conditions"]}
+
+def get_weather(location: str) -> dict:
+    return {"temp": 22, "conditions": "Sunny"}
+```
+
+도구 스키마(`--tool-schema-file tools.json` 또는 `toolDefinitions`)로 입력 형식을 선언합니다:
+
+```json
+[
+  { "name": "get_weather", "description": "Get current weather for a location",
+    "inputSchema": { "type": "object",
+      "properties": { "location": { "type": "string", "description": "City name" } },
+      "required": ["location"] } }
+]
 ```
 
 ## Policy Engine 연동
 
-### Gateway에 Policy Engine 연결
+Gateway에 Policy Engine을 붙여 도구 호출 권한을 Cedar로 제어합니다. 항상 `LOG_ONLY`로 먼저 배포하세요.
 
 ```bash
-# Policy Engine을 Gateway에 연결 (ENFORCE 모드)
-agentcore policy attach-policy-engine \
-  --policy-engine-name my-policy-engine \
-  --gateway-name my-api-gateway \
-  --mode ENFORCE
+agentcore add gateway --name MyGateway \
+  --policy-engine MyPolicyEngine --policy-engine-mode LOG_ONLY
 ```
 
-### Cedar 정책 예시
+또는 `agentcore.json`의 게이트웨이에 `policyEngineConfiguration` 블록 추가. 자세한 내용은 `references/policy.md`.
 
-```cedar
-// 특정 도구 호출 허용
-permit (
-    principal,
-    action == TargetName::Action::"weather-tool___get_weather",
-    resource
-);
+## 디버깅
 
-// 특정 조건에서만 허용
-permit (
-    principal,
-    action == TargetName::Action::"crm-tool___update_customer",
-    resource
-) when {
-    principal.role == "admin"
-};
-```
-
-## Best Practices
-
-### 1. 도구 설명 최적화
-
-```bash
-# 명확하고 구체적인 설명 사용
-agentcore gateway create-mcp-gateway-target \
-  --gateway-name my-gateway \
-  --target-name search-products \
-  --description "Search for products by name, category, or price range. Returns product ID, name, price, and availability."
-```
-
-### 2. 에러 처리
-
-```python
-# Lambda 함수에서 적절한 에러 응답
-def lambda_handler(event, context):
-    try:
-        result = process_request(event)
-        return {"statusCode": 200, "body": json.dumps(result)}
-    except ValueError as e:
-        return {"statusCode": 400, "body": json.dumps({"error": str(e)})}
-    except Exception as e:
-        return {"statusCode": 500, "body": json.dumps({"error": "Internal error"})}
-```
-
-### 3. 버전 관리
-
-```bash
-# Lambda 버전 지정
-agentcore gateway create-mcp-gateway-target \
-  --gateway-name my-gateway \
-  --target-name versioned-tool \
-  --type lambda \
-  --lambda-arn arn:aws:lambda:us-east-1:123456789012:function:MyFunc:v2
-```
+- **상세 오류**: 게이트웨이 생성/업데이트 시 `--exception-level DEBUG`로 Lambda/authorizer/타겟 검증 오류를 노출(프로덕션에선 생략).
+- **대화형 테스트**: [MCP Inspector](https://modelcontextprotocol.io/)에 게이트웨이 URL + Authorization 헤더를 넣어 `tools/list`·`tools/call` 확인.
+- **로그**: `aws logs tail /aws/bedrock-agentcore/gateways/<ID> --follow`. 관리 이벤트는 CloudTrail, 호출(InvokeGateway) 이벤트는 데이터 이벤트로 별도 활성화 필요.
 
 ## Troubleshooting
 
-### Gateway 연결 실패
-
-```bash
-# 1. Gateway 상태 확인
-agentcore gateway get-mcp-gateway --name my-gateway
-
-# 2. Target 상태 확인
-agentcore gateway list-mcp-gateway-targets --gateway-name my-gateway
-
-# 3. Lambda 권한 확인
-aws lambda get-policy --function-name MyFunction
-```
-
-### 일반적인 문제
-
 | 문제 | 원인 | 해결 |
 |------|------|------|
-| `GatewayNotFound` | 존재하지 않는 gateway | gateway list로 확인 |
-| `TargetInvocationError` | Lambda 실행 오류 | CloudWatch 로그 확인 |
-| `AuthenticationFailed` | 인증 정보 오류 | Secrets Manager 확인 |
-| `PolicyDenied` | 정책에 의해 차단 | Cedar 정책 확인 |
+| Gateway `CREATING`에서 멈춤 | 서비스 역할 신뢰 정책 | `bedrock-agentcore.amazonaws.com` 신뢰 확인, `statusReasons` 조회 |
+| Target `SYNCHRONIZE_UNSUCCESSFUL` | MCP 버전/스키마 문제 | 업스트림 MCP 2025-06-18/2025-03-26 지원, 스키마 `$ref` 제거 |
+| `ValidationException` (UpdateGateway) | 일부 필드 누락 | `gateway_get`로 현재 값 조회 후 변경 없는 필드도 함께 전달 |
+| 타겟 호출 `AccessDenied` | 서비스 역할 권한 | `lambda:InvokeFunction` 등, OAuth/API Key는 토큰/시크릿 권한 확인 |
+
+### IAM 권한
+
+**게이트웨이 관리:** `bedrock-agentcore:CreateGateway/GetGateway/UpdateGateway/DeleteGateway/ListGateways`, `*GatewayTarget`, `SynchronizeGatewayTargets`, `*ResourcePolicy`, `*WorkloadIdentity`, `*CredentialProvider`, `iam:PassRole` (리소스 `arn:aws:bedrock-agentcore:*:*:*gateway*`).
+
+**게이트웨이 서비스 역할:** `bedrock-agentcore.amazonaws.com` 신뢰 + 타겟별 권한(Lambda `lambda:InvokeFunction`, API Gateway `execute-api:Invoke`, OAuth/API Key 시 `GetWorkloadAccessToken`·`GetResourceOauth2Token`/`GetResourceApiKey`·`secretsmanager:GetSecretValue`, S3 스키마 시 `s3:GetObject`).
+
+## 최신 정보 확인
+
+```
+mcp__bedrock-agentcore-mcp-server__get_gateway_guide()
+mcp__bedrock-agentcore-mcp-server__search_agentcore_docs(query="gateway ...")
+```

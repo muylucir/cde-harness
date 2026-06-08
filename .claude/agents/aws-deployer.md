@@ -135,6 +135,20 @@ cd infra && npm install
 
 CDK 컴파일 검증: `cd infra && npx tsc --noEmit` (에러 시 수정, 최대 3회)
 
+**CDK charset 검증 (필수)**: CDK 코드 생성 직후 `node .pipeline/scripts/check-cdk-charset.mjs`를 실행한다.
+- IAM/CloudFormation 텍스트 필드(특히 IAM Role `description`/`roleName`, CfnOutput `description`)는 **ASCII + Latin-1만 허용**(허용 코드포인트: `0x09 0x0A 0x0D 0x20-0x7E 0x00A1-0x00FF`)한다. em dash(—)·en dash(–)·ellipsis(…)·스마트 따옴표(' ' " ")·NBSP·한국어 같은 비-Latin1 문자를 **문자열 리터럴**에 넣으면 `CreateRole`이 거부되고 스택이 `ROLLBACK_COMPLETE`로 전체 롤백된다.
+- **규칙**: `infra/bin`·`infra/lib`의 모든 string literal(특히 `description:`)은 ASCII로 작성한다. 한국어 설명은 **코드 주석(`//`)으로** 옮긴다 (주석은 CFN으로 나가지 않으므로 검사 대상이 아니다). 프로젝트 산문에서 흔히 쓰는 em dash(—)를 코드 문자열에 그대로 복사하지 않는다 — 하이픈(`-`)을 쓴다.
+- exit 1이면 보고된 `file:line:col`의 문자를 치환한 뒤 재실행한다 (`tsc --noEmit`는 이 문제를 잡지 못한다 — 컴파일은 통과하지만 배포가 깨진다).
+
+**CDK synth + CFN 제약 검증 (필수)**: `cd infra && npx cdk synth >/dev/null` 후, 루트에서 `node .pipeline/scripts/check-cdk-synth.mjs`를 실행한다.
+- 합성된 CloudFormation 템플릿에서 **서비스 허용 범위를 벗어난 숫자 prop**을 검사한다. 대표 함정:
+  - CloudFront `OriginReadTimeout`: **1–120초**(기본 30). `Duration.minutes(3)`(=180초) 같은 값은 배포 시 `originReadTimeout is not within the valid range`로 `CREATE_FAILED` + 롤백.
+  - CloudFront `OriginKeepaliveTimeout`: 1–300초(기본 5). `ConnectionTimeout`: 1–10초. `ConnectionAttempts`: 1–3. `ResponseCompletionTimeout` ≥ `OriginReadTimeout`.
+  - Lambda `Timeout`: 1–900초(최대 15분). `MemorySize`: 128–10240MB.
+  - SQS `VisibilityTimeout`: 0–43200초, `MessageRetentionPeriod`: 60–1209600초, `ReceiveMessageWaitTimeSeconds`: 0–20.
+- **규칙**: 타임아웃/메모리 등 숫자 prop은 위 범위 안에서 설정한다. CloudFront 응답 타임아웃이 120초를 넘어야 하면 코드로 우회하지 말고 **CloudFront 응답 타임아웃 쿼터 상향**을 사용자에게 안내한다 (Service Quotas / 콘솔).
+- exit 1이면 보고된 `리소스타입 [LogicalId] -> prop` 위치의 값을 범위 안으로 조정한 뒤 재실행한다 (`tsc --noEmit`는 못 잡는다 — 값의 타입은 number라 통과하지만 배포가 깨진다).
+
 ### Step 2: 듀얼 모드 데이터 레이어
 
 스킬의 데이터 레이어 패턴(references/data-layer.md)을 참조하여:
@@ -216,6 +230,8 @@ CDK 컴파일 검증: `cd infra && npx tsc --noEmit` (에러 시 수정, 최대 
 |----------|------|
 | `aws-architecture.json` 미존재 | 에러 + "aws-architect를 먼저 실행하세요" |
 | CDK TypeScript 컴파일 에러 | 에러 분석 + 수정 + 최대 3회 |
+| CDK charset 위반 (`check-cdk-charset.mjs` exit 1) | 보고된 `file:line:col`의 비-Latin1 문자(em dash 등)를 ASCII로 치환 + 재실행. 한국어는 주석으로 이동 |
+| CFN 범위 제약 위반 (`check-cdk-synth.mjs` exit 1) | 보고된 `리소스 [LogicalId] -> prop`의 범위 밖 숫자(CloudFront `OriginReadTimeout` > 120 등)를 범위 안으로 조정 + 재실행. 한도 상향이 필요하면 쿼터 상향 안내 |
 | `cdk bootstrap` 실패 | AWS 자격 증명/리전 확인 안내 + 1회 재시도 |
 | `cdk deploy` 실패 | CloudFormation 에러 파싱 + 1회 재시도. 2회 실패 시 `cdk destroy` 안내 |
 | `npm run build` 실패 | import/타입 에러 수정 + 최대 3회 |
@@ -224,6 +240,8 @@ CDK 컴파일 검증: `cd infra && npx tsc --noEmit` (에러 시 수정, 최대 
 ## 검증 체크리스트
 
 - [ ] `infra/` CDK 컴파일 성공 (`npx tsc --noEmit`)
+- [ ] **CDK charset 검사 통과** (`node .pipeline/scripts/check-cdk-charset.mjs` exit 0 — IAM description 등 문자열 리터럴에 em dash/비-Latin1 문자 없음)
+- [ ] **CDK synth + CFN 제약 검사 통과** (`cdk synth` 후 `node .pipeline/scripts/check-cdk-synth.mjs` exit 0 — CloudFront `OriginReadTimeout` 등 범위 밖 숫자 prop 없음)
 - [ ] `cdk deploy` 성공
 - [ ] `.env.local` + `.env.local.example` 생성됨
 - [ ] DataStore 인터페이스 + Store 구현 + Factory 구현됨

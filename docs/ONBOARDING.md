@@ -395,6 +395,10 @@ npm run dev
 
 **드리프트 차단 스크립트**: `check-stages-sync.mjs`, `check-allowed-models-sync.mjs`(통합 진입점), `check-spec-model-id.mjs`, `check-agent-models.mjs`, `cross-check-endpoints.mjs`, `check-envelope.mjs`, `check-store-naming.mjs`, `check-strands-rule13.mjs`, `check-bedrock-no-direct-import.mjs`, `check-reviewer-skills.mjs`, `check-review-categories.mjs`, `check-markdown-render.mjs`가 명령/에이전트/코드 ↔ SSOT drift를 자동 차단합니다. (`check-allowed-models-sync.mjs`가 sub-check [B]~[K]로 대부분을 통합 실행합니다.)
 
+**배포 전 검증 스크립트** (`/awsarch` Phase 2 CHECKPOINT + Phase 3 배포 직전 실행, `tsc`가 못 잡는 "컴파일은 되지만 배포가 거부되는" 표면을 차단):
+- `check-cdk-charset.mjs` — `infra/` CDK 정의 코드의 문자열 리터럴(특히 IAM Role `description`)에 CloudFormation이 거부하는 비-Latin1 문자(em dash 등)가 있는지 검사. 위반 시 `CreateRole` 거부로 `ROLLBACK_COMPLETE` 되는 것을 사전 차단. `infra/` 미생성 시 skip.
+- `check-cdk-synth.mjs` — 합성된 `infra/cdk.out/*.template.json`을 읽어 서비스 허용 범위를 벗어난 숫자 prop(CloudFront `OriginReadTimeout` > 120초, Lambda `Timeout` > 900초, SQS 타임아웃 등)을 검사. 데이터 기반 카탈로그라 제약 추가가 쉬움. `cdk synth` 이후 실행해야 하며, 템플릿 없으면 skip.
+
 ---
 
 ## 7. 하지 말아야 할 것

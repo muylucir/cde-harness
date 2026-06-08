@@ -215,6 +215,8 @@ node .pipeline/scripts/checkpoint.mjs start aws-deployer
 - [ ] `npm run build` 성공 (Next.js 빌드, DynamoDB 모드)
 - [ ] `DATA_SOURCE=memory npm run build` 성공 (mock 모드 여전히 동작 — `--cdk`는 배포가 없으므로 mock이 기본 동작 경로)
 - [ ] `cd infra && npx tsc --noEmit` 성공 (CDK 컴파일)
+- [ ] **CDK charset 검사 통과** — `node .pipeline/scripts/check-cdk-charset.mjs` (exit 0). CDK 문자열 리터럴(특히 IAM Role `description`/`roleName`)에 em dash(—)·ellipsis(…)·스마트 따옴표·NBSP·한국어 같은 비-Latin1 문자가 있으면 `CreateRole`이 거부되고 스택이 `ROLLBACK_COMPLETE`로 롤백된다. **실패 시 `aws-deployer`에 피드백 → 수정 (Phase 2 수정 카운트에 포함, 최대 2회)**. 이 게이트는 `tsc --noEmit`가 잡지 못하는 런타임/배포 표면(CFN 텍스트 필드 charset)을 막는다 — 컴파일은 통과해도 배포가 깨지는 케이스다.
+- [ ] **CDK synth + CFN 제약 검사 통과** — `cd infra && npx cdk synth >/dev/null` 후 (루트에서) `node .pipeline/scripts/check-cdk-synth.mjs` (exit 0). 합성된 CloudFormation 템플릿에서 **서비스 허용 범위를 벗어난 숫자 값**(예: CloudFront `OriginReadTimeout` > 120초, Lambda `Timeout` > 900초, SQS `VisibilityTimeout` > 43200초)을 잡는다. 이런 값은 타입은 `number`라 `tsc`는 통과하지만 배포 시 `Invalid request ... not within the valid range`로 `CREATE_FAILED` + 롤백된다. **실패 시 `aws-deployer`에 피드백 → 수정 (Phase 2 수정 카운트에 포함, 최대 2회)**.
 
 - **`--cdk` 모드**: Phase 2 CHECKPOINT 통과 직후 **여기서 종료** (Phase 3 배포로 진행하지 않음). 실제 `cdk deploy`가 없으므로 AWS 비용은 발생하지 않는다. `08-aws-infra/`에는 설계 산출물(`aws-architecture.json/md`)이 있고, `infra/` CDK 프로젝트와 듀얼 모드 데이터 레이어가 디스크에 남는다.
   ```bash
@@ -250,6 +252,19 @@ node .pipeline/scripts/checkpoint.mjs start aws-deployer
 ## Phase 3: CDK 배포
 
 - `aws-deployer` agent가 CDK 배포를 실행 (Step 4)
+
+**3-0. 배포 전 정적 가드** (필수, `cdk bootstrap` 이전): "tsc는 통과하지만 배포가 거부되는" 표면을 마지막으로 차단한다.
+```bash
+# (a) charset: CDK 문자열 리터럴의 비-Latin1 문자 (IAM description em dash 등)
+node .pipeline/scripts/check-cdk-charset.mjs
+
+# (b) CFN 범위 제약: 합성 템플릿의 범위 밖 숫자 값 (CloudFront originReadTimeout > 120 등)
+cd infra && npx cdk synth >/dev/null && cd ..
+node .pipeline/scripts/check-cdk-synth.mjs
+```
+- 둘 다 exit 0이어야 다음으로 진행한다. exit 1이면 `aws-deployer`에 피드백하여 (a) 위반 문자열 리터럴 또는 (b) 범위 밖 숫자 prop을 수정한 뒤 재실행한다.
+- Phase 2를 건너뛰고 `/pipeline-from aws-deployer`로 직접 재개하는 경우에도 이 가드가 동작하므로, IAM `description` em dash나 CloudFront `originReadTimeout=180` 같은 값으로 인한 `ROLLBACK_COMPLETE`를 배포 실행 전에 차단한다. (Phase 2 CHECKPOINT의 동일 게이트와 중복이지만, 비용이 발생하는 `cdk deploy` 직전의 마지막 방어선이다.)
+- `check-cdk-synth.mjs`는 합성 템플릿(`infra/cdk.out/*.template.json`)을 읽으므로 **반드시 `cdk synth` 이후** 실행한다. 위 3-2 `cdk diff`가 내부적으로 synth를 수행하지만, 가드의 독립성을 위해 여기서 명시적으로 synth한다.
 
 **3-1. CDK Bootstrap** (최초 1회):
 ```bash

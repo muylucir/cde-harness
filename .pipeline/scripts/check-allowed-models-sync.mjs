@@ -51,6 +51,10 @@
  *   (M) consumers[] 경로 실존 (이 파일 본문):
  *       — allowed-models.json.consumers[] 항목의 선행 파일 경로가 실제 존재하는지 검증(D2-W4 죽은 메타).
  *
+ *   (N) settings.json Bash 가드 hook DENY/ALLOW 매트릭스 (check-hook-guard.mjs sub-call)
+ *       — PreToolUse Bash 가드를 추출·재생해 state.json 우회/비가역 명령 차단이 살아있는지 검증.
+ *         node 스크립트파일 우회(P1-A3) 봉합 후 회귀 방지.
+ *
  * 사용법: node .pipeline/scripts/check-allowed-models-sync.mjs
  * 종료 코드: 0 = 모든 SSOT sync, 1 = 어느 하나라도 drift
  */
@@ -240,6 +244,7 @@ function main() {
     { name: '[I] stages.json ↔ .claude/* drift', script: 'check-stages-sync.mjs' },
     { name: '[J] AI streaming markdown rendering', script: 'check-markdown-render.mjs' },
     { name: '[K] review-categories.json ↔ reviewer.md / ssot_for', script: 'check-review-categories.mjs' },
+    { name: '[N] settings.json Bash guard hook DENY/ALLOW matrix', script: 'check-hook-guard.mjs' },
   ];
 
   let totalFailed = failed;
@@ -262,7 +267,7 @@ function main() {
     );
     process.exit(1);
   }
-  console.log('\n✓ 모든 정책 SSOT (모델 ID / store naming / strands Rule 13 / agent models / Bedrock import / spec model_id / reviewer skills / API envelope / stages drift / markdown rendering / review categories / hardcoded model literals / consumers paths) 동기화 확인.');
+  console.log('\n✓ 모든 정책 SSOT (모델 ID / store naming / strands Rule 13 / agent models / Bedrock import / spec model_id / reviewer skills / API envelope / stages drift / markdown rendering / review categories / hardcoded model literals / consumers paths / hook guard matrix) 동기화 확인.');
   process.exit(0);
 }
 

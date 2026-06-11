@@ -186,3 +186,49 @@ interface CommonAgentArtifactFields {
 - 시그니처는 `export function proxy(request)` — `export function middleware()` 패턴 작성 금지(reviewer가 P0 반려).
 - 인증 FR이 있으면 JWT/Cognito 검증 + 보호 라우트 매트릭스를 포함하고, 없으면 보안 헤더만 처리한다.
 - 기본 모드 `AUTH_PROVIDER=mock`, `/awsarch` 후 `cognito`로 전환.
+
+## 12. 검증 에이전트 공통 피드백 스키마 (SSOT)
+
+> **이 절이 단일 정의다.** 코드 제너레이터로 회귀(loop_back)하는 모든 검증 에이전트(`qa-engineer`, `reviewer`, `security-auditor-pipeline`)는 `.pipeline/artifacts/v{N}/04-codegen/feedback-from-{source}-iter-{K}.json`를 **동일한 body 필드**로 작성한다. feedback-analyzer/오케스트레이터가 `return_to`로 라우팅하므로 형식이 갈리면 라우팅 일관성이 깨진다. 각 에이전트 본문은 이 형식을 다시 정의하지 말고 "_preamble §12 공통 피드백 스키마"로만 인용한다.
+
+```typescript
+// 경로: .pipeline/artifacts/v{N}/04-codegen/feedback-from-{source}-iter-{K}.json
+//   {source} ∈ "qa" | "reviewer" | "security"   (파일명 토큰; stages.json.loops feedback_file_pattern과 정합)
+//   {K}      = 1-based iteration
+
+interface ValidationFeedback {
+  /** 발신 에이전트. stages.json.loops[*].trigger_stage와 동일한 정식 stage 이름. */
+  source: "qa-engineer" | "reviewer" | "security-auditor-pipeline";
+  /** 1-based 이터레이션 번호 (파일명의 {K}와 일치). */
+  iteration: number;
+  /** 코드 수정이 필요한 이슈 목록. 비어 있으면 회귀 불필요(= PASS). */
+  failures: ValidationFinding[];
+}
+
+interface ValidationFinding {
+  /** 무엇이 문제인지 한 줄 식별자. qa=테스트명, reviewer=카테고리 항목, security=취약점명. */
+  test: string;
+  /** 근거 위치 "path:line" (예: "src/app/api/vehicles/route.ts:42", "e2e/incidents.spec.ts:25"). */
+  file: string;
+  /** 이슈 분류. 발신 에이전트 도메인 라벨 (예: "functional" | "category-6" | "xss" | "injection"). */
+  type: string;
+  /** 관측된 증상/위반 내용 (한국어 가능). grep 결과·에러 메시지 등 근거 포함. */
+  error: string;
+  /** 수정 제안 (코드 제너레이터가 무엇을 고칠지 — 한국어 가능). */
+  suggested_fix: string;
+  /** 회귀 대상 스테이지 — 라우팅 키. */
+  return_to: "code-generator-backend" | "code-generator-frontend" | "code-generator-ai" | "spec-writer" | "aws-deployer";
+  /** 관련 FR ID (있으면; 예: "FR-003"). 없으면 생략. */
+  affected_fr?: string;
+  /** 관련 acceptance criteria (qa에서 주로 사용; 예: "AC-2: 심각도 필터가 작동한다"). 없으면 생략. */
+  acceptance_criteria?: string;
+  /** FP-001~011 카탈로그 참조 (reviewer/security에서 주로 사용; 예: "FP-007"). 없으면 생략. */
+  fp_ref?: string;
+}
+```
+
+**규칙**:
+- **공통 필수 body**: `source`, `iteration`, `failures[]`. 각 finding은 `test`/`file`/`type`/`error`/`suggested_fix`/`return_to`를 **반드시** 포함한다 (필드명은 qa-engineer 본문 예시와 동일 — reviewer/security가 같은 형식을 그대로 쓴다).
+- `affected_fr`/`acceptance_criteria`/`fp_ref`는 선택. 발신 에이전트별 추가 필드(예: qa-engineer의 `infrastructure_fixes[]` — 테스트 인프라 수정용, 코드 회귀 아님)는 위 공통 body **외부에** 둘 수 있으나, 코드 회귀 이슈는 모두 `failures[]`에 넣는다.
+- `return_to`가 없는 finding은 라우팅 불가이므로 금지.
+- 본문에서 위 형식을 다시 정의하지 말고 본 절을 인용한다.

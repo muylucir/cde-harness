@@ -60,6 +60,23 @@ Execute the complete prototype generation pipeline from customer brief to handov
 
 **새 Agent를 Launch하지 말고 SendMessage로 기존 에이전트를 이어붙인다.** 새 Agent는 이전 컨텍스트를 모르므로 처음부터 다시 시작한다.
 
+## 오케스트레이터 레벨 실패 처리 (launch 실패 / empty return / API 에러 / rate-limit)
+
+위의 "불완전 종료"는 에이전트가 *실행은 됐으나 산출물이 부분적인* 경우다. 그와 별개로, 에이전트 호출 자체가 실패하거나 의미 있는 산출 없이 끝나는 **오케스트레이터 레벨 실패**가 있다. 이때는 SendMessage 재개가 통하지 않을 수 있으므로(컨텍스트가 없거나 호출이 거부됨) 아래 표에 따라 분기한다. 공통 원칙: **부분 상태를 PASS로 넘기지 않는다(fail-closed)**, **state.json은 `checkpoint.mjs`로만 기록한다**, **재시도는 유한**하다.
+
+| 실패 모드 | 감지 신호 | 대응 절차 | 한도 |
+|---|---|---|---|
+| **Launch 실패** (Agent 도구가 에이전트를 시작조차 못함) | Agent 호출이 에러 반환 / 즉시 종료, 산출물 디렉토리 미생성 | 동일 stage를 **새 Agent로 1회 재시도** (SendMessage 아님 — 컨텍스트가 없음). 재시도도 실패면 `checkpoint.mjs halt <stage> --reason="agent launch failed"` 후 사용자에게 보고. | 1회 |
+| **Empty return** (에이전트가 응답은 했으나 파일을 0개 생성) | CHECKPOINT에서 모든 산출 파일 미존재 + 에이전트가 "완료" 주장 | 먼저 **SendMessage로 1회 재개**("산출 파일이 비어 있습니다. <목록>을 작성하세요"). 그래도 0개면 새 Agent로 1회 재시도. | 재개 1 + 재시도 1 |
+| **API 에러 (비-rate-limit)** (5xx, model error, content filter 등) | Agent 호출이 비-rate-limit 에러로 종료 | **즉시 재시도하지 말 것**. 1회 짧은 대기 후 재시도. 동일 에러 2연속이면 `halt <stage> --reason="api error: <요약>"` 후 사용자에게 옵션 제시. | 2회 |
+| **Rate-limit / throttling** (429, throttling) | 에러 메시지에 rate/throttl/429 | **지수 백오프**로 재시도(예: 대기 후 1회, 더 길게 1회). 한도 소진 시 halt하지 말고 "rate-limit 대기 중" 보고 후 사용자 판단을 기다린다(비용·시간 trade-off는 사용자 결정). | 백오프 2회 |
+| **동일 에러 반복** (위 재시도들이 같은 실패로 수렴) | `checkpoint.mjs budget`의 `identical_error_streak >= 2` | 자동 재시도 중단. `halt`에 "수렴 실패" 태그 + 복구 옵션 3가지(① /pipeline-from 재개 ② 입력/스펙 수정 후 재실행 ③ 현재 상태 수용) 제시. | budget이 강제 |
+
+**규칙**:
+- 모든 재시도 한도는 위 표가 상한이며, 누적 코드 재생성은 별도로 `budgets.total_code_regens`(기본 8회) 전역 cap에 합산된다 — stage 단위 재시도가 전역 예산을 우회하지 못한다.
+- launch/empty/API 실패로 **halt할 때도 `checkpoint.mjs halt`만 사용**한다. state.json을 직접 쓰지 않는다(_preamble §3).
+- 어떤 실패 모드든 **CHECKPOINT가 통과하지 않은 stage를 completed로 마킹하지 않는다**. checkpoint.mjs의 빈 checkpoint fail-closed 가드(P1-A1)가 이를 코드로 강제하지만, 오케스트레이터도 부분 산출물을 "성공"으로 보고하지 않는다.
+
 ## CHECKPOINT 실행 규칙 (코드 기반)
 
 **모든 CHECKPOINT는 `.pipeline/scripts/checkpoint.mjs` 스크립트로 실행한다.** LLM이 직접 state.json을 수정하지 않는다.

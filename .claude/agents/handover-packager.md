@@ -87,7 +87,7 @@ npm run dev
 - `.pipeline/artifacts/v{latest}/03-specs/_manifest.json` + 스펙 파일들
 - `.pipeline/artifacts/v{latest}/04-codegen/generation-log-*.json`
 - `.pipeline/artifacts/v{latest}/05-review/review-report.md` + `.pipeline/artifacts/v{latest}/05-qa/test-report.md`
-- `.pipeline/artifacts/v{latest}/06-security/security-audit.md` + `security-result.json`
+- `.pipeline/artifacts/v{latest}/06-security/security-report.md` + `security-result.json`
 
 ### AWS 인프라 아티팩트 (조건부 — /awsarch 실행된 경우)
 - `.pipeline/artifacts/v{latest}/08-aws-infra/aws-architecture.json` + `aws-architecture.md`
@@ -398,7 +398,7 @@ cd infra && npx ts-node scripts/seed-data.ts
 - [ ] 시드 데이터를 실제 데이터 마이그레이션으로 교체
 
 ### 보안
-{security-audit.md의 production_notes에서 추출}
+{security-report.md의 production_notes에서 추출}
 - [ ] Content-Security-Policy 헤더 강화
 - [ ] 환경 변수로 모든 설정값 분리
 - [ ] npm audit 결과 해결

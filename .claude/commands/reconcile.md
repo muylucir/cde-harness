@@ -205,7 +205,7 @@ node .pipeline/scripts/checkpoint.mjs new-version \
   --trigger=reconcile \
   --mode=docs-only \
   --branch="$(git branch --show-current)" \
-  --baseline-commit="$(jq -r '.baseline_commit' .pipeline/revisions/code-to-vN+1.json)" \
+  --baseline-commit="$(jq -r '.baseline_commit' .pipeline/revisions/v{N}-to-v{N+1}.json)" \
   2> /tmp/new-version.err
 NV_EXIT=$?
 

@@ -262,7 +262,7 @@ npm run test:e2e                               # 실행
 
 앱이 요구사항을 구현하지 않았거나 잘못 구현한 경우.
 
-**이 경우 테스트를 수정하지 않고**, 피드백 파일을 작성하여 해당 코드 제너레이터에 수정을 요청한다:
+**이 경우 테스트를 수정하지 않고**, 피드백 파일을 작성하여 해당 코드 제너레이터에 수정을 요청한다. **공통 형식은 [_preamble §12 공통 피드백 스키마](_preamble.md#12-검증-에이전트-공통-피드백-스키마-ssot)** — `source`/`iteration`/`failures[]` body는 reviewer·security와 동일하며, 아래 예시의 `infrastructure_fixes[]`는 qa-engineer 전용 추가 필드(테스트 인프라 수정용, 코드 회귀 아님)다:
 
 ```json
 // .pipeline/artifacts/v{N}/04-codegen/feedback-from-qa-iter-{N}.json

@@ -113,7 +113,7 @@ const bedrock = new BedrockModel({
 
 ### 주요 모델 ID (2026년 초 기준)
 
-- Claude: `us.anthropic.claude-sonnet-4-20250514-v1:0`, `global.anthropic.claude-opus-4-6-v1`, `anthropic.claude-3-5-haiku-20241022-v1:0`
+- Claude: `us.anthropic.claude-sonnet-4-20250514-v1:0`, `global.anthropic.claude-opus-4-8`, `anthropic.claude-3-5-haiku-20241022-v1:0`
 - Nova: `us.amazon.nova-premier-v1:0`, `us.amazon.nova-pro-v1:0`
 - Llama: `us.meta.llama3-2-90b-instruct-v1:0`
 

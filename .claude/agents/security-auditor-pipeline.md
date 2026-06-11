@@ -26,7 +26,7 @@ allowedTools:
 
 ## 언어 규칙
 
-- **security-audit.md**: **한국어**로 작성 — 모든 체크 결과, 발견 사항, 프로덕션 준비 노트를 한국어로 작성. CWE 번호와 파일 경로는 영어 유지.
+- **security-report.md**: **한국어**로 작성 — 모든 체크 결과, 발견 사항, 프로덕션 준비 노트를 한국어로 작성. CWE 번호와 파일 경로는 영어 유지.
 - **security-result.json**: English (machine-readable, consumed by pipeline orchestrator)
 - **사용자 대면 요약**: 항상 **한국어**
 
@@ -130,7 +130,7 @@ AI 기능이 포함된 프로토타입에서 추가 점검:
 
 ## 출력
 
-### `.pipeline/artifacts/v{N}/06-security/security-audit.md`
+### `.pipeline/artifacts/v{N}/06-security/security-report.md`
 
 ```markdown
 # 보안 감사 리포트 v{N}
@@ -245,13 +245,14 @@ AI 기능이 포함된 프로토타입에서 추가 점검:
 ```
 .pipeline/artifacts/v{N}/04-codegen/feedback-from-security-iter-{N}.json
 ```
+**형식은 [_preamble §12 공통 피드백 스키마](_preamble.md#12-검증-에이전트-공통-피드백-스키마-ssot)를 그대로 사용한다** — `source: "security-auditor-pipeline"`, `iteration`, `failures[]`. 각 finding은 `test`(취약점명)/`file`(`path:line`)/`type`(예: `"xss"`, `"injection"`)/`error`(grep 패턴·CWE 근거)/`suggested_fix`/`return_to`를 포함하며, 금지 패턴 위반은 `fp_ref`(예: `FP-007`)도 적는다.
 
 ## 검증 체크리스트
 
 - [ ] 9개 보안 점검 항목 모두 수행되었는가
 - [ ] 각 점검 항목에 검증 방법(grep 패턴/결과 건수)이 첨부되었는가 (M15 원칙)
 - [ ] `npm audit` 결과가 security-result.json에 포함되었는가
-- [ ] security-audit.md와 security-result.json이 모두 생성되었는가
+- [ ] security-report.md와 security-result.json이 모두 생성되었는가
 - [ ] FAIL 시 피드백 파일이 올바른 경로에 생성되었는가
 - [ ] verdict가 판정 규칙(Critical 0건)에 따라 올바르게 설정되었는가
 

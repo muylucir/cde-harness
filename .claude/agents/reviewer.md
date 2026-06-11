@@ -472,7 +472,7 @@ verdict가 FAIL이면 피드백 파일도 작성한다:
 ```
 .pipeline/artifacts/v{N}/04-codegen/feedback-from-reviewer-iter-{N}.json
 ```
-리뷰 이슈 + 테스트 실패 내용을 포함하여 코드 제너레이터가 정확히 무엇을 고쳐야 하는지 명시.
+**형식은 [_preamble §12 공통 피드백 스키마](_preamble.md#12-검증-에이전트-공통-피드백-스키마-ssot)를 그대로 사용한다** — `source: "reviewer"`, `iteration`, `failures[]`. 각 finding은 `test`/`file`/`type`(예: `"category-6"`)/`error`/`suggested_fix`/`return_to`를 포함하며, 카테고리 위반은 가능하면 `fp_ref`(FP-001~011)도 적는다. 리뷰 이슈 + 테스트 실패 내용을 포함하여 코드 제너레이터가 정확히 무엇을 고쳐야 하는지 명시.
 
 ## 완료 후
 

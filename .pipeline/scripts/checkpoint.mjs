@@ -134,6 +134,24 @@ process.on('exit', releaseLock);
 process.on('SIGINT', () => { releaseLock(); process.exit(130); });
 process.on('SIGTERM', () => { releaseLock(); process.exit(143); });
 
+/**
+ * 스테이지 prerequisites[]를 현재 버전 토큰으로 치환한 뒤 존재 여부를 검사한다.
+ * cmdStart(진입 게이트)와 cmdValidateStage(사전 점검) 양쪽이 공유하여, 전제조건
+ * 미충족 진입을 한 곳에서만 정의한다. (P1-A1: cmdStart가 prerequisite를 안 보던 구멍)
+ * @param {object} def stages.json 스테이지 정의
+ * @param {number|string} currentVersionNum 현재 버전 번호
+ * @returns {{ ok: boolean, results: Array<{ path: string, ok: boolean }> }}
+ */
+function evaluatePrerequisites(def, currentVersionNum) {
+  const results = [];
+  for (const p of def.prerequisites ?? []) {
+    const concrete = p.replace('v{N}', `v${currentVersionNum}`);
+    const abs = resolve(ROOT, concrete);
+    results.push({ path: concrete, ok: existsSync(abs) });
+  }
+  return { ok: results.every((r) => r.ok), results };
+}
+
 /** 스테이지 정의 조회 (없으면 null) */
 function findStageDef(name) {
   // stages.mjs에 등록된 이름이 아니면 즉시 null 반환 (stages.json 1차 lookup과 의미적으로 동일).
@@ -266,7 +284,18 @@ function runJsonCompare(mode, arg) {
     return { check: label, passed: String(value) !== operand, reason: String(value) !== operand ? undefined : `got "${String(value)}" (== forbidden)` };
   }
   // json-lte
-  const lhs = Number(value);
+  // 보안 게이트 fail-closed (P1-A2): JSON 값이 실제 number 타입이 아니면 차단한다.
+  // Number(null)=Number("")=Number([])=Number(false)=0 이라 present-but-falsy 값이
+  // `0 <= 0`으로 슬쩍 통과하던 구멍을 typeof 검사로 막는다. npm_audit.critical 같은
+  // 숫자 게이트는 실제 number만 허용한다.
+  if (typeof value !== 'number') {
+    return {
+      check: label,
+      passed: false,
+      reason: `value at "${dotpath}" is ${value === null ? 'null' : typeof value} (=${JSON.stringify(value)}), expected a number — fail-closed`,
+    };
+  }
+  const lhs = value;
   const rhs = Number(operand);
   if (!Number.isFinite(lhs) || !Number.isFinite(rhs)) {
     return { check: label, passed: false, reason: `non-numeric compare (value="${String(value)}", n="${operand}")` };
@@ -587,6 +616,24 @@ function cmdStart(stageName) {
     }
   }
 
+  // prerequisite 게이트 (P1-A1): stages.json의 prerequisites[] 파일이 모두 존재해야 진입 가능.
+  // 이전에는 cmdValidateStage만 검사했기에, 오케스트레이터가 validate-stage를 건너뛰고
+  // start를 직접 부르면 선행 산출물 없이도 stage가 running으로 마킹됐다. start 진입 시점에
+  // 강제하여 어떤 경로로 들어와도 전제조건을 우회할 수 없게 한다.
+  // optional_gate_cmd로 자동 skip되는 경우는 위에서 이미 process.exit(0)으로 빠졌으므로,
+  // 여기 도달했다면 이 stage는 실제로 실행될 stage다 → 전제조건을 fail-closed로 강제한다.
+  {
+    const { ok, results } = evaluatePrerequisites(def, state.current_version);
+    if (!ok) {
+      console.error(`✗ Prerequisites missing for "${stageName}" — cannot start.`);
+      for (const r of results) {
+        console.error(`  ${r.ok ? '✓' : '✗'} ${r.path}`);
+      }
+      console.error(`  Run earlier stages first, or: node .pipeline/scripts/checkpoint.mjs validate-stage ${stageName}`);
+      process.exit(1);
+    }
+  }
+
   // Budget 자동 검사 — 루프 트리거 stage 진입 시 누적/플립플롭/스트릭 임계 초과 여부를 강제 검증한다.
   // 트리거 집합은 stages.json.loops{}의 trigger_stage에서 파생한다 (하드코딩 배열 제거 — D1-W2/D4-W3).
   // stages.json이 단일 소스이므로 새 루프를 추가해도 코드 수정 없이 budget 가드가 따라온다.
@@ -675,6 +722,13 @@ function cmdCheck(stageName, checkArgs) {
     process.exit(1);
   }
 
+  // 운영 계측 플래그(--tokens / --cost-estimate)를 check 문자열에서 분리한다.
+  // 체크 문자열은 `file:`/`json:`/`cmd:` 등 타입 접두사를 가지며 `--`로 시작하지 않으므로,
+  // `--`로 시작하는 인자만 플래그로 걷어낸다. (C3: 토큰/비용 회계는 check 경로에서만 기록)
+  const flagArgs = checkArgs.filter((a) => a.startsWith('--'));
+  const checkStrings = checkArgs.filter((a) => !a.startsWith('--'));
+  const flags = parseFlags(flagArgs);
+
   // stages.json의 checkpoint 필드를 baseline으로 자동 병합한다.
   // LLM이 check 인자를 빠뜨려도 데이터 단일 소스에서 enforce된다.
   // v{N} 토큰은 현재 버전으로 치환. 동일 시그니처는 중복 제거.
@@ -684,8 +738,53 @@ function cmdCheck(stageName, checkArgs) {
     (c) => c.replace(/v\{N\}/g, versionToken)
   );
   const allChecks = [...baselineChecks];
-  for (const c of checkArgs) {
+  for (const c of checkStrings) {
     if (!allChecks.includes(c)) allChecks.push(c);
+  }
+
+  // 선택적 계측 값 파싱 — 숫자가 아니면 무시(게이트 아님).
+  const tokensVal = flags.tokens !== undefined ? Number(flags.tokens) : undefined;
+  const costVal = flags['cost-estimate'] !== undefined ? Number(flags['cost-estimate']) : undefined;
+  /**
+   * 계측 필드(tokens/cost_estimate)를 엔트리에 기록한다 (유한 숫자일 때만).
+   * @param {object} target stages[] 엔트리
+   */
+  const recordTelemetry = (target) => {
+    if (Number.isFinite(tokensVal)) target.tokens = tokensVal;
+    if (Number.isFinite(costVal)) target.cost_estimate = costVal;
+  };
+
+  // fail-closed (P1-A1): 실행할 체크가 0개면 PASS시키지 않는다.
+  // `[].every() === true`라 빈 배열은 무조건 PASS로 처리돼 스테이지가 rubber-stamp로
+  // completed 마킹되던 구멍을 막는다. baseline checkpoint도 없고 인자도 없으면,
+  // 검증 없이 통과시키는 대신 명시적 실패로 차단한다.
+  if (allChecks.length === 0) {
+    const now = new Date().toISOString();
+    const startTime = new Date(entry.started_at).getTime();
+    const durationMs = Date.now() - startTime;
+    const item = {
+      check: `no-op checkpoint for "${stageName}"`,
+      passed: false,
+      reason:
+        'no checks provided and stages.json defines no baseline checkpoint — fail-closed (empty checkpoint cannot PASS). Pass explicit checks: check <stage> file:<path> ...',
+    };
+    entry.status = 'checkpoint-failed';
+    entry.completed_at = now;
+    entry.duration_ms = durationMs;
+    entry.checkpoint = {
+      passed: false,
+      items: [item],
+      retries: (entry.checkpoint?.retries ?? 0) + 1,
+      checked_at: now,
+    };
+    recordTelemetry(entry);
+    deriveBudgetCounters(ver);
+    writeState(state);
+    console.log(`✗ CHECKPOINT "${stageName}" — FAILED (${formatDuration(durationMs)})`);
+    console.log(`  ✗ ${item.check} — ${item.reason}`);
+    const result = { stage: stageName, passed: false, duration_ms: durationMs, items: [item] };
+    console.log(`\n__CHECKPOINT_RESULT__${JSON.stringify(result)}`);
+    process.exit(1);
   }
 
   // cmd 타임아웃: stages.json의 checkpoint_timeout_ms를 우선 사용 (없으면 기본값)
@@ -717,6 +816,7 @@ function cmdCheck(stageName, checkArgs) {
     retries: allPassed ? prevRetries : prevRetries + 1,
     checked_at: now,
   };
+  recordTelemetry(entry);
 
   // Budget 자동 파생 (P0-B): ver.stages[]를 스캔해 total_code_regens/identical_error_streak를 계산.
   // LLM이 수동으로 상태를 조작하지 않도록 checkpoint 기록 시점에 파이프라인이 스스로 증분한다.
@@ -819,13 +919,9 @@ function cmdValidateStage(name) {
   if (def.optional_gate_cmd) console.log(`Auto-skip gate: ${def.optional_gate_cmd}`);
 
   console.log('\nPrerequisites:');
-  let allOk = true;
-  for (const p of def.prerequisites ?? []) {
-    const concrete = p.replace('v{N}', `v${state.current_version}`);
-    const abs = resolve(ROOT, concrete);
-    const ok = existsSync(abs);
-    if (!ok) allOk = false;
-    console.log(`  ${ok ? '✓' : '✗'} ${concrete}`);
+  const { ok: allOk, results } = evaluatePrerequisites(def, state.current_version);
+  for (const r of results) {
+    console.log(`  ${r.ok ? '✓' : '✗'} ${r.path}`);
   }
 
   console.log('\nExpected outputs:');
@@ -1089,6 +1185,10 @@ function cmdSchema(args) {
       checkpoint: '{ passed: boolean, items: CheckpointItem[], retries: integer, checked_at: ISO-8601 } | null',
       error_lines: '(optional) string[] — captured on checkpoint-failed for downstream feedback',
       skipped_reason: '(optional) string — populated when status="skipped" by optional_gate_cmd',
+      tokens:
+        '(optional) integer — total tokens this stage consumed (input+output). Recorded ONLY via `check --tokens=<n>`. Cost-attribution telemetry for opus/sonnet/haiku tiering; orchestrator may omit it.',
+      cost_estimate:
+        '(optional) number — estimated USD cost for this stage. Recorded ONLY via `check --cost-estimate=<n>`. Optional telemetry; never gates anything.',
     },
     CheckpointItem: {
       check: 'human-readable check description (e.g., "file exists: ...")',

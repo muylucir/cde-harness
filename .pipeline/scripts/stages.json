@@ -331,7 +331,7 @@
       "description": "src/ 코드 변경을 감지하고 아티팩트(요구사항/아키텍처/스펙/생성로그)를 역방향 동기화",
       "prerequisites": ["src/", ".pipeline/artifacts/"],
       "outputs": [
-        ".pipeline/revisions/code-to-vN+1.json",
+        ".pipeline/revisions/v{N}-to-v{N+1}.json",
         ".pipeline/artifacts/v{N+1}/reconcile-report.md"
       ],
       "resume_via": "/reconcile"
@@ -375,7 +375,7 @@
       ],
       "outputs": [
         "infra/",
-        ".pipeline/artifacts/v{N}/08-aws-infra/deployment-log.json"
+        ".pipeline/artifacts/v{N}/08-aws-infra/deploy-log.json"
       ],
       "resume_via": "/pipeline-from aws-deployer"
     },

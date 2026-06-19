@@ -241,11 +241,14 @@ import boto3, json, uuid
 data = boto3.client("bedrock-agentcore", region_name="us-east-1")
 resp = data.invoke_agent_runtime(
     agentRuntimeArn="arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/my-agent",
-    runtimeSessionId=str(uuid.uuid4()),   # 33자 이상
-    payload=json.dumps({"prompt": "Hello"}).encode(),
+    runtimeSessionId=uuid.uuid4().hex + uuid.uuid4().hex[:1],   # 33자 이상
+    payload=json.dumps({"input": {"prompt": "Hello"}}).encode(),  # 아래 FastAPI 컨트랙트와 동일 봉투
+    qualifier="DEFAULT",
 )
 print(json.loads(b"".join(resp["response"]).decode()))
 ```
+
+> `/invocations`에는 AWS가 강제하는 JSON 봉투가 없습니다 — 에이전트 코드가 직접 형태를 정합니다. 단 **클라이언트가 보내는 payload와 에이전트가 읽는 형태는 일치해야** 합니다. 위 커스텀 FastAPI 예시는 `request.input.get("prompt")`로 읽으므로 `{"input": {"prompt": ...}}`로 보냅니다. SDK 스캐폴딩 에이전트(`BedrockAgentCoreApp`, `payload.get("prompt")`)는 `{"prompt": ...}`를 그대로 받습니다.
 
 ## 커스텀 컨테이너 (FastAPI)
 
@@ -311,6 +314,7 @@ docker buildx build --platform linux/arm64 \
 | **LangGraph** | ✓ | 상태 기반 워크플로우 | 그래프 흐름, 상태 관리, 복잡한 라우팅 |
 | **Google ADK** | ✓ | Google 생태계 에이전트 | ADK 패턴 |
 | **OpenAI Agents** | ✓ | OpenAI Agents SDK | 핸드오프 |
+| **Claude Agent SDK** | 커스텀 | Anthropic Claude Agent SDK | 진입점 컨트랙트/커스텀 컨테이너로 호스팅(아직 CLI `--framework` 값 아님) |
 | **CrewAI** | 커스텀 | 멀티 에이전트 팀 | 역할 기반 협업, litellm |
 
 ## Troubleshooting

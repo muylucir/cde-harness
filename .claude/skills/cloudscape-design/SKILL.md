@@ -65,6 +65,59 @@ Fetch live docs from cloudscape.design when you need detailed component APIs or 
 
 Before implementing a complex component, fetch its guidelines and API JSON for accurate props.
 
+## Critical Gotcha: Dropdowns Clipped Inside Containers (`expandToViewport`)
+
+**This is the #1 cause of broken Cloudscape pages.** By default, a dropdown's height is constrained to fit inside its nearest scrollable ancestor. When you place `Select`, `Multiselect`, `Autosuggest`, `DatePicker`, `DateRangePicker`, `ButtonDropdown`, or `PropertyFilter` inside a `Table`, `Modal`, `SplitPanel`, `Cards`, or any scrollable/overflow-hidden `Container`, the popover gets clipped — it collapses into a thin sliver with a scroll-stepper instead of expanding over the page.
+
+**Fix: always set `expandToViewport` on dropdown components used inside these containers.** It renders the dropdown through a React Portal with fixed positioning, so it floats above the layout.
+
+```tsx
+// ❌ WRONG — dropdown gets clipped inside a Table cell / Modal / SplitPanel
+<Select selectedOption={value} onChange={({ detail }) => setValue(detail.selectedOption)} options={options} />
+
+// ✅ CORRECT — dropdown expands over the page
+<Select
+  selectedOption={value}
+  onChange={({ detail }) => setValue(detail.selectedOption)}
+  options={options}
+  expandToViewport
+/>
+```
+
+Applies equally to `Multiselect`, `Autosuggest`, `DatePicker`, `DateRangePicker`, `ButtonDropdown`, and `PropertyFilter`. When in doubt — if the dropdown lives anywhere inside a `Table`, `Modal`, `SplitPanel`, or `Cards` — set `expandToViewport`.
+
+### Inline-edit dropdown in a Table cell (most common case)
+
+Use the column's `editConfig` and set `expandToViewport` on the editor's `Select`:
+
+```tsx
+const COLUMN_DEFINITIONS = [
+  {
+    id: "status",
+    header: "Status",
+    cell: (item) => <StatusIndicator type={item.status}>{item.statusText}</StatusIndicator>,
+    editConfig: {
+      ariaLabel: "Status",
+      editingCell: (item, { currentValue, setValue }) => {
+        const options = [
+          { value: "in-progress", label: "진행 중" },
+          { value: "done", label: "완료" },
+        ];
+        return (
+          <Select
+            autoFocus
+            expandToViewport          // ← REQUIRED: without this the dropdown is clipped by the table
+            selectedOption={options.find(o => o.value === (currentValue ?? item.status)) ?? null}
+            onChange={({ detail }) => setValue(detail.selectedOption.value)}
+            options={options}
+          />
+        );
+      },
+    },
+  },
+];
+```
+
 ## Page Layout Architecture
 
 Every Cloudscape page starts with `AppLayout`:
@@ -151,6 +204,8 @@ import BreadcrumbGroup from "@cloudscape-design/components/breadcrumb-group";
 - Date range → `DateRangePicker`
 - File → `FileUpload` or `FileDropzone`
 - AI/chat prompt → `PromptInput` (NOT Textarea or Input)
+
+> When any of `Select`, `Multiselect`, `Autosuggest`, `DatePicker`, or `DateRangePicker` sits inside a `Table`, `Modal`, `SplitPanel`, or scrollable container, add `expandToViewport` or the dropdown will be clipped. See [Critical Gotcha](#critical-gotcha-dropdowns-clipped-inside-containers-expandtoviewport).
 
 ### "I need to display status/feedback"
 - Page-level notifications → `Flashbar`
@@ -524,6 +579,7 @@ import Button from "@cloudscape-design/components/button";
 
 - Import each component from its own path: `@cloudscape-design/components/{component-name}`
 - All events use `({detail}) => ...` pattern (not `(event) => ...`)
+- Set `expandToViewport` on `Select`/`Multiselect`/`Autosuggest`/`DatePicker`/`DateRangePicker`/`ButtonDropdown`/`PropertyFilter` whenever they live inside a `Table`, `Modal`, `SplitPanel`, `Cards`, or scrollable `Container` — otherwise the dropdown popover is clipped
 - Controlled components: value + onChange for inputs, selectedItems + onSelectionChange for tables
 - Use `Header` component for section titles (not raw h1-h6)
 - Use `SpaceBetween` for consistent spacing between elements

@@ -242,6 +242,8 @@ Layer 3: Agentic Workflow  — 여러 에이전트가 어떻게 협업하는가?
 | 3 | **Graph** | 방향성 그래프로 흐름 정의 | 복잡한 조건부/계층적 흐름 | `multi-agent-pattern.md` |
 | 4 | **Workflow** | 사전 정의된 순차 파이프라인 | 명확한 단계별 프로세스 | `multi-agent-pattern.md` |
 
+> **통신 경계는 별도 축입니다.** 위 4개는 보통 **인프로세스** 조정 패턴입니다. 에이전트가 **다른 프로세스·서비스·조직**에 있으면 **A2A(Agent-to-Agent) 프로토콜**로 원격 호출합니다(원격 에이전트를 `A2AAgent`로 감싸 로컬처럼 사용; Graph 노드/도구로 결합 가능, Swarm은 미지원). A2A는 5번째 조정 패턴이 아니라 위 패턴들이 네트워크를 건너게 하는 **전송**입니다. 상세는 `multi-agent-pattern.md`의 "A2A 프로토콜" 절.
+
 ### 멀티 에이전트 패턴 선택 기준
 
 3축 평가에서 멀티 에이전트로 판정된 경우, **어떤 축이 가장 높은 점수를 받았는지**로 패턴을 선택합니다:
@@ -373,7 +375,7 @@ Agentic AI (자율성 ≥6)
 - `parallelization.md` — Parallelization 상세 (분산 처리, 결과 합성)
 
 ### Layer 3: Agentic Workflows
-- `multi-agent-pattern.md` — 멀티 에이전트 상세 (Agents as Tools, Swarm, Graph, Workflow)
+- `multi-agent-pattern.md` — 멀티 에이전트 상세 (Agents as Tools, Swarm, Graph, Workflow + A2A 프로토콜로 원격/크로스조직 협업)
 - `saga-orchestration.md` — Saga Orchestration 상세 (중앙 오케스트레이터, 보상 트랜잭션)
 - `scatter-gather.md` — Scatter-Gather 상세 (병렬 분산, 결과 집계)
 

@@ -6,14 +6,15 @@ description: |
   사용자가 다음 중 하나라도 언급하면 — 명시적으로 "AgentCore"라고 말하지 않더라도 — 반드시 이 스킬을 사용:
   (1) AgentCore Runtime에 에이전트 배포/스케일링 (agentcore create/dev/deploy/invoke)
   (2) AgentCore Memory — 단기(STM)/장기(LTM) 대화 기억, MemorySessionManager
-  (3) AgentCore Gateway — 기존 API/Lambda/MCP 서버를 에이전트 도구로 변환
+  (3) AgentCore Gateway — 기존 API/Lambda/MCP 서버·다른 에이전트(A2A)·LLM을 단일 엔드포인트로 (MCP/HTTP/Inference 타겟)
   (4) AgentCore Code Interpreter 또는 Browser 내장 도구 사용
   (5) AgentCore Identity — OAuth2/JWT/API Key 자격증명, requires_access_token
   (6) AgentCore Observability — OpenTelemetry 트레이싱, CloudWatch GenAI 대시보드
   (7) AgentCore Policy — Cedar 정책으로 도구 호출 권한 제어
   (8) AgentCore Evaluations — 온라인/온디맨드 에이전트 품질 평가
-  (9) Strands/LangGraph/Google ADK/OpenAI Agents를 AgentCore에 통합/호스팅
-  (10) BedrockAgentCoreApp 진입점 코드 작성, /invocations·/ping 컨트랙트
+  (9) AgentCore Optimization — 트레이스 기반 프롬프트/도구 추천, 구성 번들, A/B 테스트
+  (10) Strands/LangGraph/Google ADK/OpenAI Agents를 AgentCore에 통합/호스팅
+  (11) BedrockAgentCoreApp 진입점 코드 작성, /invocations·/ping 컨트랙트
   또한 "에이전트를 서버리스로 배포", "에이전트에 기억을 추가", "에이전트 도구 게이트웨이",
   "agentcore.json", "agentcore deploy 오류" 같은 요청에도 사용.
 ---
@@ -28,25 +29,30 @@ AgentCore는 AI 에이전트를 프로덕션에 배포하고 운영하기 위한
 > - **에이전트 코드 SDK** = `bedrock-agentcore` (pip). 진입점은 `from bedrock_agentcore.runtime import BedrockAgentCoreApp`.
 >
 > 오래된 자료/모델은 `from bedrock_agentcore_starter_toolkit import BedrockAgentCoreApp`, `MCPGatewayTool`, `CodeInterpreterTool`, `MemoryClient.save_message()` 같은 **존재하지 않는 API**를 자주 만들어냅니다. 항상 아래의 검증된 패턴과 `references/`를 따르고, 불확실하면 MCP 도구(`search_agentcore_docs` / `fetch_agentcore_doc` / `get_*_guide`)로 확인하세요.
+>
+> **범위:** 이 가이드는 **GA 서비스**만 다룹니다. `@aws/agentcore@preview` 채널이 여는 **managed harness / config 기반 에이전트**, 그리고 **Agent Registry · Payments**는 **preview**이므로 제외합니다(아래 표 참고). Policy(2026-03 GA)·Evaluations(2026-03 GA)·Optimization(GA, "insights" 하위기능만 preview)은 GA이며 포함합니다.
 
-## Quick Reference — 핵심 서비스 9개
+## Quick Reference — GA 서비스 10개
 
 | 서비스 | 설명 | 다루는 방법 |
 |--------|------|-------------|
-| **Runtime** | 서버리스 에이전트 호스팅·세션 격리·자동 스케일링 | `agentcore create/dev/deploy/invoke` |
-| **Memory** | STM(이벤트)/LTM(전략 기반 추출) 지속 메모리 | `agentcore add memory`, `MemorySessionManager` |
-| **Gateway** | API·Lambda·MCP 서버를 단일 MCP 엔드포인트(도구)로 변환 | `agentcore add gateway` / `add gateway-target` |
-| **Code Interpreter** | 격리 샌드박스 Python 실행 | `bedrock_agentcore.tools.code_interpreter_client` |
-| **Browser** | 관리형 클라우드 Chrome (Playwright/Nova Act) | `bedrock_agentcore.tools.browser_client` |
-| **Identity** | OAuth2/JWT/API Key 자격증명, 워크로드 ID | `agentcore add credential`, `requires_access_token` |
-| **Observability** | OpenTelemetry 트레이싱·메트릭 → CloudWatch | `aws-opentelemetry-distro`, Transaction Search |
-| **Policy** | Cedar 정책으로 도구 호출 권한 제어 | `agentcore.json` `policyEngines` + MCP `policy_*` |
-| **Evaluation** | LLM-as-a-Judge 온라인/온디맨드 평가 | `agentcore add evaluator/online-eval`, `agentcore run` |
+| **Runtime** | 서버리스 에이전트 호스팅·세션 격리·자동 스케일링. 멀티 API 데이터면(invoke/command/shell/streaming), BYO 파일시스템(S3/EFS) | `agentcore create/dev/deploy/invoke/exec` |
+| **Memory** | STM(이벤트)/LTM(전략 기반 추출) 지속 메모리. 메타데이터 필터링(indexed keys) | `agentcore add memory`, `bedrock_agentcore.memory.integrations.strands` |
+| **Gateway** | 도구·에이전트·LLM을 단일 엔드포인트로 — MCP/HTTP(A2A 포함)/Inference 타겟 | `agentcore add gateway` / `add gateway-target` (+ boto3 HTTP/Inference) |
+| **Code Interpreter** | 격리 샌드박스 코드 실행(Python/JS/TS), 파일 I/O·shell·네트워크 모드 | `bedrock_agentcore.tools.code_interpreter_client` |
+| **Browser** | 관리형 클라우드 Chrome (Playwright/Nova Act/browser-use). 프로필·프록시·확장·OS 액션 | `bedrock_agentcore.tools.browser_client` |
+| **Identity** | OAuth2(25개 벤더)/JWT/API Key 자격증명, 워크로드 ID, 서비스 연결 역할 | `agentcore add credential`, `requires_access_token` |
+| **Observability** | OpenTelemetry 트레이싱·서비스별 메트릭(7종) → CloudWatch, 교차 계정 | `aws-opentelemetry-distro>=0.10.0`, Transaction Search |
+| **Policy** | Cedar 정책으로 도구 호출 권한 제어 (GA) | `agentcore add policy-engine / add policy` + MCP `policy_*` |
+| **Evaluation** | LLM-as-a-Judge 온라인/온디맨드 평가 (GA) | `agentcore add evaluator/online-eval`, `agentcore run eval` |
+| **Optimization** | 트레이스 기반 프롬프트/도구 설명 추천 + 구성 번들 + A/B 테스트 (GA; "insights"만 preview) | Evaluations 위에 동작, Gateway로 A/B |
+
+> **Preview(이 가이드 범위 밖):** **Harness**(관리형 에이전트 루프), **Agent Registry**(조직 단위 에이전트/도구 카탈로그), **Payments**(x402 마이크로트랜잭션). 모두 존재하지만 preview이므로 GA 전까지 제외합니다.
 
 ## 사전 요구사항
 
 - **Node.js 20+** — CLI는 npm 패키지로 배포됩니다.
-- **Python 3.10+** — 생성되는 에이전트 코드는 Python입니다.
+- **Python 3.10+** — 생성되는 에이전트 코드는 Python입니다(직접 코드 배포는 Python 3.10–3.14 및 **Node.js 22**도 지원). 보안상 SDK는 `bedrock-agentcore>=1.6.1` 핀 권장(CVE-2026-12530).
 - **AWS CDK** — CLI가 CDK로 리소스를 배포합니다 (`cdk bootstrap` 1회 필요).
 - **AWS 자격증명** 구성 (`aws sts get-caller-identity`로 확인).
 - **모델 액세스** — Bedrock 콘솔에서 사용할 모델(예: Anthropic Claude Sonnet) 활성화.
@@ -174,7 +180,7 @@ session = sessions.create_memory_session(actor_id="user-123", session_id="sess-4
 
 session.add_turns(messages=[ConversationalMessage("주문이 안 왔어요", MessageRole.USER)])
 recent = session.get_last_k_turns(k=5)                       # 단기(이벤트)
-facts = session.search_long_term_memories(query="고객 이슈 요약", namespace_prefix="/", top_k=3)  # 장기
+facts = session.search_long_term_memories(query="고객 이슈 요약", namespace_path="/", top_k=3)  # 장기
 ```
 
 자세한 내용·전략 구성은 [references/memory.md](references/memory.md).
@@ -182,14 +188,14 @@ facts = session.search_long_term_memories(query="고객 이슈 요약", namespac
 ### 2. Gateway 도구
 
 ```bash
-agentcore add gateway --name MyGateway
+agentcore add gateway --name MyGateway --authorizer-type NONE --runtimes MyAgent
 agentcore add gateway-target --name WeatherTools --type lambda-function-arn \
   --lambda-arn arn:aws:lambda:us-east-1:123:function:weather \
   --tool-schema-file tools.json --gateway MyGateway
 agentcore deploy
 ```
 
-Gateway는 표준 **MCP 엔드포인트**가 됩니다. 에이전트는 Strands `MCPClient` 등 일반 MCP 클라이언트로 연결합니다. 노출되는 도구 이름은 `타겟명___도구명`(언더스코어 3개)입니다. 자세한 내용은 [references/gateway.md](references/gateway.md).
+타겟은 **MCP / HTTP / Inference** 세 범주입니다. **MCP 타겟**(Lambda·API Gateway·OpenAPI·Smithy·원격 MCP 서버·내장 Integrations/Connectors)은 도구를 하나의 MCP 엔드포인트로 집계 — 에이전트는 Strands `MCPClient`로 연결하고, 도구 이름은 `타겟명___도구명`(언더스코어 3개). **HTTP 타겟**(A2A 에이전트·외부 MCP·passthrough; AgentCore Runtime은 preview)은 경로 기반으로 직접 전달. **Inference 타겟**은 LLM 트래픽을 공급자로 라우팅. CLI `--type`은 MCP 타겟용이고, HTTP/Inference는 boto3 `bedrock-agentcore-control`로 구성합니다. 자세한 내용은 [references/gateway.md](references/gateway.md).
 
 ### 3. Code Interpreter
 
@@ -248,6 +254,7 @@ agentcore traces list
 - [Observability 모니터링](references/observability.md) — OTEL env, Transaction Search, GenAI 대시보드
 - [Policy Engine 정책 관리](references/policy.md) — Cedar, 정책 생성, ENFORCE/LOG_ONLY
 - [Evaluation 평가 가이드](references/evaluation.md) — 내장/커스텀 평가자, 온라인/온디맨드
+- [Optimization 가이드](references/optimization.md) — 추천, 구성 번들, A/B 테스트
 - [프레임워크 통합](references/integrations.md) — Strands/LangGraph/Google ADK/OpenAI Agents/CrewAI
 - [CLI 전체 레퍼런스](references/cli-reference.md) — 모든 agentcore 명령어와 플래그
 

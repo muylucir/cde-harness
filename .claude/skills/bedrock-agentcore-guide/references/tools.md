@@ -6,13 +6,34 @@ AgentCore는 에이전트가 안전하게 코드를 실행하고(Code Interprete
 > 예전 자료의 `from bedrock_agentcore_starter_toolkit.tools import CodeInterpreterTool, BrowserTool, NovaActBrowserTool`은 **가공된(존재하지 않는) API**입니다. 검증된 방법은 둘입니다:
 > - **SDK 클라이언트(직접)**: `from bedrock_agentcore.tools.code_interpreter_client import CodeInterpreter`, `from bedrock_agentcore.tools.browser_client import browser_session`
 > - **Strands 도구**: `from strands_tools.code_interpreter import AgentCoreCodeInterpreter`, `from strands_tools.browser import AgentCoreBrowser`
-> 설치: `pip install bedrock-agentcore strands-agents strands-agents-tools` (Browser는 추가로 `playwright nest-asyncio`).
+> 설치: `pip install 'bedrock-agentcore>=1.6.1' strands-agents strands-agents-tools` (Browser는 추가로 `playwright nest-asyncio`). **보안:** `bedrock-agentcore` 1.1.3–1.6.0은 `install_packages()` pip 플래그 인젝션 취약점(CVE-2026-12530) → **≥1.6.1** 핀.
 
 ---
 
 ## Code Interpreter
 
-격리된 샌드박스에서 Python을 안전하게 실행합니다. pandas/numpy/matplotlib 등 일반 라이브러리가 사전 설치되어 있습니다. 세션 기본 타임아웃 900초(15분), 최대 28800초(8시간).
+격리된 샌드박스에서 코드를 안전하게 실행합니다. **Python·JavaScript·TypeScript**를 지원하며(`executeCode`의 `language`), pandas/numpy/matplotlib 등 일반 라이브러리가 사전 설치돼 있습니다. 세션 기본 타임아웃 900초(15분), 최대 28800초(8시간).
+
+### 도구 명령(`invoke`/`InvokeCodeInterpreter`의 `name`)
+
+`executeCode`만이 아니라 9개 명령이 있습니다: `executeCode`, `executeCommand`(셸/AWS CLI), `startCommandExecution`·`getTask`·`stopTask`(비동기 장기 작업), `writeFiles`·`readFiles`·`listFiles`·`removeFiles`(샌드박스 파일 CRUD). 인라인 파일 ≤100MB, 터미널 `aws s3 cp` 경유 ≤5GB.
+
+```python
+# 파일 쓰기 → 목록
+code_client.invoke("writeFiles", {"content": [{"path": "data.csv", "text": "a,b\n1,2"}]})
+code_client.invoke("listFiles", {"path": ""})
+# 셸 명령으로 S3 업로드 (커스텀 CI + 실행 역할 필요)
+code_client.invoke("executeCommand", {"command": "aws s3 cp data.csv s3://my-bucket/"})
+```
+
+### 네트워크 모드 (커스텀 Code Interpreter)
+
+`create_code_interpreter(networkConfiguration={"networkMode": "SANDBOX"|"PUBLIC"|"VPC", ...})`:
+- `SANDBOX` — 제한된 AWS 접근(예: S3), 공개 인터넷 없음.
+- `PUBLIC` — 전체 인터넷.
+- `VPC` — `vpcConfig`(`securityGroups`, `subnets`)로 사설 리소스.
+
+커스텀 CI는 `create_code_interpreter`/`delete_code_interpreter`로 만들며 반환된 `codeInterpreterId`(또는 그 ARN)를 `codeInterpreterIdentifier`로 사용합니다(기본 `aws.codeinterpreter.v1` 대신). 루트 CA 인증서도 구성 가능. 참고: `vpcConfig`는 Runtime 전용 필드와 혼동 금지 — Browser/Code Interpreter는 자체 `networkConfiguration`을 씁니다.
 
 ### Strands 도구로 사용 (권장)
 
@@ -167,7 +188,7 @@ asyncio.run(main())
 
 ### Nova Act로 자연어 브라우저 자동화
 
-Amazon Nova Act(연구 프리뷰)는 자연어 지시로 브라우저를 조작합니다. 같은 `browser_session` CDP 엔드포인트에 연결합니다:
+Amazon Nova Act는 자연어 지시로 브라우저를 조작합니다. 같은 `browser_session` CDP 엔드포인트에 연결합니다:
 
 ```python
 from bedrock_agentcore.tools.browser_client import browser_session
@@ -185,12 +206,33 @@ def browser_with_nova_act(prompt, starting_page, nova_act_key, region="us-west-2
             return nova_act.act(prompt)
 ```
 
-설치: `pip install bedrock-agentcore nova-act rich boto3`. Nova Act API 키는 https://nova.amazon.com/act 에서 발급(현재 US amazon.com 계정 한정).
+설치: `pip install bedrock-agentcore nova-act rich boto3`. Nova Act API 키는 https://nova.amazon.com/act 에서 발급(키 발급은 현재 US 기반 amazon.com 계정 한정). 자동화 프레임워크는 Playwright·Nova Act·Strands 외에 **`browser-use`**도 docs가 명시 — 모두 CDP 자동화 엔드포인트로 연결합니다.
+
+### 커스텀 브라우저 생성 (`create_browser`)
+
+`boto3 bedrock-agentcore-control.create_browser`는 다음을 받습니다(반환 `browserId`/`browserArn`; `list_browsers(type="CUSTOM"|"SYSTEM")`):
+- `networkConfiguration` — **`PUBLIC | VPC`**(+`vpcConfig`). Browser에는 SANDBOX 모드가 없습니다.
+- `recording` — `enabled` + `s3Location`.
+- `enterprisePolicies` — `MANAGED | RECOMMENDED`(S3의 Chrome 정책 파일).
+- `certificates` — Secrets Manager 루트 CA.
+
+Strands 도구에서 커스텀 브라우저를 쓰려면 `AgentCoreBrowser(region=..., identifier="<browser-id>")`.
+
+### 새 GA 기능 (프로필 · 프록시 · 확장 · OS 액션)
+
+- **브라우저 프로필** — `create_browser_profile`로 쿠키/로컬·세션 스토리지/히스토리를 세션 간 영속(재로그인 생략).
+- **프록시** — `start_browser_session(proxyConfiguration={"proxies":[{"externalProxy":{"server","port","credentials":{"basicAuth":{"secretArn"}},"domainPatterns":[...]}}],"bypass":{"domainPatterns":[...]}})`. 도메인 기반 라우팅(first-match-wins), 자격증명은 Secrets Manager.
+- **확장 프로그램** — `BrowserExtension.location`(S3 ZIP, Chromium `manifest.json`). 세션당 최대 10개·각 10MB.
+- **엔터프라이즈 정책** — `create_browser`의 `enterprisePolicies`(관리형 Chrome 정책).
+- **OS 레벨 액션 API(`InvokeBrowser`)** — CDP가 못 하는 OS 동작용 REST API: `mouseClick/Move/Drag/Scroll`, `keyType/Press/Shortcut`, 전체 데스크톱 `screenshot`(PNG). 네이티브 print/upload 다이얼로그·JS alert·OS 컨텍스트 메뉴 처리. `POST /browsers/{id}/sessions/invoke`. 기본 뷰포트 1456×819(세션 시작의 `viewPort`로 조정).
+
+> [!NOTE]
+> **Web Bot Auth / CAPTCHA 감소(`browserSigning`)**는 **preview**(IETF Web Bot Auth 초안 기반, API·서명 방식 변경 가능)이므로 이 가이드 범위 밖입니다.
 
 ### 세션 레코딩 / 라이브 뷰
 
-- **라이브 뷰**: 세션 실행 중 AgentCore 콘솔 > Built-in tools > Browser > "View live session"으로 실시간 확인.
-- **레코딩**: 커스텀 브라우저에 `recording.enabled=True` + S3 위치를 설정해 생성(`boto3 bedrock-agentcore-control.create_browser`). 콘솔에서 비디오·DOM·네트워크·CDP 이벤트 단위로 재생/분석 가능.
+- **라이브 뷰**: 세션 실행 중 AgentCore 콘솔 > Built-in tools > Browser > "View live session"으로 실시간 확인. 경로 `/browser-streams/aws.browser.v1/sessions/{session_id}/live-view`.
+- **레코딩**(커스텀 브라우저 전용 — 기본 `aws.browser.v1`은 레코딩 불가): `recording.enabled=True` + S3. DOM 변경·사용자 액션·콘솔 로그·**CDP 이벤트**·네트워크 요청을 `s3://.../<session-id>/batch_N.ndjson.gz`로 저장. 독립 S3 리플레이 뷰어(`view_recordings.py`). 세션 데이터 TTL 30일. 브라우저 도구당 최대 500 동시 세션.
 
 ### IAM 권한 (Browser)
 

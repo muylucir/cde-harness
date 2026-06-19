@@ -10,7 +10,7 @@ npm install react-markdown remark-gfm
 
 ## SSE 이벤트 프로토콜 (백엔드와 공유)
 
-백엔드(`strands-sdk-typescript-guide`의 Next.js SSE 통합 참조)가 전송하는 이벤트 타입:
+백엔드(`strands-sdk-guide`의 Next.js SSE 통합 참조)가 전송하는 이벤트 타입:
 
 ```typescript
 // src/types/ai.ts (또는 백엔드가 이미 생성한 타입 파일에 추가)
@@ -31,7 +31,7 @@ export type SSEEvent =
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import type { SSEEvent } from '@/lib/ai/sse-types';
+import type { SSEEvent } from '@/types/ai';
 
 interface StreamingState {
   /** 지금까지 누적된 텍스트 */

@@ -41,12 +41,13 @@ aws xray update-indexing-rule --name "Default" \
 
 ## 시나리오 1: Runtime 호스팅 (자동 계측)
 
-`requirements.txt`/`pyproject.toml`에 `aws-opentelemetry-distro`를 추가하고, 프레임워크가 트레이스를 방출하도록 설정(Strands는 `strands-agents[otel]`)하면 됩니다. 코드는 평소처럼 작성합니다:
+`requirements.txt`/`pyproject.toml`에 `aws-opentelemetry-distro>=0.10.0`(+`boto3`)를 추가하고, 프레임워크가 트레이스를 방출하도록 설정(Strands는 `strands-agents[otel]`)하면 됩니다. 컨테이너는 CMD를 `opentelemetry-instrument`로 래핑합니다. 지원 계측: ADOT 외에 **OpenInference, OpenLLMetry, OpenLit, Traceloop** 및 auto-instrumentor(`opentelemetry-instrumentation-langchain` 등). 코드는 평소처럼 작성합니다:
 
 ```python
 # requirements.txt
 # strands-agents[otel]
-# aws-opentelemetry-distro
+# aws-opentelemetry-distro>=0.10.0
+# boto3
 # bedrock-agentcore
 
 from strands import Agent, tool
@@ -92,12 +93,7 @@ opentelemetry-instrument python agent.py
 
 `opentelemetry-instrument`는 환경 변수에서 설정을 읽어 Strands·Bedrock 호출·도구·DB 요청을 자동 계측하고 트레이스를 CloudWatch로 보냅니다.
 
-여러 실행을 하나의 세션으로 묶으려면 OTEL baggage로 세션 ID를 연결:
-
-```python
-from opentelemetry import baggage, context
-ctx = baggage.set_baggage("session.id", session_id)
-```
+여러 실행을 하나의 세션으로 묶으려면 ADOT에서 HTTP 헤더 **`X-Amzn-Bedrock-AgentCore-Runtime-Session-Id`** 로 세션을 전달합니다(이것이 현행 GA 메커니즘). OTEL baggage `session.id`도 동작하지만 docs가 규정하는 방식은 헤더입니다.
 
 ## 커스텀 스팬/속성 (선택)
 
@@ -116,12 +112,24 @@ def process(prompt: str):
     return result
 ```
 
+## 서비스별 제공 메트릭 (7종 리소스)
+
+자동 수집 메트릭은 에이전트만이 아니라 **Runtime, Memory, Gateway, Built-in Tools, Identity, Policy, Payments** 7종 리소스에 대해 발행됩니다(각 전용 메트릭 페이지). Memory는 span/log 활성화가 필요할 수 있고, Policy 메트릭은 `AWS/Bedrock-AgentCore` 네임스페이스를 씁니다.
+
+**Runtime 메트릭(`bedrock-agentcore` 네임스페이스, 1분 배치):** `Invocations`, `Throttles`, `SystemErrors`, `UserErrors`, `Latency`, `TotalErrors`, `SessionCount`, WebSocket 전용 `ActiveStreamingConnections`·`InboundStreamingBytesProcessed`·`OutboundStreamingBytesProcessed`.
+
+**Vended CPU/메모리 + USAGE_LOGS(비용 귀속):** `CPUUsed-vCPUHours`·`MemoryUsed-GBHours`(계정/런타임/엔드포인트, 1분). 명시적으로 켜는 1초 단위 `USAGE_LOGS`(`agent.runtime.vcpu.hours.used`/`agent.runtime.memory.gb_hours.used`).
+
+## 교차 계정 관측성 (GA)
+
+CloudWatch OAM sink/link로 여러 계정의 AgentCore 리소스를 모니터링합니다(Organizations 또는 개별 계정). 콘솔이 자동 집계합니다.
+
 ## CloudWatch에서 보기
 
 - **GenAI Observability 대시보드**: CloudWatch 콘솔 > GenAI Observability > Bedrock AgentCore. Agents/Sessions/Traces 뷰.
-- **로그**: Log groups에서 `/aws/bedrock-agentcore/runtimes/<agent_id>-<endpoint>/...`
+- **로그**: Log groups에서 `/aws/bedrock-agentcore/runtimes/<agent_id>-<endpoint>/...`(OTEL 구조화 로그는 `.../otel-rt-logs` 또는 `.../runtime-logs`).
 - **트레이스**: Transaction Search(`/aws/spans/default`)에서 서비스 이름으로 필터.
-- **메트릭**: Metrics > AWS namespaces > `Bedrock-AgentCore`.
+- **메트릭**: Metrics > AWS namespaces > `bedrock-agentcore` (소문자 — CloudWatch 네임스페이스는 대소문자 구분; Policy는 `AWS/Bedrock-AgentCore`).
 
 ## CloudWatch 알람 (선택)
 
@@ -132,7 +140,7 @@ import boto3
 cw = boto3.client("cloudwatch")
 cw.put_metric_alarm(
     AlarmName="HighAgentLatency",
-    Namespace="Bedrock-AgentCore",
+    Namespace="bedrock-agentcore",
     MetricName="Latency",
     Statistic="Average", Period=300, EvaluationPeriods=2,
     Threshold=5000, ComparisonOperator="GreaterThanThreshold",
@@ -155,6 +163,8 @@ cw.put_metric_alarm(
 | 스팬 누락 | 프레임워크 OTEL 미설정 | `strands-agents[otel]`/auto-instrumentor 설치 |
 | 로그/트레이스 분리 | env 미설정(외부 호스팅) | `AGENT_OBSERVABILITY_ENABLED` 등 환경 변수 확인 |
 | 높은 비용 | 인덱싱 비율 과도 | `update-indexing-rule`로 샘플링 낮춤 |
+
+> **범위 밖(preview):** Payments 관측성(`observability-payments-metrics`)과 Optimization의 "insights"(실패/의도/궤적 분석)는 preview이므로 제외합니다. AgentCore 쪽 Observability 기능 자체와 GenAI Observability 대시보드는 GA입니다.
 
 ## 최신 정보 확인
 

@@ -8,11 +8,12 @@
 ## 설치
 
 ```bash
-npm install -g @aws/agentcore         # 안정 채널
-npm install -g @aws/agentcore@preview # 프리뷰(harness 등)
+npm install -g @aws/agentcore         # 안정(GA) 채널 — 이 가이드의 대상
 agentcore --version
 agentcore --help
 ```
+
+> `@aws/agentcore@preview`(프리뷰 채널)는 managed harness/config 기반 에이전트 등 preview 기능을 엽니다 — 이 가이드의 GA 범위에서 제외합니다.
 
 요구사항: Node.js 20+, Python 3.10+, AWS CDK(`cdk bootstrap` 1회), AWS 자격증명.
 
@@ -25,14 +26,15 @@ agentcore [options] [command]
   dev|d [options]             로컬 개발 서버(hot-reload)
   deploy|p [options]          CDK로 인프라 배포
   invoke|i [options] [prompt] 배포된 에이전트 호출
-  add [subcommand]            리소스 추가(agent, memory, gateway, target, credential, evaluator, online-eval)
+  add [subcommand]            리소스 추가(agent, memory, gateway, gateway-target, identity, credential,
+                              policy-engine, policy, evaluator, online-eval)
   remove [subcommand]         설정에서 리소스 제거
   status|s [options]          배포 리소스·상태
   logs|l [options]            런타임 로그 스트리밍/검색
   traces|t                    트레이스 조회/다운로드
-  run                         온디맨드 평가 실행
-  evals                       과거 평가 결과 조회
-  pause / resume              온라인 평가 설정 일시중지/재개
+  run eval [options]          온디맨드 평가 실행
+  evals history               과거 평가 결과 조회
+  pause / resume online-eval  온라인 평가 설정 일시중지/재개
   fetch                       배포 리소스 접근 정보
   package|pkg [options]       배포 없이 아티팩트 패키징
   validate [options]          agentcore/ 설정 검증
@@ -114,11 +116,13 @@ agentcore invoke                          # 프롬프트 없이 → 대화형 TU
 ```bash
 agentcore add agent --name MyAgent --framework Strands --memory longAndShortTerm
 agentcore add memory --name SharedMemory --strategies SEMANTIC,SUMMARIZATION --expiry 30
-agentcore add gateway --name MyGateway [--authorizer-type CUSTOM_JWT ...]
+agentcore add gateway --name MyGateway --authorizer-type NONE --runtimes MyAgent
 agentcore add gateway-target --name T --type mcp-server --endpoint URL --gateway MyGateway
-agentcore add credential --name OpenAI --api-key sk-...
+agentcore add credential --name OpenAI --api-key sk-...     # = add identity (자격증명 공급자)
+agentcore add policy-engine --name PE --attach-to-gateways MyGateway --attach-mode LOG_ONLY
+agentcore add policy --name Rule --engine PE --source rule.cedar
 agentcore add evaluator
-agentcore add online-eval
+agentcore add online-eval --name cfg --runtime MyAgent --evaluator "Builtin.Helpfulness"
 ```
 
 각 명령은 `agentcore.json`을 갱신하고 필요한 값을 프롬프트로 받습니다. 추가 후 `agentcore deploy`로 프로비저닝합니다. 세부 플래그는 각 서비스 reference 참조.
@@ -134,12 +138,15 @@ agentcore add online-eval
 | 플래그 | 설명 |
 |--------|------|
 | `--name`, `--description` | - |
-| `--authorizer-type` | `NONE`,`AWS_IAM`,`CUSTOM_JWT` |
+| `--authorizer-type` | `NONE`,`AWS_IAM`,`CUSTOM_JWT`,`AUTHENTICATE_ONLY` |
+| `--runtimes` | 연결할 런타임 에이전트 |
 | `--discovery-url`,`--allowed-audience`,`--allowed-clients`,`--allowed-scopes` | JWT 설정 |
-| `--no-semantic-search` | 의미 검색 비활성화 |
-| `--policy-engine`,`--policy-engine-mode` | Policy 연결(`LOG_ONLY`/`ENFORCE`) |
+| `--no-semantic-search` | 의미 검색 비활성화(나중에 켤 수 없음) |
+| `--exception-level` | `NONE`(기본)/`DEBUG` |
 
-### add gateway-target
+> Policy 연결은 게이트웨이가 아니라 `agentcore add policy-engine --attach-to-gateways/--attach-mode`로 합니다(`references/policy.md`).
+
+### add gateway-target (MCP 타겟)
 | 플래그 | 설명 |
 |--------|------|
 | `--name`,`--gateway` | - |
@@ -148,6 +155,8 @@ agentcore add online-eval
 | `--lambda-arn`,`--tool-schema-file` | Lambda 타겟 |
 | `--schema` | OpenAPI/Smithy 스키마 |
 | `--outbound-auth`,`--credential-name` | 아웃바운드 인증 |
+
+> HTTP 타겟(A2A·외부 MCP passthrough·AgentCore Runtime[preview])과 Inference 타겟(LLM 라우팅)은 boto3 `bedrock-agentcore-control.create_gateway_target`(`targetConfiguration.http.passthrough` / `http.agentcoreRuntime` / `inference`)로 구성합니다. Integrations 내장 템플릿(Jira·Slack·Salesforce 등 16개)은 콘솔 전용. 자세한 내용은 `references/gateway.md`.
 
 ### add credential
 | 플래그 | 설명 |
@@ -190,11 +199,14 @@ agentcore traces get <trace-id>
 ## 평가 (Evaluations)
 
 ```bash
-agentcore add evaluator       # 평가자 구성
-agentcore add online-eval     # 온라인 평가 설정 → deploy
-agentcore run                 # 온디맨드 평가 실행
-agentcore evals               # 결과 조회
-agentcore pause / resume      # 온라인 설정 일시중지/재개
+agentcore add evaluator                          # (선택) 커스텀 평가자 구성
+agentcore run eval --runtime MyAgent --session-id "$SID" \
+  --evaluator "Builtin.Helpfulness"              # 온디맨드 평가 실행
+agentcore evals history                          # 결과 조회
+agentcore add online-eval --name cfg --runtime MyAgent \
+  --evaluator "Builtin.Helpfulness" --enable-on-create   # 온라인 설정 → deploy
+agentcore pause online-eval "cfg"                # 온라인 설정 일시중지
+agentcore resume online-eval "cfg"               # 재개
 ```
 
 내장 평가자 ID는 `Builtin.Helpfulness` 형식. 자세한 내용은 `references/evaluation.md`.
@@ -249,13 +261,15 @@ agentcore remove all && agentcore deploy   # 정리
 ### Gateway + Policy
 
 ```bash
-agentcore add gateway --name MyGateway \
-  --policy-engine MyPolicyEngine --policy-engine-mode LOG_ONLY
+agentcore add gateway --name MyGateway --authorizer-type NONE --runtimes MyAgent
 agentcore add gateway-target --name RefundTarget --type lambda-function-arn \
   --lambda-arn $LAMBDA_ARN --tool-schema-file tools.json --gateway MyGateway
-# policyEngines/policies 는 agentcore.json 에 선언 (references/policy.md)
+# 정책 엔진을 게이트웨이에 연결(연결은 엔진 쪽에서) + Cedar 정책 추가
+agentcore add policy-engine --name MyPolicyEngine \
+  --attach-to-gateways MyGateway --attach-mode LOG_ONLY
+agentcore add policy --name RefundLimit --engine MyPolicyEngine --source refund.cedar
 agentcore deploy
-# 로그 검토 후 ENFORCE 로 전환 — agentcore.json 의 mode 변경 후 재배포
+# 로그 검토 후 ENFORCE 로 전환 (--attach-mode ENFORCE 로 갱신 후 재배포)
 ```
 
 ### 메모리 + 자격증명

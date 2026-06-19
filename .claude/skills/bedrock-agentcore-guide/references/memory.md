@@ -3,10 +3,11 @@
 AgentCore Memory는 에이전트가 과거 상호작용을 기억하게 합니다. **단기 메모리(STM)**는 세션 내 턴 단위 이벤트(대화 history)를, **장기 메모리(LTM)**는 전략(semantic, summarization, user preference, episodic)을 통해 세션 간 추출된 인사이트를 저장합니다.
 
 > [!IMPORTANT]
-> 예전 자료에 나오는 `from bedrock_agentcore_starter_toolkit.memory import MemoryClient` + `memory.save_message()` / `memory.semantic_search()` / `memory.log_event()` 같은 API는 **실제로 존재하지 않습니다(가공된 이름)**. 검증된 SDK는 아래 둘입니다:
-> - **제어면(리소스 CRUD)**: `from bedrock_agentcore_starter_toolkit.operations.memory.manager import MemoryManager`
+> 예전 자료에 나오는 `from bedrock_agentcore_starter_toolkit.memory import MemoryClient` + `memory.save_message()` / `memory.semantic_search()` / `memory.log_event()` 같은 API는 **실제로 존재하지 않습니다(가공된 이름)**. 검증된 경로는:
+> - **제어면(리소스 CRUD)**: boto3 `bedrock-agentcore-control`(`create_memory`/`get_memory`/`update_memory`/`delete_memory`/`list_memories`) 또는 `agentcore add memory` CLI. (예전 자료의 starter-toolkit `MemoryManager`는 deprecated 패키지 — 현행 docs는 boto3/CLI를 권장)
 > - **데이터면(이벤트 쓰기/조회)**: `from bedrock_agentcore.memory.session import MemorySessionManager`
-> 전체 연산은 boto3 `bedrock-agentcore-control`(제어면)·`bedrock-agentcore`(데이터면)로도 가능합니다.
+>
+> 배포 환경에서는 보통 `agentcore add memory`로 만드는 것을 권장합니다.
 
 ## 핵심 개념
 
@@ -53,7 +54,7 @@ agentcore remove memory --name SharedMemory
 |--------|------|
 | `--name` | 메모리 이름 |
 | `--strategies` | 쉼표 구분: `SEMANTIC`, `SUMMARIZATION`, `USER_PREFERENCE`, `EPISODIC` |
-| `--expiry` | 이벤트 만료(일). 기본 30, 최소 7, 최대 365 |
+| `--expiry` | 이벤트 만료(일). 기본 30, 최대 365 (필수) |
 
 **`--memory` 단축 매핑:** `none`(없음) / `shortTerm`(이벤트만) / `longAndShortTerm`(STM + SEMANTIC·SUMMARIZATION LTM).
 
@@ -83,38 +84,39 @@ agentcore remove memory --name SharedMemory
 ```
 
 **스키마 제약:**
-- `name`: 패턴 `[a-zA-Z][a-zA-Z0-9_]{0,47}`, 필수
-- `eventExpiryDuration`: 정수 3–365, 필수
+- `name`: 패턴 `[a-zA-Z][a-zA-Z0-9_]{0,47}`(최대 48자), 필수
+- `eventExpiryDuration`: 필수, **최소 7일 / 최대 365일**(CLI 기본 30). raw API는 ISO 8601 기간, CLI는 일 단위 정수.
 - `strategies[].type`: `SEMANTIC` | `SUMMARIZATION` | `USER_PREFERENCE` | `EPISODIC`
-- `namespaces`: `{actorId}`, `{sessionId}`, `{memoryStrategyId}` 치환자 지원
+- `namespaces`/`namespaceTemplates`: `{actorId}`, `{sessionId}`, `{memoryStrategyId}` 치환자 지원. **raw boto3 API는 `namespaceTemplates`가 현행 필드**(`namespaces`는 레거시) — boto3로 `create_memory` 시 `namespaceTemplates`를 쓰세요. `agentcore.json` 키 이름은 CLI 스키마를 따르므로 위 JSON 예시(`namespaces`)대로 둡니다.
 
-## 메모리 리소스 생성 (제어면 SDK)
+## 메모리 리소스 생성 (제어면 — boto3)
 
-CLI 대신 코드로 리소스를 만들려면 `MemoryManager`를 사용합니다. (배포 환경에서는 보통 `agentcore add memory`로 만드는 것을 권장)
+CLI 대신 코드로 리소스를 만들려면 boto3 `bedrock-agentcore-control`을 사용합니다. (배포 환경에서는 보통 `agentcore add memory`로 만드는 것을 권장)
 
 ```python
-from bedrock_agentcore_starter_toolkit.operations.memory.manager import MemoryManager
-from bedrock_agentcore_starter_toolkit.operations.memory.models.strategies import SemanticStrategy
+import boto3
 
-manager = MemoryManager(region_name="us-west-2")
+control = boto3.client("bedrock-agentcore-control", region_name="us-west-2")
 
-memory = manager.get_or_create_memory(
+memory = control.create_memory(
     name="CustomerSupportSemantic",
     description="Customer support memory store",
-    strategies=[
-        SemanticStrategy(
-            name="semanticLongTermMemory",
-            namespaces=["/strategies/{memoryStrategyId}/actors/{actorId}/"],
-        )
+    eventExpiryDuration="P30D",          # ISO 8601 기간 (최대 365일)
+    memoryStrategies=[
+        {"semanticMemoryStrategy": {
+            "name": "semanticLongTermMemory",
+            "namespaceTemplates": ["/strategies/{memoryStrategyId}/actors/{actorId}/"],
+        }}
     ],
 )
-memory_id = memory.get("id")
+memory_id = memory["memory"]["id"]
 
-manager.list_memories()
-manager.delete_memory(memory_id=memory_id)
+control.list_memories()
+control.delete_memory(memoryId=memory_id)
 ```
 
-> 설치: `pip install bedrock-agentcore bedrock-agentcore-starter-toolkit`. Starter Toolkit은 빠른 시작용 헬퍼이고, 전체 연산은 boto3 `bedrock-agentcore-control`/`bedrock-agentcore`로 가능합니다.
+> 전략 태그드 유니온 키: `semanticMemoryStrategy` / `summaryMemoryStrategy` / `userPreferenceMemoryStrategy` / `episodicMemoryStrategy` / `customMemoryStrategy`.
+> 설치: `pip install bedrock-agentcore` + `npm install -g @aws/agentcore`(CLI). 데이터면 연산은 boto3 `bedrock-agentcore`로 가능합니다.
 
 ## 이벤트 쓰기 / 조회 (데이터면 SDK)
 
@@ -140,12 +142,12 @@ session.add_turns(messages=[
 turns = session.get_last_k_turns(k=5)
 
 # 장기: 전체 레코드 나열
-records = session.list_long_term_memory_records(namespace_prefix="/")
+records = session.list_long_term_memory_records(namespace_path="/")
 
 # 장기: 의미 검색
 relevant = session.search_long_term_memories(
     query="고객 지원 이슈를 요약해줘",
-    namespace_prefix="/",
+    namespace_path="/",
     top_k=3,
 )
 ```
@@ -175,7 +177,7 @@ def invoke(payload):
 
     # 관련 장기 기억 조회 → 시스템 프롬프트에 주입
     memories = session.search_long_term_memories(
-        query=prompt, namespace_prefix="/", top_k=5
+        query=prompt, namespace_path="/", top_k=5
     )
     context = "\n".join(str(m) for m in memories)
 
@@ -194,6 +196,54 @@ if __name__ == "__main__":
 
 > [!NOTE]
 > LTM 추출은 비동기 백그라운드 작업입니다. 이벤트를 쓴 직후에는 레코드가 아직 없을 수 있습니다. 추출 작업 상태는 boto3 `list_memory_extraction_jobs`로 확인할 수 있습니다.
+
+### 권장: Strands 통합 헬퍼 (자동 저장·조회)
+
+위처럼 수동으로 `search`/`add_turns`를 엮는 대신, **현행 권장 방식**은 통합 세션 매니저를 쓰는 것입니다. 턴 저장·메모리 조회가 자동화됩니다:
+
+```python
+from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig, RetrievalConfig
+from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
+from strands import Agent
+
+config = AgentCoreMemoryConfig(
+    memory_id="<memory-id>", session_id="sess-456", actor_id="user-123",
+    # batch_size > 1 이면 메시지를 버퍼링 → 반드시 with 블록 또는 .close() 호출(아니면 유실)
+)
+session_manager = AgentCoreMemorySessionManager(config, region_name="us-west-2")
+
+agent = Agent(system_prompt="...", session_manager=session_manager)
+agent("주문이 안 왔어요")   # 턴 저장 + 관련 메모리 조회가 자동 처리됨
+```
+
+데이터면 편의 클라이언트로 `from bedrock_agentcore.memory import MemoryClient`(`create_memory_and_wait(...)` 등)도 있습니다. LangChain/LangGraph는 `AgentCoreMemorySaver`(STM 체크포인트)·`AgentCoreMemoryStore`(LTM)를 사용합니다.
+
+## 메타데이터 필터링 (indexed keys) — 속성 기반 사전 필터
+
+의미 검색(KNN) 전에 **구조화된 메타데이터로 사전 필터링**할 수 있습니다(예: `priority == "high"`인 레코드만).
+
+1. **생성 시 인덱스 키 선언** — `create_memory`/`update_memory`의 `indexedKeys`: `[{"key":"priority","type":"STRING"}]`. 타입 `STRING|STRINGLIST|NUMBER`, 메모리당 **최대 10개**, 추가 후 제거 불가·기존 레코드 백필 없음.
+2. **(LTM) 전략별 `metadataSchema`** — `memoryRecordSchema.metadataSchema`로 대화에서 메타데이터를 LLM 추출(`extractionConfig.llmExtractionConfig`, 내장 지시 `LATEST_VALUE` 등) 또는 `extractionType: STRICTLY_CONSISTENT`(이벤트 값 그대로 복사, 다른 값끼리 통합 방지). 기본은 `LLM_INFERRED`.
+3. **이벤트에 메타데이터 주입** — `CreateEvent(metadata={"department":{"stringValue":"billing"}})` 또는 `BatchCreate/UpdateMemoryRecords`.
+4. **질의 시 필터** — `RetrieveMemoryRecords`의 `searchCriteria.metadataFilters`(또는 `ListMemoryRecords` 최상위, 의미 검색 없이 메타데이터만). 필터당 **최대 5개, AND 로직**, KNN 이전 사전 필터로 적용.
+
+```python
+records = client.retrieve_memory_records(
+    memoryId="<memory-id>",
+    namespace="/users/123/facts",
+    searchCriteria={
+        "searchQuery": "고객 이슈 요약",
+        "metadataFilters": [
+            {"left": {"metadataKey": "priority"},
+             "operator": "EQUALS_TO",
+             "right": {"metadataValue": {"stringValue": "high"}}},
+        ],
+    },
+    maxResults=20,   # 기본 20, 최대 100
+)
+```
+
+연산자: `EQUALS_TO, CONTAINS, EXISTS, NOT_EXISTS, GREATER_THAN(_OR_EQUALS), LESS_THAN(_OR_EQUALS), BEFORE, AFTER`. 시스템 타임스탬프 `x-amz-agentcore-memory-createdAt`/`updatedAt`은 키 선언 없이 필터 가능. (`ListEvents`의 이벤트 메타데이터 필터는 `EXISTS/NOT_EXISTS/EQUALS_TO` + `stringValue`만 지원.)
 
 ## Best Practices
 
@@ -221,6 +271,10 @@ agentcore status --type memory
 **제어면 (bedrock-agentcore-control):** `CreateMemory`, `GetMemory`, `UpdateMemory`, `DeleteMemory`, `ListMemories` — 리소스 `arn:aws:bedrock-agentcore:*:*:memory/*`.
 
 **데이터면 (bedrock-agentcore):** `CreateEvent`, `GetEvent`, `DeleteEvent`, `ListEvents`, `ListActors`, `ListSessions`, `GetMemoryRecord`, `DeleteMemoryRecord`, `ListMemoryRecords`, `RetrieveMemoryRecords`, `BatchCreate/Delete/UpdateMemoryRecords`, `ListMemoryExtractionJobs`, `StartMemoryExtractionJob`.
+
+### 주요 한도 (Memory)
+
+메모리 리소스 150개/리전(조정 가능), **전략 6개/메모리(조정 불가)**, 900 전략/계정. `eventExpiryDuration` 7–365일. CreateEvent 메시지 100개/이벤트·메시지당 100KB·이벤트 10MB. RetrieveMemoryRecords/ListMemoryRecords 각 30 TPS, CreateEvent 10 TPS. LTM 추출 150,000 토큰/분(조정 가능). RetrieveMemoryRecords `maxResults` 기본 20·최대 100. 전체는 [Quotas](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/bedrock-agentcore-limits.html) 참조.
 
 ## 최신 정보 확인
 

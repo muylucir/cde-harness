@@ -11,6 +11,7 @@ allowedTools:
   - Glob
   - Grep
   - WebFetch
+  - mcp__agentcore-web-search__web-search___WebSearch
   - WebSearch
   - Bash(ls:*)
   - Bash(mkdir:*)
@@ -46,7 +47,19 @@ allowedTools:
 
 추출한 키워드로 다음을 검색한다:
 
-> **URL 수집 원칙**: 모든 검색/조회에서 출처 URL을 반드시 수집한다. 각 WebSearch/WebFetch 결과의 URL을 `metadata.sources`에 기록한다. URL을 찾을 수 없는 경우 `"url": null`로 명시한다.
+> **웹 검색 도구 (선택 우선순위 — 이 블록이 도구 선택의 단일 기준)**: 웹 **검색**은 아래 우선순위로 도구를 선택한다.
+>
+> 1. **1순위 — `mcp__agentcore-web-search__web-search___WebSearch`** (AgentCore 게이트웨이 웹 검색, 사용 가능한 경우): 호출 파라미터 `query`(필수, 검색 문자열), `maxResults`(선택, 1–25, 기본 10).
+> 2. **2순위 — 내장 `WebSearch`** (폴백): 아래 중 **하나라도** 해당하면 사용한다.
+>    - **미설치**: `mcp__agentcore-web-search__web-search___WebSearch`가 사용 가능한 도구 목록에 **없다** (= `agentcore-web-search` MCP 서버가 이 환경에 등록되지 않음). 이 경우 시도 없이 **처음부터** 내장 `WebSearch`로 진행한다.
+>    - **런타임 실패**: MCP 도구는 있으나 호출이 **연속 2회 실패**(타임아웃/에러)했다. 이 경우 이후 검색은 내장 `WebSearch`로 전환한다.
+>
+> 폴백(2순위)을 사용한 경우 완료 보고에 사용한 백엔드를 명시한다 — 예: `웹 검색 백엔드: 내장 WebSearch (agentcore-web-search 미설치)` 또는 `... (MCP 연속 실패로 폴백)`.
+>
+> - 검색 결과의 특정 페이지 본문이 필요하면 `WebFetch`로 해당 URL을 조회한다 (두 검색 도구 모두 검색만 제공, 본문 fetch 미지원).
+> - 본 문서에서 "검색"이라고 표기된 모든 항목(2a~2f)은 위 우선순위로 선택된 검색 도구 호출을 의미한다. 어느 백엔드를 쓰든 검색 횟수·포화 판정·최소 깊이 기준은 동일하게 적용한다.
+
+> **URL 수집 원칙**: 모든 검색/조회에서 출처 URL을 반드시 수집한다. 각 검색 결과(MCP WebSearch)/WebFetch 결과의 URL을 `metadata.sources`에 기록한다. URL을 찾을 수 없는 경우 `"url": null`로 명시한다.
 
 **2a. 업계 표준 워크플로우**
 - "{domain} management workflow" 검색
@@ -128,7 +141,7 @@ allowedTools:
 
 **단계**:
 1. **Read**: customer-brief.md → 키워드 추출
-2. **WebSearch**: 카테고리 2a~2f (포화 판정까지)
+2. **WebSearch**: 2단계 "웹 검색 도구" 우선순위로 선택한 도구(`mcp__agentcore-web-search__web-search___WebSearch` 우선, 미설치/실패 시 내장 `WebSearch`)로 카테고리 2a~2f 검색 (포화 판정까지)
 3. **Write**: `domain-context.json` (크면 카테고리별 배열을 Edit로 채움)
 4. **Write**: `domain-context.md`
 
@@ -169,7 +182,8 @@ allowedTools:
 
 ## 검증 체크리스트
 
-- [ ] 웹 검색을 최소 10회 이상 수행했는가
+- [ ] 웹 검색을 최소 10회 이상 수행했는가 (2단계 우선순위로 도구 선택: `mcp__agentcore-web-search__web-search___WebSearch` 우선, 미설치·실패 시 내장 `WebSearch` 폴백)
+- [ ] 폴백(내장 WebSearch)을 사용한 경우 완료 보고에 검색 백엔드를 명시했는가
 - [ ] 카테고리별 최소 깊이를 모두 충족했는가 (2.5단계 표 참조)
 - [ ] 종료 조건 3가지 중 최소 1개를 충족하여 종료했는가
 - [ ] 유사 제품 기능 분석이 포함되었는가
@@ -185,6 +199,9 @@ allowedTools:
 |----------|------|
 | `customer-brief.md` 미존재 | "고객 브리프가 없습니다. `/brief`를 먼저 실행하세요." 에러 출력 + 중단 |
 | WebSearch 결과 0건 | 키워드 변형으로 2회 재시도 (예: 영어→한국어, 동의어). 그래도 0건이면 해당 항목을 "리서치 불충분"으로 표기하고 나머지 계속 |
+| `mcp__agentcore-web-search__...` 도구가 목록에 없음 (서버 미설치) | 시도 없이 처음부터 내장 `WebSearch`로 진행. 완료 보고에 백엔드 명시 |
+| `mcp__agentcore-web-search__...` 호출 실패(타임아웃/에러) | 동일 쿼리 1회 재시도 → 연속 2회 실패 시 내장 `WebSearch`로 폴백하고 계속. 폴백 사용 시 사용자 보고에 명시 |
+| 내장 `WebSearch`도 사용 불가 | 웹 검색 없이 진행 불가 — 사용자에게 "웹 검색 도구를 사용할 수 없습니다"를 알리고 중단 |
 | WebFetch 403/timeout/실패 | 다른 소스 URL로 대체 시도. 실패 시 `"url": null`로 기록하고 계속 |
 | 도메인 식별 불가 (브리프가 모호) | 사용자에게 산업/도메인 명확화 질문 출력 + 중단. "브리프에서 도메인을 식별할 수 없습니다. 산업을 명시해 주세요." |
 | 복수 도메인 감지 | 주 도메인/부 도메인으로 분리하여 사용자에게 확인: "다음 도메인이 감지되었습니다: {목록}. 주 도메인을 선택해 주세요." |

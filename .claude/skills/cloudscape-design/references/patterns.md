@@ -124,22 +124,30 @@ Fetch the pattern URL for detailed implementation guidance.
 
 ## Generative AI Patterns
 
-| Pattern | URL Path | Description |
-|---------|----------|-------------|
-| Generative AI chat | `genai/generative-AI-chat` | User-AI conversation interface |
-| Conversational history | `genai/history` | Chat history management |
-| Pattern abstraction | `genai/genai-patterns` | GenAI pattern framework |
-| Ingress | `genai/ingress` | Button to engage AI feature |
-| Follow-up questions | `genai/follow-up-questions` | Request additional info |
-| Shortcut menus | `genai/shortctut-menus` | Quick access menus |
-| Support prompts | `genai/support-prompts` | Suggested prompts for users |
-| Progressive steps | `genai/progressive-steps` | Hierarchical task display |
-| Artifact previews | `genai/artifact-previews` | Display AI-generated artifacts |
-| Response regeneration | `genai/response-regeneration` | Generate alternative response |
-| Generative AI loading states | `genai/genai-loading-states` | AI processing status |
-| Generative AI output label | `genai/output-label` | Label AI-produced output |
-| User authorized actions | `genai/user-authorized-actions` | AI actions needing authorization |
-| Variables | `genai/variables` | Variable usage in templates |
+> ⚠️ GenAI patterns live under a **different base URL** than the rest: `https://cloudscape.design/gen-ai/patterns/{slug}/index.html.md` (note `gen-ai/patterns/`, **not** `/patterns/...`). The old `patterns/genai/...` URLs now 404.
+
+| Pattern | URL slug (under `gen-ai/patterns/`) | Description | Built from |
+|---------|-------------------------------------|-------------|-----------|
+| Generative AI chat | `generative-ai-chat` | User-AI conversation interface | `ChatBubble`, `Avatar`, `PromptInput`, `SupportPromptGroup` |
+| Timeline overview | `timeline-overview` | **Agent events/actions/milestones in a chronological timeline** (agent-activity feed) | `Steps`, `Header`, `Select` filter, `Divider` |
+| Thinking | `thinking` | AI reasoning shown before the final response ("Thought for 14s") | `ExpandableSection` (collapsed), `Steps`, `CodeView` inline, `Link` |
+| Progressive steps | `progressive-steps` | Hierarchical display of agent tasks being performed | `Steps`, `ExpandableSection` |
+| Agent management | `agent-management` | Browse, enable, and scope AI agents for a user/org | `Cards`/`Table`, `Toggle`, `Header` |
+| In-chat context | `in-chat-context` | Ways users supply context to an agent mid-conversation | `PromptInput`, `FileUpload`, `TokenGroup` |
+| Conversational history | `conversational-history` | Chat history management | `SideNavigation`, `ExpandableSection` |
+| Follow-up questions | `follow-up-questions` | Request additional info to improve responses | `SupportPromptGroup` |
+| Support prompts | `support-prompts` | Suggested prompts presented to users | `SupportPromptGroup` |
+| Shortcut menus | `shortcut-menus` | Modify behavior, add context, run quick actions | `ButtonDropdown` |
+| Ingress | `ingress` | Button/affordance to engage an AI feature | `Button`, `Avatar` (`gen-ai`) |
+| Artifact previews | `artifact-previews` | Display AI-generated artifacts in chat | `Container`, `CodeView`, `Modal` |
+| Response regeneration | `response-regeneration` | Generate an alternative response | `ButtonGroup` |
+| Generative AI loading states | `generative-ai-loading-states` | AI processing/generating status | `ChatBubble showLoadingBar`, `LoadingBar` |
+| Generative AI output label | `generative-ai-output-label` | Short label marking AI-produced output | `Box`, `Icon` (`gen-ai`) |
+| User authorized actions | `user-authorized-actions` | AI actions needing user authorization | `Alert`, `Button`, `Modal` |
+| Variables | `variables` | Variables within prompt templates / structured content | `TokenGroup`, `Autosuggest` |
+| Pattern abstraction | `pattern-abstraction` | Framework abstraction over GenAI patterns | — |
+
+GenAI foundation (color/icon conventions for AI features): `https://cloudscape.design/gen-ai/foundation/index.html.md` — use `Avatar`/`Icon` with `color="gen-ai"`/`iconName="gen-ai"` to signal AI-powered surfaces.
 
 ## Demos (Source Code)
 

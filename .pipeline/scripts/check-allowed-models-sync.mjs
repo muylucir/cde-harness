@@ -55,6 +55,16 @@
  *       — PreToolUse Bash 가드를 추출·재생해 state.json 우회/비가역 명령 차단이 살아있는지 검증.
  *         node 스크립트파일 우회(P1-A3) 봉합 후 회귀 방지.
  *
+ *   (O) 확정 결정/요구 패턴 disposition 보존 (check-decision-preservation.mjs sub-call)
+ *       — req의 confirmed Key Decision과 요구된 에이전트 통신/토폴로지 패턴이 architecture/ai-internals를
+ *         거치며 trade-off 기록 없이 사라지거나 더 단순한 패턴으로 교체(무기록 다운그레이드)되는 drift 차단.
+ *         honored/deferred/descoped + rationale (+ restore_path) 기록을 강제한다.
+ *
+ *   (P) AI 코어 AgentCore 이식성 (check-ai-portability.mjs sub-call)
+ *       — src/lib/ai/** 에이전트 코어가 Next 프로세스에 용접(server-only/next import)되거나 in-process
+ *         스토어에 직접 결합(@/lib/db import + 영속화 호출)되어 AgentCore Runtime으로 들어올릴 수 없게 되는
+ *         것을 차단. events-only 코어: 코어는 emit만, 영속화는 어댑터(Next 라우트/AgentCore 핸들러)가.
+ *
  * 사용법: node .pipeline/scripts/check-allowed-models-sync.mjs
  * 종료 코드: 0 = 모든 SSOT sync, 1 = 어느 하나라도 drift
  */
@@ -245,6 +255,8 @@ function main() {
     { name: '[J] AI streaming markdown rendering', script: 'check-markdown-render.mjs' },
     { name: '[K] review-categories.json ↔ reviewer.md / ssot_for', script: 'check-review-categories.mjs' },
     { name: '[N] settings.json Bash guard hook DENY/ALLOW matrix', script: 'check-hook-guard.mjs' },
+    { name: '[O] confirmed decision / required pattern disposition', script: 'check-decision-preservation.mjs' },
+    { name: '[P] AI core AgentCore Runtime portability', script: 'check-ai-portability.mjs' },
   ];
 
   let totalFailed = failed;
@@ -267,7 +279,7 @@ function main() {
     );
     process.exit(1);
   }
-  console.log('\n✓ 모든 정책 SSOT (모델 ID / store naming / strands Rule 13 / agent models / Bedrock import / spec model_id / reviewer skills / API envelope / stages drift / markdown rendering / review categories / hardcoded model literals / consumers paths / hook guard matrix) 동기화 확인.');
+  console.log('\n✓ 모든 정책 SSOT (모델 ID / store naming / strands Rule 13 / agent models / Bedrock import / spec model_id / reviewer skills / API envelope / stages drift / markdown rendering / review categories / hardcoded model literals / consumers paths / hook guard matrix / decision preservation / AI portability) 동기화 확인.');
   process.exit(0);
 }
 

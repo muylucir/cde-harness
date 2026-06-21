@@ -131,6 +131,12 @@ reviewer는 카테고리별 검사 직전에 다음 Skill 도구를 **반드시*
 - [ ] 각 FR에 대해 `requirements_coverage[FR].pages|components|api_routes|hooks` 중 최소 한 곳에 매핑이 존재 (전부 빈 배열이면 미커버)
 - [ ] (샘플 spot-check) 매핑된 컴포넌트가 실제 `src/`에 존재 (manifest는 신뢰하되 무작위 N=3 검증)
 - [ ] 구현이 인수 조건(acceptance criteria)과 일치하는가? (FR 본문과 매핑 컴포넌트의 동작 정합)
+- [ ] **AC 충실도 (semantic fidelity) — "선언만 커버, 실제 미배선" 차단**: 커버리지 매핑이 존재한다고 PASS가 아니다. AC가 **구체적 데이터 흐름·메커니즘**을 명시하면 그것이 실제로 동작하는지 코드로 확인한다:
+  - **데이터가 명시된 소비처로 흐르는가**: AC가 "X가 Y에 참조/주입된다"고 하면, X의 계산 결과가 실제로 Y에 전달되는지 본다. 계산 후 버려지면(`void fn()`, 반환값 미사용) **partial coverage** — manifest가 "covered"라 주장해도 FAIL/CONCERNS. (예: LTM `referencedIncidentIds`를 계산하고 A-RCA 프롬프트에 안 넣음)
+  - **레지스트리/등록 기반 동작이 실제 레지스트리로 구동되는가**: AC/NFR이 "등록만으로 코어 변경 없이 추가/활성화"(예: Agent Card 등록만으로 위임 대상 확장, FR-011/NFR-006류)를 명시하면, 위임/디스패치가 **런타임 레지스트리 조회**(`repository.list({status:'active'})` 등)로 구동되는지 확인한다. 컴파일타임 `z.enum([...])` + 고정 호출부로 하드코딩돼 새 항목이 코어 수정 없이 동작 불가하면 FAIL/CONCERNS.
+  - **스펙↔코드 패턴 정합**: `ai-internals.json.architecture.strands_pattern` / `requirement_pattern_disposition.chosen_pattern`에 적힌 패턴이 실제 코드와 일치하는가. 스펙은 `.asTool()`(도구 등록)인데 코드는 `Promise.all([directCall, ...])` 하드코딩 호출이면 스펙↔코드 drift → FAIL. (SDK 제약으로 어쩔 수 없이 직접 호출이면, 그 사실이 `requirement_pattern_disposition`에 기록돼 있어야 한다.)
+  - 위 어느 것이든 **manifest의 커버리지 주장이 실제 구현보다 과장**되면 그 자체가 finding이다(`harness_rule="review-category 5 (AC fidelity)"`). manifest를 정정하거나 구현을 보강하도록 `return_to`를 지정한다.
+- [ ] **확정 결정 disposition 보존**: `requirements.json.key_decisions[]`의 confirmed 항목이 `architecture.json.key_decisions_disposition[]`에 기록되었는가. AI 프로토타입이면 `ai-internals.json.architecture.requirement_pattern_disposition`도 확인. (자동 게이트 `check-decision-preservation.mjs` [O]가 1차 차단하나, reviewer는 disposition의 **내용 품질**을 본다 — rationale이 형식적이거나 restore_path가 비현실적이면 CONCERNS.)
 
 **검사 방법**:
 ```bash
@@ -269,10 +275,12 @@ AI 채팅/분석 응답이 사용자에게 마크다운 원문(`**bold**`, `# he
 - [ ] **streaming-markdown 페어링**: `useAIStreaming` 훅을 호출하는 모든 컴포넌트가 `<MarkdownContent>` 또는 `<ReactMarkdown>` JSX와 페어링되어 있음. 한쪽만 있고 다른 쪽이 없으면 회귀 직전 신호
 - [ ] **raw 렌더링 금지**: assistant 분기 JSX에 `{content}`, `{msg.content}`, `{message.content}` 같은 raw 텍스트 노출 0건. user role 메시지의 raw 출력은 허용 (마크다운 의도 없음)
 - [ ] **XSS 방지**: `dangerouslySetInnerHTML`로 마크다운 HTML 삽입 0건
+- [ ] **AgentCore 이식성 (Rule 14, sub-check [P])**: `src/lib/ai/**`(에이전트 코어)가 transport-/persistence-neutral인가 — `server-only`/`next/*`/`@/lib/db` import 0건, repository 영속화 호출 0건. 영속화/전송은 `src/app/api/**` 라우트 어댑터가 소유(events-only). `check-ai-portability.mjs` 결과를 1차 근거로 인용하되, 코어/어댑터 분리가 **실질적으로** 성립하는지(같은 코어를 AgentCore Express 핸들러로 감쌀 수 있는지) 본다. 위반 시 `return_to: "code-generator-ai"`.
 
 **검사 방법**:
 ```bash
 node .pipeline/scripts/check-markdown-render.mjs   # 자동 검증 진입점 (sub-check [J])
+node .pipeline/scripts/check-ai-portability.mjs    # AI 코어 이식성 (sub-check [P])
 grep -rEn "dangerouslySetInnerHTML" src/ 2>/dev/null
 grep -rEn "\\{\\s*(msg|message)\\.content\\s*\\}" src/ 2>/dev/null
 ```

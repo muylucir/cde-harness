@@ -168,6 +168,17 @@ node .pipeline/scripts/checkpoint.mjs schema --json
 
     > **금지**: `process.env.BEDROCK_MODEL_ID ?? '...'` 패턴, `.env.example`에 모델 ID 등록, 단축 이름(`'sonnet'`)을 SDK에 전달, 위 3개 외 다른 모델 ID 사용.
 
+14. **AI 에이전트 코어는 AgentCore Runtime 이식 가능 형태로 작성한다 (transport-/persistence-neutral).** AI 에이전트는 궁극적으로 Amazon Bedrock AgentCore Runtime(또는 컨테이너 BYO: Express `/ping`+`/invocations`, ARM64)에 **별도 프로세스로** 배포된다. 따라서 `src/lib/ai/**`(에이전트 토폴로지/프롬프트/도구 = "포터블 코어")는 Next.js 프로세스나 in-process 스토어에 결합되면 안 된다. Rule 12의 `DATA_SOURCE` 듀얼 모드가 데이터 레이어에서 하는 일을, `AI_RUNTIME` 듀얼 모드가 AI 런타임 레이어에서 한다.
+
+    - **`AI_RUNTIME` 듀얼 모드**: `inline`(기본, $0 — Next 라우트가 코어를 in-process로 실행, 현재 동작) | `agentcore`(라우트는 `InvokeAgentRuntimeCommand`로 배포된 런타임을 호출하는 얇은 프록시). `/awsarch` 실행 후 `agentcore`로 전환.
+    - **포터블 코어 규칙** (`src/lib/ai/**`, `check-ai-portability.mjs` = sub-check [P]가 강제):
+      1. `import 'server-only'` 금지 — 코어는 Next 전용이 아니다.
+      2. `next/*` import 금지 — 전송(SSE `ReadableStream`/`done`/`close`)은 Next 라우트 **어댑터**가 소유한다.
+      3. `@/lib/db/*` import 금지 — 입력은 컨텍스트/payload로 주입, 출력은 이벤트로 emit (읽기·쓰기 모두).
+      4. repository 영속화 호출(`<X>Repository.create/append/update/...`) 금지.
+    - **데이터 정책 = Events-only**: 코어는 activity/audit/tool_call/카드/최종 메시지를 전부 `SSEEmitter`로 **emit만** 하고 직접 영속화하지 않는다. 영속화는 **소비자**(inline=Next 라우트, agentcore=이벤트를 수신하는 Next)가 담당한다. 이로써 Next SSE 라우트와 미래 AgentCore Express `/invocations` 핸들러가 같은 코어 위 **얇은 어댑터 2개**가 된다.
+    - **TS는 컨테이너 BYO 경로**: AgentCore Runtime의 1급 스캐폴드는 Python(`BedrockAgentCoreApp`)이지만, TS Strands는 Express `/ping`+`/invocations`(port 8080, ARM64 Docker, ECR) 컨테이너로 배포한다. 상세는 `strands-sdk-typescript-guide` / `bedrock-agentcore-guide` 스킬.
+
 ## API Contract Conventions (BE/FE 공통)
 
 BE와 FE가 생성하는 모든 API 응답/요청은 아래 형식을 **예외 없이** 따른다. 단일 소스는 spec-writer-backend가 생성하는 `.pipeline/artifacts/v{N}/03-specs/api-contract.json`이며, 실제 구현 매니페스트는 code-generator-backend가 생성하는 `.pipeline/artifacts/v{N}/04-codegen/api-manifest.json`이다. **스펙과 실제 구현이 다르면 실제 구현을 신뢰한다.**

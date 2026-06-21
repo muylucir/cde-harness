@@ -134,6 +134,12 @@ src/
    - 이 검증은 ai-internals.json의 `system_prompt` 영역과 ai-contract의 `sse_events` 영역만 Read하면 충분하다 — system_prompt 전문은 코드 합성 시 어차피 Read한다.
    - 검증 실패는 `generation-log-ai.json`의 `skipped_scope[]`에 `target: "marker-validation"`, `impact: "high"`로 기록한다.
 7. **세션/요약/상태 관리 메서드는 stub 금지** — `summarizeIfOver20Turns`처럼 ai-internals의 `agent_topology.memory`에 명시된 훅은 실제 구현 필수. 빈 바디 또는 미구현 throw 금지.
+8. **AI 코어는 AgentCore Runtime 이식 가능 형태로 작성 (CLAUDE.md Rule 14, `check-ai-portability.mjs` = sub-check [P]가 강제 — 위반 시 reviewer P0 반려).** `src/lib/ai/**`(에이전트 토폴로지/프롬프트/도구 = "포터블 코어")와 `src/app/api/**`의 SSE 라우트("어댑터")를 분리한다:
+   - **코어 금지사항** (`src/lib/ai/**`): `import 'server-only'` 금지 · `next/*` import 금지 · `@/lib/db/*` import 금지 · `<X>Repository.create/append/update/insert/replace/delete()` 호출 금지.
+   - **Events-only**: 코어는 activity/audit/tool_call/카드/최종 메시지를 주입받은 `SSEEmitter`로 **emit만** 한다. 영속화는 **라우트 어댑터**가 SSE 이벤트를 보며 수행한다(또는 이벤트 핸들러에서). 예: 코어의 `orchestratorRunner.stream()`은 최종 텍스트를 emit하고, 라우트가 그 이벤트를 받아 `messageRepository.create()`를 호출한다. 코어 안에서 `messageRepository.create()`를 직접 부르지 않는다.
+   - **입력 주입**: 세션 컨텍스트·활성 Agent Card·메모리 뷰 등 코어가 읽어야 하는 데이터는 라우트 어댑터가 조회해서 `createRunContext(...)`/payload로 **주입**한다. 코어가 `@/lib/db`를 import하지 않는다.
+   - **`AI_RUNTIME` 듀얼 모드**: 라우트는 `process.env.AI_RUNTIME ?? 'inline'`로 분기 — `inline`이면 코어를 in-process 실행(현재), `agentcore`면 `InvokeAgentRuntimeCommand`로 배포된 런타임 호출. agentcore 분기는 미배포 상태에서 명확한 에러를 던지는 스텁이어도 되나(휴면), 코어/어댑터 분리 자체는 inline에서도 반드시 성립해야 한다.
+   - **목표 불변식**: 같은 코어를 (a) Next SSE 라우트와 (b) 미래 AgentCore Express `/invocations` 핸들러가 **얇은 어댑터 2개**로 감쌀 수 있어야 한다. 상세 배포 패턴은 `strands-sdk-typescript-guide`의 `references/deployment.md`(Express `/ping`+`/invocations`) 참조.
 
 ### 점진적 작업 규칙
 
@@ -231,6 +237,7 @@ src/
 
 - [ ] `npm run build` 성공
 - [ ] `node .pipeline/scripts/ai-smoke.mjs` 통과 (stub 금지/이벤트명 일관성/Agent 인스턴스/Bedrock 직접 import 금지)
+- [ ] **`node .pipeline/scripts/check-ai-portability.mjs --root=.` 통과 (Rule 14, sub-check [P])** — `src/lib/ai/**`에 `server-only`/`next/*`/`@/lib/db` import 0건, repository 영속화 호출 0건. 영속화/전송은 `src/app/api/**` 라우트 어댑터가 소유(events-only). 위반 시 코어/어댑터 분리를 리팩터한다.
 - [ ] `@aws-sdk/client-bedrock-runtime` 직접 import가 없는가 (Strands SDK만 사용)
 - [ ] `BedrockModel` 인스턴스로 모델 프로바이더가 설정되었는가
 - [ ] **모든 `modelId` 문자열이 CLAUDE.md Rule 13의 3개 ID 중 하나로 직접 명시되었는가** (SSOT: `.pipeline/scripts/allowed-models.json` — haiku / sonnet / opus 단축에 대응하는 정식 ID)

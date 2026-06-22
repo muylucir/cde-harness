@@ -161,11 +161,22 @@ function main() {
     process.exit(2);
   }
 
+  // 휴면 agent-runtime/ 진입점 존재 여부 — advisory(경고만, exit code 불변).
+  // 코어가 깨끗해도 두 번째 어댑터(전략 A 진입점)가 없으면 이식성이 "코드로 증명"되지 않는다.
+  // 하드 fail로 만들지 않는 이유: agent-runtime/는 휴면 빌드 타깃이라 부재가 코어 결함은 아니다.
+  // 강제는 code-generator-ai 규칙 9 + 체크리스트가 담당하고, 여기선 발견 가능성만 높인다.
+  const runtimeEntry = resolve(ROOT, 'agent-runtime/src/index.ts');
+  const runtimeAdvisory = existsSync(runtimeEntry)
+    ? `  ✓ 휴면 agent-runtime/ 진입점 존재 (전략 A — AgentCore Express 어댑터)`
+    : `  ⚠ agent-runtime/src/index.ts 부재 — 휴면 AgentCore 진입점(전략 A) 미생성. ` +
+      `code-generator-ai 규칙 9 권장(이식성을 컴파일로 증명). advisory.`;
+
   if (allViolations.length === 0) {
     console.log(
       `  ✓ src/lib/ai/ ${files.length}개 파일 모두 transport-/persistence-neutral ` +
         `(server-only/next/@lib/db/영속화 호출 0건) — AgentCore Runtime 이식 가능 형태`,
     );
+    console.log(runtimeAdvisory);
     process.exit(0);
   }
 

@@ -178,6 +178,7 @@ node .pipeline/scripts/checkpoint.mjs schema --json
       4. repository 영속화 호출(`<X>Repository.create/append/update/...`) 금지.
     - **데이터 정책 = Events-only**: 코어는 activity/audit/tool_call/카드/최종 메시지를 전부 `SSEEmitter`로 **emit만** 하고 직접 영속화하지 않는다. 영속화는 **소비자**(inline=Next 라우트, agentcore=이벤트를 수신하는 Next)가 담당한다. 이로써 Next SSE 라우트와 미래 AgentCore Express `/invocations` 핸들러가 같은 코어 위 **얇은 어댑터 2개**가 된다.
     - **TS는 컨테이너 BYO 경로**: AgentCore Runtime의 1급 스캐폴드는 Python(`BedrockAgentCoreApp`)이지만, TS Strands는 Express `/ping`+`/invocations`(port 8080, ARM64 Docker, ECR) 컨테이너로 배포한다. 상세는 `strands-sdk-typescript-guide` / `bedrock-agentcore-guide` 스킬.
+    - **휴면 `agent-runtime/` 패키지 (전략 A, code-generator-ai 규칙 9)**: AI FR이 있으면 code-generator-ai가 코어를 감싸는 두 번째 어댑터를 **레포 루트 `agent-runtime/`** 에 휴면 생성한다 — Express `/ping`+`/invocations` 진입점 **1개**(오케스트레이터/단일 에이전트만 노출, sub-agent는 in-process), ARM64 Dockerfile, README. Next 빌드/배포 대상이 아니나 `cd agent-runtime && npx tsc --noEmit`로 코어 이식성을 컴파일로 증명한다. **멀티-Runtime A2A(전략 B)는 코드 생성하지 않고** README의 복원 경로로만 문서화하며, 실제 분리는 `/awsarch`의 명시적 의사결정이다. 배포 활성화는 aws-deployer(언어 일치: TS 코어 → TS 컨테이너, Python 래퍼 금지).
 
 ## API Contract Conventions (BE/FE 공통)
 
@@ -229,6 +230,7 @@ ESLint가 강제할 수 없는 규칙 (에이전트가 준수):
 
 `src/`는 하네스에 포함되지 않으며, 파이프라인 실행 시 코드 제너레이터가 생성한다.
 `infra/`는 `/awsarch` 실행 시 aws-deployer가 생성한다.
+`agent-runtime/`(휴면)은 AI FR이 있을 때 code-generator-ai가 생성한다 — `src/lib/ai/` 코어를 AgentCore Runtime용으로 감싸는 Express `/ping`+`/invocations` 어댑터(Rule 14 / 규칙 9). Next 빌드 대상이 아니다.
 
 ```
 src/

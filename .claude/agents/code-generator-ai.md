@@ -103,12 +103,21 @@ src/
 │       └── streaming.ts          # SSE 스트리밍 유틸리티
 ├── app/api/
 │   ├── chat/
-│   │   └── route.ts             # 채팅 API (스트리밍 응답)
+│   │   └── route.ts             # 채팅 API (스트리밍 응답) — 어댑터 #1 (Next SSE)
 │   └── agent/
 │       └── route.ts             # 에이전트 호출 API (도구 호출 포함)
 └── types/
     └── ai.ts                    # AI 관련 타입 (Message, Tool, AgentResponse 등)
+
+agent-runtime/                    # 휴면 — AgentCore Runtime용 어댑터 #2 (전략 A, 규칙 9)
+├── src/index.ts                  # Express /ping + /invocations 1개 → 코어 호출
+├── package.json                  # @strands-agents/sdk + express (Next와 분리)
+├── tsconfig.json                 # 코어를 상대경로 import, 자체 컴파일
+├── Dockerfile                    # ARM64 (AgentCore 요구)
+└── README.md                     # 배포 절차 + 전략 B(A2A) 복원 경로
 ```
+
+> `agent-runtime/`는 `src/lib/ai/` 코어를 그대로 감싸는 **두 번째 얇은 어댑터**다(첫째는 위 `app/api/.../route.ts` SSE 라우트). 휴면이므로 Next 빌드/배포 대상이 아니나 `npx tsc --noEmit`로 코어 이식성을 증명한다. 상세 규칙은 절대 규칙 9 참조.
 
 ## 구현 프로세스
 
@@ -140,6 +149,30 @@ src/
    - **입력 주입**: 세션 컨텍스트·활성 Agent Card·메모리 뷰 등 코어가 읽어야 하는 데이터는 라우트 어댑터가 조회해서 `createRunContext(...)`/payload로 **주입**한다. 코어가 `@/lib/db`를 import하지 않는다.
    - **`AI_RUNTIME` 듀얼 모드**: 라우트는 `process.env.AI_RUNTIME ?? 'inline'`로 분기 — `inline`이면 코어를 in-process 실행(현재), `agentcore`면 `InvokeAgentRuntimeCommand`로 배포된 런타임 호출. agentcore 분기는 미배포 상태에서 명확한 에러를 던지는 스텁이어도 되나(휴면), 코어/어댑터 분리 자체는 inline에서도 반드시 성립해야 한다.
    - **목표 불변식**: 같은 코어를 (a) Next SSE 라우트와 (b) 미래 AgentCore Express `/invocations` 핸들러가 **얇은 어댑터 2개**로 감쌀 수 있어야 한다. 상세 배포 패턴은 `strands-sdk-typescript-guide`의 `references/deployment.md`(Express `/ping`+`/invocations`) 참조.
+9. **휴면 `agent-runtime/` 패키지를 생성한다 (전략 A — 단일 진입점, in-process).** 규칙 8의 "목표 불변식 (b)"를 **실제 코드로 실증**하는 두 번째 얇은 어댑터다. 코어와 같은 레포에 두되 빌드/배포는 하지 않는다(휴면). 이로써 "AgentCore에 올라갈 수 있다"가 문서가 아니라 컴파일 가능한 코드로 증명된다.
+   - **생성 조건**: AI FR이 있으면(= 이 에이전트가 실행되면) 항상 생성한다.
+   - **전략 A만 생성 (in-process 단일 Runtime)**: `agent_topology.type`이 무엇이든(Single / Agents as Tools / Graph / Swarm) **진입점은 오케스트레이터(또는 단일 에이전트) 1개만** 노출한다. sub-agent는 코어 내부 구현이므로 별도 진입점을 만들지 않는다. **멀티-Runtime A2A(전략 B)는 코드로 생성하지 않는다** — 아래 README에 복원 경로로 문서화만 한다.
+   - **standalone_agents 예외**: `agent_topology.standalone_agents[]` 중 오케스트레이터와 **독립된 외부 트리거**를 가진 것(예: test11 A-COM = POST /postmortem에서 직접 호출)은 진입점을 1개 더 추가할 수 있다. 단 오케스트레이터 토폴로지에 종속된 sub-agent는 절대 별도 진입점을 만들지 않는다.
+   - **파일 구조**:
+     ```
+     agent-runtime/                  # 휴면 — Next 빌드/배포 대상 아님
+     ├── src/index.ts                # Express /ping + /invocations 1개 → 코어의 orchestrator stream/invoke 호출
+     ├── package.json                # @strands-agents/sdk + express (Next와 분리된 자체 의존성)
+     ├── tsconfig.json               # ES2022/ESNext, 코어를 상대경로로 import
+     ├── Dockerfile                  # FROM --platform=linux/arm64 node:20-slim (AgentCore ARM64 요구)
+     └── README.md                   # 배포 방법 + 전략 B(A2A) 복원 경로
+     ```
+   - **`src/index.ts` 작성 규칙**:
+     - 코어를 **상대경로로 그대로 import**해서 호출한다(`import { orchestratorRunner } from '../../src/lib/ai/agents/orchestrator-runner'` 등). 코어를 복붙·재구현하지 않는다 — 어댑터는 얇아야 한다.
+     - `GET /ping` → `{ status: 'Healthy', time_of_last_update }`. `POST /invocations` → payload(JSON dict)에서 입력 추출 → 코어 호출. 스트리밍이면 `agent.stream()`/코어의 stream을 async generator로 yield, 비스트리밍이면 invoke 결과 반환.
+     - **Events-only 정합**: 코어가 emit하는 이벤트를 이 진입점이 소비한다(영속화는 배포 환경의 책임 — 휴면 단계에선 emit→응답 매핑만). 코어 안에서 영속화하지 않는 규칙 8을 깨지 않는다.
+     - 포트는 `process.env.PORT ?? 8080`(AgentCore 계약). `0.0.0.0` 바인드.
+     - 패턴 원본은 `strands-sdk-typescript-guide`의 `references/deployment.md` "Step 2: Express 서버" + Dockerfile(ARM64)를 따른다.
+   - **`README.md` 필수 내용**:
+     1. "이 패키지는 휴면이다 — `src/lib/ai/` 코어를 AgentCore Runtime용으로 감싸는 두 번째 어댑터(첫째는 Next SSE 라우트). 평소 빌드/배포되지 않으며, AgentCore 전환 시 활성화한다."
+     2. 배포 절차 요약: `docker buildx --platform linux/arm64` → ECR push → `agentcore create`/`deploy` (또는 `aws-deployer` Step 4.5 참조).
+     3. **전략 B(A2A 멀티-Runtime) 복원 경로**: "도메인 에이전트의 독립 배포·확장·교체(req NFR-4)가 필요하면, 각 sub-agent를 별도 Runtime으로 분리하고 오케스트레이터의 in-process 위임 호출(`delegateToAObs(...)`)을 `A2AAgent({ url })` HTTP 호출로 교체한다. 진입점이 에이전트마다 1개씩 생긴다. 이 결정은 `/awsarch` 단계의 명시적 의사결정으로 남긴다 — 프로토타입은 전략 A(단일 Runtime)만 구현." `ai-internals.json.architecture.requirement_pattern_disposition.restore_path`와 일관되게 작성.
+   - **`agent-runtime/`는 Next `tsconfig`/빌드에서 제외**한다(휴면이므로 `npm run build`가 건드리지 않음). 단 `cd agent-runtime && npx tsc --noEmit`로 **타입 컴파일은 통과**해야 한다 — 코어가 실제로 이식 가능함을 증명하는 핵심. generation-log-ai.json의 `files_created[]`에 기록.
 
 ### 점진적 작업 규칙
 
@@ -238,6 +271,9 @@ src/
 - [ ] `npm run build` 성공
 - [ ] `node .pipeline/scripts/ai-smoke.mjs` 통과 (stub 금지/이벤트명 일관성/Agent 인스턴스/Bedrock 직접 import 금지)
 - [ ] **`node .pipeline/scripts/check-ai-portability.mjs --root=.` 통과 (Rule 14, sub-check [P])** — `src/lib/ai/**`에 `server-only`/`next/*`/`@/lib/db` import 0건, repository 영속화 호출 0건. 영속화/전송은 `src/app/api/**` 라우트 어댑터가 소유(events-only). 위반 시 코어/어댑터 분리를 리팩터한다.
+- [ ] **휴면 `agent-runtime/` 패키지 생성됨 (규칙 9, 전략 A)** — Express `/ping`+`/invocations` 진입점 1개(오케스트레이터/단일 에이전트만 노출), 코어를 상대경로 import(재구현 아님), ARM64 Dockerfile, README에 전략 B(A2A) 복원 경로 명시.
+- [ ] **`cd agent-runtime && npx tsc --noEmit` 타입 컴파일 통과** — 코어가 Next 밖에서도 컴파일됨을 증명(이식성의 실증). 실패 시 코어가 여전히 Next/db에 결합돼 있다는 신호 → 코어 리팩터.
+- [ ] **전략 B(멀티-Runtime A2A) 코드는 생성하지 않았는가** — sub-agent별 진입점/`A2AAgent` 호출은 README 문서화만. 프로토타입은 전략 A(단일 Runtime)만 구현.
 - [ ] `@aws-sdk/client-bedrock-runtime` 직접 import가 없는가 (Strands SDK만 사용)
 - [ ] `BedrockModel` 인스턴스로 모델 프로바이더가 설정되었는가
 - [ ] **모든 `modelId` 문자열이 CLAUDE.md Rule 13의 3개 ID 중 하나로 직접 명시되었는가** (SSOT: `.pipeline/scripts/allowed-models.json` — haiku / sonnet / opus 단축에 대응하는 정식 ID)

@@ -13,9 +13,9 @@ Next.js 16 App Router 프로토타입에서 **AWS Cognito User Pool + Hosted UI*
 
 CDE 파이프라인에서 호출되는 위치:
 - `requirements-analyst`가 인증 관련 FR을 식별
-- `architect`가 보호 라우트 트리 설계
+- `application-architect`가 보호 라우트 트리 설계
 - `code-generator-backend`가 `src/proxy.ts`(구 `middleware.ts`) + API Route 가드 생성
-- `aws-architect` / `aws-deployer`가 `/awsarch` 시 Cognito 인프라 추가
+- `solutions-architect`(설계) / `aws-deployer`(배포)가 Cognito 인프라 추가
 - `security-auditor-pipeline`이 인증 누락/우회 점검 시 참조
 
 ## 1. Mock 모드 vs Cognito 모드

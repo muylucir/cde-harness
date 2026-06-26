@@ -8,7 +8,7 @@ description: >
   사용자가 "어떤 DB를 써야 해?", "DynamoDB vs Aurora", "이 데이터 모델에 맞는 AWS 서비스",
   "캐시가 필요할까", "비동기 처리 어떻게", "이 아키텍처 비용", "AgentCore를 써야 하나" 같은
   설계/선택 질문을 하면 — AWS라고 명시하지 않아도 — 사용한다.
-  aws-architect 에이전트가 참조. CDK 구현 코드는 aws-cdk-patterns 스킬, AI 에이전트 구현 상세는 bedrock-agentcore-guide 스킬.
+  solutions-architect 에이전트가 참조. CDK 구현 코드는 aws-cdk-patterns 스킬, AI 에이전트 구현 상세는 bedrock-agentcore-guide 스킬.
   Skip: CDK 코드 작성(→aws-cdk-patterns), 프론트엔드 작업, 에이전트 코드 구현(→bedrock-agentcore-guide).
 ---
 

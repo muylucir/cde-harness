@@ -202,7 +202,7 @@ Auto 모드에서도 **CHECKPOINT**, **품질 루프(Stage 6)**, **서킷 브레
 
 모든 단계를 순차 실행한다. 코드 생성 후에는 **테스트 루프(기능 검증) → 리뷰(품질 검증)** 순서로 코드 품질을 보장한다.
 
-> **Stage 번호 ↔ stages.json `order` 매핑 (사람용 번호는 묶음 라벨)**: 아래 "Stage N"은 사람이 읽기 쉬운 묶음 라벨이고, `checkpoint.mjs`가 보는 실제 stage 이름/순서는 `.pipeline/scripts/stages.json`의 `order` 필드가 SSOT다. 매핑: Stage 1=`domain-researcher`(order 0), Stage 2=`requirements-analyst`(1), Stage 3=`architect`(2), Stage 4=`spec-writer-backend`(3)/`spec-writer-ai`(4)/`spec-writer-frontend`(5), Stage 5=`code-generator-backend`(6)/`code-generator-ai`(7)/`code-generator-frontend`(8), Stage 6a=`qa-engineer`(9), Stage 6b=`reviewer`(10), Stage 7=`security-auditor-pipeline`(11), Stage 7+=`ai-smoke`(12). 유효 stage 이름은 `node .pipeline/scripts/checkpoint.mjs list-stages`로 조회한다.
+> **Stage 번호 ↔ stages.json `order` 매핑 (사람용 번호는 묶음 라벨)**: 아래 "Stage N"은 사람이 읽기 쉬운 묶음 라벨이고, `checkpoint.mjs`가 보는 실제 stage 이름/순서는 `.pipeline/scripts/stages.json`의 `order` 필드가 SSOT다. 매핑: Stage 1=`domain-researcher`(order 0), Stage 2=`requirements-analyst`(1), Stage 3=`application-architect`(2)/`ai-architect`(3)/`solutions-architect`(4), Stage 4=`spec-writer-backend`(5)/`spec-writer-ai`(6)/`spec-writer-frontend`(7), Stage 5=`code-generator-backend`(8)/`code-generator-ai`(9)/`code-generator-frontend`(10), Stage 6a=`qa-engineer`(11), Stage 6b=`reviewer`(12), Stage 7=`security-auditor-pipeline`(13), Stage 7+=`ai-smoke`(14). 유효 stage 이름은 `node .pipeline/scripts/checkpoint.mjs list-stages`로 조회한다.
 
 ```
 Stage 1   도메인 리서치 ← 승인 게이트 (제안 요구사항)
@@ -274,24 +274,58 @@ node .pipeline/scripts/checkpoint.mjs check requirements-analyst \
   "file:.pipeline/artifacts/v{N}/01-requirements/requirements.md"
 ```
 
-### Stage 3: Architecture Design
+### Stage 3: Architecture Design (논리 → 물리, 3 아키텍트 순차)
 
+아키텍처는 3개 아키텍트로 분리된다: **application-architect**(논리, agnostic) → **ai-architect**(논리 AI, AI FR 있을 때만) → **solutions-architect**(물리 통합 — aggregate별 엔진 pin + AWS/ministack). 저장소 결정이 늦은 "AWS 전환" 문맥이 아니라 접근패턴 근거에서 나오도록, solutions-architect가 codegen 전에 메인 파이프라인에서 실행된다.
+
+**3-1. Application Architect (논리)**
 ```bash
 # APPROVAL GATE: FR/NFR 검토 후 사용자 승인.
-node .pipeline/scripts/checkpoint.mjs approve architect \
-  --mode=interactive --notes="사용자 승인: 아키텍처 설계 진행"
-node .pipeline/scripts/checkpoint.mjs start architect
+node .pipeline/scripts/checkpoint.mjs approve application-architect \
+  --mode=interactive --notes="사용자 승인: 논리 아키텍처 설계 진행"
+node .pipeline/scripts/checkpoint.mjs start application-architect
 ```
-- Launch the `architect` agent
+- Launch the `application-architect` agent
 - Input: `01-requirements/requirements.json`
-- Output: `.pipeline/artifacts/v{N}/02-architecture/`
+- Output: `.pipeline/artifacts/v{N}/02-architecture/architecture.json` (+ `access_patterns[]`), `architecture.md`
 - **APPROVAL GATE** (auto 모드 시 건너뜀): Present component tree and data flow. Wait for approval.
 
-**CHECKPOINT (Stage 3)**: 누락 시 `architect`를 재실행한다 (최대 1회).
 ```bash
-node .pipeline/scripts/checkpoint.mjs check architect \
+node .pipeline/scripts/checkpoint.mjs check application-architect \
   "json:.pipeline/artifacts/v{N}/02-architecture/architecture.json" \
   "file:.pipeline/artifacts/v{N}/02-architecture/architecture.md"
+```
+
+**3-2. AI Architect (논리 AI — AI FR 있을 때만)**
+
+`node .pipeline/scripts/has-ai.mjs .pipeline/artifacts/v{N}/01-requirements/requirements.json`가 true일 때만 실행. AI FR이 없으면 스킵.
+```bash
+node .pipeline/scripts/checkpoint.mjs approve ai-architect \
+  --mode=interactive --notes="사용자 승인: AI 토폴로지 설계 진행"
+node .pipeline/scripts/checkpoint.mjs start ai-architect
+```
+- Launch the `ai-architect` agent
+- Input: `01-requirements/requirements.json`, `02-architecture/architecture.json`
+- Output: `.pipeline/artifacts/v{N}/02-architecture/ai-architecture.json`, `ai-architecture.md`
+```bash
+node .pipeline/scripts/checkpoint.mjs check ai-architect \
+  "json:.pipeline/artifacts/v{N}/02-architecture/ai-architecture.json"
+```
+
+**3-3. Solutions Architect (물리 통합)**
+```bash
+node .pipeline/scripts/checkpoint.mjs approve solutions-architect \
+  --mode=interactive --notes="사용자 승인: 엔진 pin + AWS/ministack 설계 진행"
+node .pipeline/scripts/checkpoint.mjs start solutions-architect
+```
+- Launch the `solutions-architect` agent
+- Input: `02-architecture/architecture.json`(`access_patterns[]`) + `ai-architecture.json`(있으면)
+- Output: `.pipeline/artifacts/v{N}/08-aws-infra/aws-architecture.json`, `aws-architecture.md`
+- 로컬 $0(ministack)이므로 설계 단계는 auto 승인 가능. 유료 배포 승인은 `/awsarch`의 aws-deployer에서.
+```bash
+node .pipeline/scripts/checkpoint.mjs check solutions-architect \
+  "json:.pipeline/artifacts/v{N}/08-aws-infra/aws-architecture.json" \
+  "file:.pipeline/artifacts/v{N}/08-aws-infra/aws-architecture.md"
 ```
 
 ### Stage 4: Specification (BE → AI → FE 3개 에이전트 순차 호출)

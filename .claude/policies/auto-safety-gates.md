@@ -28,8 +28,8 @@
 
 | stage | `auto_approval_allowed` | 비고 |
 |---|---|---|
-| `domain-researcher` / `requirements-analyst` / `architect` | `true` | design phase — `--auto` 통과 가능 |
-| `aws-architect` / `aws-deployer` | `false` | 비가역 비용 — 항상 사용자 확인 |
+| `domain-researcher` / `requirements-analyst` / `application-architect` / `ai-architect` / `solutions-architect` | `true` | design phase — `--auto` 통과 가능 (solutions-architect 로컬 설계는 $0) |
+| `aws-deployer` | `false` | 비가역 비용 — 항상 사용자 확인 |
 | (그 외 모든 stage 기본값) | `false` (필드 없음) | 기본 차단 |
 
 정책 변경 시 `.pipeline/scripts/stages.json`의 stage 정의 + 본 문서를 함께 수정.

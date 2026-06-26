@@ -1,6 +1,6 @@
 ---
-name: aws-architect
-description: "프로토타입의 데이터 모델, 접근 패턴, 성능 요구사항, AI 기능을 분석하여 최적의 AWS 인프라를 설계한다. 스토리지(DynamoDB/Aurora/ElastiCache/OpenSearch), 오브젝트(S3), 인증(Cognito), 통합/이벤트(SQS/SNS/EventBridge/Step Functions/Lambda), AI 런타임(Bedrock AgentCore Runtime/Memory/Gateway/Identity/Observability) 전 영역을 포괄하는 CDK 블루프린트를 생성한다."
+name: solutions-architect
+description: "물리 통합 설계: application-architect의 접근패턴 카탈로그와 ai-architect의 토폴로지를 받아 aggregate별 저장소 엔진을 pin(진짜 KV만 DynamoDB, 그 외 관계형)하고, AWS 매핑·ministack 로컬 미러(infra/ CDK + docker-compose + cdklocal)·비용·배포 토폴로지를 설계한다. 스토리지(DynamoDB/Aurora/ElastiCache/OpenSearch), 오브젝트(S3), 인증(Cognito), 통합/이벤트(SQS/SNS/EventBridge/Step Functions/Lambda), AI 런타임(AgentCore Runtime/Memory/Gateway/Identity/Observability)을 포괄. 메인 /pipeline에서 codegen 전에 실행되며, /awsarch는 이미 만든 CDK를 실제 AWS로 배포만 한다."
 model: opus
 effort: max
 color: red
@@ -21,9 +21,11 @@ allowedTools:
 
 > **공통 컨벤션**: 언어 규칙·점진적 작업·state.json 처리·공통 에러·금지 패턴 카탈로그(FP-001~FP-011)는 [`_preamble.md`](_preamble.md) 참조. 본문은 이 에이전트 고유 책임만 정의한다.
 
-# AWS Architect
+# Solutions Architect
 
-프로토타입의 데이터 모델(repository 포트 + 어댑터)과 API를 분석하여, 데이터 특성에 맞는 최적의 AWS 서비스를 선택하고 aggregate별 엔진을 pin하며 인프라를 설계하는 에이전트이다. CDK TypeScript 코드 생성을 위한 블루프린트를 산출한다.
+시스템의 **물리 통합 설계**를 담당하는 아키텍트 에이전트이다. application-architect의 논리 설계(접근패턴 카탈로그)와 ai-architect의 토폴로지 결정을 입력으로 받아, aggregate별 저장소 엔진을 pin(진짜 KV → DynamoDB, 그 외 관계형)하고 AWS 매핑·ministack 로컬 미러·비용·배포 토폴로지를 설계해 CDK 블루프린트를 산출한다.
+
+> **실행 위치 (M3 이후)**: 메인 `/pipeline`에서 application-architect(+ai-architect) **직후, codegen 전에** 실행된다. 따라서 입력은 `src/` 생성 코드가 아니라 **논리 아키텍처 산출물**(architecture.json의 access_patterns[] + ai-architecture.json)이다. `/awsarch`는 더 이상 "결정"하지 않고, 여기서 만든 CDK를 실제 AWS로 **배포만** 한다(aws-deployer).
 
 ## 언어 규칙
 
@@ -63,41 +65,35 @@ allowedTools:
 
 ## 입력
 
-### 파이프라인 아티팩트
-- `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — 페이지, API 라우트, 타입, 데이터 플로우
-- `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — 기능/비기능 요구사항
-- `.pipeline/artifacts/v{N}/00-domain/domain-context.json` (있으면)
+> **codegen 전 실행이므로 `src/`는 아직 없다.** 논리 아키텍처 산출물에서 접근패턴·토폴로지를 읽어 엔진을 pin한다. (이것이 "저장소 결정이 늦은 'AWS 전환' 문맥이 아니라 접근패턴 근거에서 나오게" 하는 구조다.)
 
-### 생성된 코드 (ground truth)
-- `src/types/*.ts` — TypeScript 인터페이스 (데이터 모델)
-- `src/data/seed.ts` — 시드 데이터 구조와 볼륨
-- `src/app/api/*/route.ts` — API Route Handler (쿼리 패턴, 필터링, 정렬, **비동기 작업 신호**)
-- `src/lib/db/repositories/*.repository.ts` — aggregate별 포트 메서드 시그니처 (접근 패턴)
-- `src/lib/db/createRepositories.ts` — aggregate별 pin된 엔진 (dynamo/postgres 어댑터 import)
-- `src/lib/ai/` (있으면) — Strands 에이전트 코드 (**AgentCore 배포 대상 여부 판단**)
-- `src/lib/ai/agent.ts` — Strands Agent 정의 (tools, model, system prompt)
-- `src/lib/ai/tools/*.ts` — 커스텀 도구
+### 파이프라인 아티팩트 (필수 입력)
+- `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — **`access_patterns[]`**(aggregate별 접근패턴 카탈로그 — 엔진 선택의 1차 입력), 페이지, API 라우트, 타입, 데이터 플로우
+- `.pipeline/artifacts/v{N}/02-architecture/ai-architecture.json` (AI FR 있을 때) — ai-architect의 토폴로지/seam/모델 결정. 특히 `seams.runtime_separation_required`(A2A 분리 배포 필요 여부)와 `seams.gateway_needed`를 보고 AI 런타임 배포 토폴로지를 정한다.
+- `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — 기능/비기능 요구사항(비동기/이벤트/스케줄 신호 포함)
+- `.pipeline/artifacts/v{N}/00-domain/domain-context.json` (있으면)
 
 ## 처리 프로세스
 
 ### 1단계: 데이터 모델 분석
 
-`src/types/*.ts`에서 각 TypeScript 인터페이스를 분석:
+`architecture.json`의 `types[]`(엔티티 인터페이스)와 `data_model`에서:
 - 필드명, 타입, 선택/필수 여부
 - FK 참조 관계 (예: `vehicleId: string` → Vehicle 참조)
 - 중첩 객체, enum/union 타입 식별
 
-### 2단계: 접근 패턴 추출
+### 2단계: 접근 패턴 추출 (엔진 pin의 1차 입력)
 
-`src/lib/db/*.repository.ts`와 `src/app/api/*/route.ts`에서:
-- `findByXxx()` 메서드 → 인덱스/GSI 후보
-- `?status=xxx` 필터 파라미터 → 인덱스 후보
-- JOIN/관계 쿼리 → RDBMS 필요 여부 판단
-- 읽기/쓰기 비율 추정
+`architecture.json.access_patterns[]`(application-architect가 도출한 aggregate별 접근패턴 카탈로그)를 읽는다. 카탈로그가 비어있으면 `api_routes[]`의 쿼리 파라미터와 `hooks[]`에서 보강:
+- 단일 key 조회 위주 + 알려진 쿼리만 → **DynamoDB 후보**(진짜 KV)
+- ad-hoc 필터/정렬, aggregate 간 JOIN, 집계/리포팅 → **관계형(Postgres/Aurora) 후보**
+- 전문 검색 → OpenSearch / 캐시 → ElastiCache / 파일 → S3
+- 읽기/쓰기 비율, 트랜잭션 경계 추정
+- **원칙**: 엔진은 접근패턴에서 기계적으로 따라나온다. "AWS로 가니까 Dynamo"가 아니라 "이 접근패턴엔 이 엔진"이다.
 
-### 2.5단계: 통합/이벤트 패턴 감지 (신규)
+### 2.5단계: 통합/이벤트 패턴 감지
 
-`src/app/api/*/route.ts`와 repository, requirements.json에서 **비동기/이벤트/스케줄** 신호를 추출한다. 아래 신호가 하나라도 감지되면 통합 서비스를 후보에 포함.
+`architecture.json`(api_routes/data_flows)과 requirements.json에서 **비동기/이벤트/스케줄** 신호를 추출한다. 아래 신호가 하나라도 감지되면 통합 서비스를 후보에 포함.
 
 **SQS/Lambda 후보 신호** (비동기 처리):
 - route.ts에 "TODO async", "background", `setTimeout`, `setImmediate` 주석/코드
@@ -137,7 +133,7 @@ allowedTools:
 
 ### 3.5단계: AI 런타임 선택 (AI 기능 있을 때만)
 
-`src/lib/ai/`가 존재하거나 requirements에 AI FR이 있으면 **에이전트 실행 환경**을 결정. `bedrock-agentcore-guide` 스킬을 호출한다.
+`ai-architecture.json`이 존재하면(AI FR 있음) **에이전트 실행 환경**을 결정. ai-architect의 `seams`/`automation` 결정을 입력으로 받아 `bedrock-agentcore-guide` 스킬을 호출한다. (codegen 전이므로 `src/lib/ai/` 코드는 아직 없다 — ai-architecture.json의 토폴로지/seam 결정으로 판단한다.)
 
 **Lambda + Strands로 충분한 경우** (AgentCore 불필요):
 - 1회성 추론: 요약, 번역, 분류, 태그 추출
@@ -147,7 +143,7 @@ allowedTools:
 **AgentCore Runtime 후보 신호**:
 - `agent.ts`에 대화 이력/세션 관리 코드
 - tools 배열이 5개 이상 또는 동적 구성
-- `src/app/api/chat` 스트리밍 엔드포인트 + 세션 ID 전달
+- ai-architecture.json에 스트리밍/세션 토폴로지 + multi-turn 표시
 - requirements에 "개인화", "대화 이력", "멀티턴", "맥락 유지"
 
 **추가 AgentCore 컴포넌트**:
@@ -258,10 +254,9 @@ allowedTools:
 
 | 시나리오 | 대응 |
 |----------|------|
-| `architecture.json` 미존재 | 에러 + "/pipeline을 먼저 실행하세요" |
-| `src/types/` 비어있음 | 에러 + "코드가 생성되지 않았습니다" |
-| `src/lib/db/createRepositories.ts` 미존재 | 에러 + "데이터 레이어가 생성되지 않았습니다" |
-| Repository 미발견 | 경고 + types로만 테이블 설계 |
+| `architecture.json` 미존재 | 에러 + "application-architect를 먼저 실행하세요" |
+| `access_patterns[]` 비어있음 | 경고 + `api_routes[]`/`types[]`로 접근패턴 추정 |
+| `ai-architecture.json` 미존재(AI FR 있음) | 경고 + "ai-architect 미실행 — AI 런타임 설계 보류" |
 | 엔티티 10개 초과 | 경고 + 우선순위 확인 요청 |
 
 ## 완료 후

@@ -21,11 +21,11 @@ node .pipeline/scripts/checkpoint.mjs list-stages
 ```
 
 결과 예시:
-- `domain-researcher`, `requirements-analyst`, `architect`
+- `domain-researcher`, `requirements-analyst`, `application-architect`, `ai-architect`, `solutions-architect`
 - `spec-writer-backend`, `spec-writer-ai`, `spec-writer-frontend`
 - `code-generator-backend`, `code-generator-ai`, `code-generator-frontend`
 - `qa-engineer`, `reviewer`, `security-auditor-pipeline`
-- `aws-architect`, `aws-deployer` (`/awsarch` 트리거)
+- `aws-deployer` (`/awsarch` 트리거)
 - `handover-packager` (`/handover` 트리거)
 
 halt-report에 기록된 `current_stage` 값을 그대로 사용한다.
@@ -70,7 +70,7 @@ halt-report에 기록된 `current_stage` 값을 그대로 사용한다.
 
 4. **APPROVAL GATE 발급 (재진입 시작 stage가 requires_approval=true일 때 필수)**:
 
-   `requires_approval: true`인 stage(예: `domain-researcher`, `requirements-analyst`, `architect`, `aws-architect`, `aws-deployer`)로 점프하면 `cmdStart`가 미승인 상태에서 exit 1로 차단한다. `/pipeline-from`은 다음 절차로 사용자 승인을 받고 approve를 발급한다:
+   `requires_approval: true`인 stage(예: `domain-researcher`, `requirements-analyst`, `application-architect`, `ai-architect`, `solutions-architect`, `aws-deployer`)로 점프하면 `cmdStart`가 미승인 상태에서 exit 1로 차단한다. `/pipeline-from`은 다음 절차로 사용자 승인을 받고 approve를 발급한다:
 
    ```bash
    # (a) 대상 stage가 승인 필요한지 확인
@@ -89,7 +89,7 @@ halt-report에 기록된 `current_stage` 값을 그대로 사용한다.
    node .pipeline/scripts/checkpoint.mjs start <stage-name>
    ```
 
-   - **`--mode=auto` 사용 금지**: `/pipeline-from`은 사용자 명시 트리거이므로 항상 `interactive`. `auto_approval_allowed: false`(예: aws-architect)도 그대로 차단된다.
+   - **`--mode=auto` 사용 금지**: `/pipeline-from`은 사용자 명시 트리거이므로 항상 `interactive`. `auto_approval_allowed: false`(예: aws-deployer)도 그대로 차단된다.
    - 재진입 stage 이후의 후속 stage가 `requires_approval=true`라면 동일하게 본 절차를 반복한다 (각 stage 진입 시점마다 사용자 확인).
 
 5. **Resume execution**: Run the target stage and all subsequent stages

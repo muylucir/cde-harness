@@ -102,7 +102,7 @@ CLAUDE.md Rule 13의 "도구/에이전트 단위 모델 분배" 정신을 파이
 
 | 모델 | effort | 적용 에이전트 | 이유 |
 |---|---|---|---|
-| opus | max | architect, aws-architect, aws-deployer, code-generator-* | 복잡 추론·코드 합성·아키텍처 의사결정. Opus 4.8에서 코딩/에이전트 작업은 `xhigh`가 최적 — `max`는 overthinking 위험이 있어 현재 `max` 유지 중 |
+| opus | max | application-architect, ai-architect, solutions-architect, aws-deployer, code-generator-* | 복잡 추론·코드 합성·아키텍처 의사결정. Opus 4.8에서 코딩/에이전트 작업은 `xhigh`가 최적 — `max`는 overthinking 위험이 있어 현재 `max` 유지 중 |
 | opus | high | requirements-analyst, spec-writer-*, qa-engineer, reviewer, security-auditor-pipeline, feedback-analyzer, reconcile-analyzer | 정합성 검증·계약 작성·품질 리뷰 |
 | sonnet | medium | brief-composer, domain-researcher, git-manager, handover-packager | 정형 합성·도메인 정리·git 작업·문서 합성 (opus 불필요) |
 

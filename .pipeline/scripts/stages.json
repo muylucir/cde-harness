@@ -60,25 +60,66 @@
       "resume_via": "/pipeline-from requirements-analyst"
     },
     {
-      "name": "architect",
+      "name": "application-architect",
       "order": 2,
       "group": "design",
       "phase": "design",
       "optional": false,
       "requires_approval": true,
       "auto_approval_allowed": true,
-      "approval_reason": "페이지/컴포넌트 트리 검토 후 스펙 작성 진행 여부 결정",
-      "description": "페이지/라우트/컴포넌트 트리/데이터 플로우 설계",
+      "approval_reason": "도메인/aggregate·접근패턴·페이지/컴포넌트 트리 검토 후 진행 여부 결정",
+      "description": "논리 설계(저장소/클라우드/AI agnostic): 도메인/aggregate 경계, 접근패턴 카탈로그, API 계약 의미, 페이지/라우트/컴포넌트 트리, 데이터 플로우",
       "prerequisites": [".pipeline/artifacts/v{N}/01-requirements/requirements.json"],
       "outputs": [
         ".pipeline/artifacts/v{N}/02-architecture/architecture.json",
         ".pipeline/artifacts/v{N}/02-architecture/architecture.md"
       ],
-      "resume_via": "/pipeline-from architect"
+      "resume_via": "/pipeline-from application-architect"
+    },
+    {
+      "name": "ai-architect",
+      "order": 3,
+      "group": "design",
+      "phase": "design",
+      "optional": true,
+      "optional_condition": "requirements.json has AI-related FR",
+      "optional_gate_cmd": "node .pipeline/scripts/has-ai.mjs .pipeline/artifacts/v{N}/01-requirements/requirements.json",
+      "requires_approval": true,
+      "auto_approval_allowed": true,
+      "approval_reason": "AI 에이전트 토폴로지·모델 선택·seam 필요 여부 검토 후 진행 여부 결정",
+      "description": "논리 AI 설계: 에이전트 토폴로지(단일/멀티), Gateway/A2A seam 필요 여부, per-tool 모델 선택, RAG 전략, 에이전트/도구 호출 authz. 결정만 산출하고 spec-writer-ai가 구현 상세를 채운다.",
+      "prerequisites": [
+        ".pipeline/artifacts/v{N}/01-requirements/requirements.json",
+        ".pipeline/artifacts/v{N}/02-architecture/architecture.json"
+      ],
+      "outputs": [
+        ".pipeline/artifacts/v{N}/02-architecture/ai-architecture.json",
+        ".pipeline/artifacts/v{N}/02-architecture/ai-architecture.md"
+      ],
+      "resume_via": "/pipeline-from ai-architect"
+    },
+    {
+      "name": "solutions-architect",
+      "order": 4,
+      "group": "design",
+      "phase": "design",
+      "optional": false,
+      "requires_approval": true,
+      "auto_approval_allowed": true,
+      "approval_reason": "aggregate별 엔진 선택·AWS 매핑·ministack 로컬 미러 설계 검토 (로컬 $0, 유료 배포 승인은 aws-deployer에서)",
+      "description": "물리 통합 설계: application/ai 아키텍트의 논리 산출물을 받아 aggregate별 저장소 엔진 pin(진짜 KV만 DynamoDB, 그 외 관계형), AWS 매핑, ministack 로컬 미러(infra/ CDK + docker-compose + cdklocal), 비용, 배포 토폴로지",
+      "prerequisites": [
+        ".pipeline/artifacts/v{N}/02-architecture/architecture.json"
+      ],
+      "outputs": [
+        ".pipeline/artifacts/v{N}/08-aws-infra/aws-architecture.json",
+        ".pipeline/artifacts/v{N}/08-aws-infra/aws-architecture.md"
+      ],
+      "resume_via": "/pipeline-from solutions-architect"
     },
     {
       "name": "spec-writer-backend",
-      "order": 3,
+      "order": 5,
       "group": "spec",
       "phase": "spec",
       "optional": false,
@@ -96,7 +137,7 @@
     },
     {
       "name": "spec-writer-ai",
-      "order": 4,
+      "order": 6,
       "group": "spec",
       "phase": "spec",
       "optional": true,
@@ -123,7 +164,7 @@
     },
     {
       "name": "spec-writer-frontend",
-      "order": 5,
+      "order": 7,
       "group": "spec",
       "phase": "spec",
       "optional": false,
@@ -143,7 +184,7 @@
     },
     {
       "name": "code-generator-backend",
-      "order": 6,
+      "order": 8,
       "group": "codegen",
       "phase": "codegen",
       "optional": false,
@@ -173,7 +214,7 @@
     },
     {
       "name": "code-generator-ai",
-      "order": 7,
+      "order": 9,
       "group": "codegen",
       "phase": "codegen",
       "optional": true,
@@ -202,7 +243,7 @@
     },
     {
       "name": "code-generator-frontend",
-      "order": 8,
+      "order": 10,
       "group": "codegen",
       "phase": "codegen",
       "optional": false,
@@ -230,7 +271,7 @@
     },
     {
       "name": "qa-engineer",
-      "order": 9,
+      "order": 11,
       "group": "quality",
       "phase": "quality",
       "optional": false,
@@ -251,7 +292,7 @@
     },
     {
       "name": "reviewer",
-      "order": 10,
+      "order": 12,
       "group": "quality",
       "phase": "quality",
       "optional": false,
@@ -276,7 +317,7 @@
     },
     {
       "name": "security-auditor-pipeline",
-      "order": 11,
+      "order": 13,
       "group": "security",
       "phase": "security",
       "optional": false,
@@ -300,7 +341,7 @@
     },
     {
       "name": "ai-smoke",
-      "order": 12,
+      "order": 14,
       "group": "quality",
       "phase": "quality",
       "optional": true,
@@ -337,28 +378,6 @@
       "resume_via": "/reconcile"
     },
     {
-      "name": "aws-architect",
-      "order": 100,
-      "group": "aws",
-      "phase": "aws-infra",
-      "optional": true,
-      "trigger": "/awsarch",
-      "requires_approval": true,
-      "auto_approval_allowed": false,
-      "approval_reason": "AWS 인프라 비용/리소스 검토 후 배포 진행 여부 결정 (auto-safety-gates.md #1: 비가역 비용)",
-      "description": "mock→AWS 전환용 인프라 설계 (DynamoDB/Aurora/S3/Cognito)",
-      "prerequisites": [
-        ".pipeline/artifacts/v{N}/02-architecture/architecture.json",
-        "src/types/",
-        "src/lib/db/"
-      ],
-      "outputs": [
-        ".pipeline/artifacts/v{N}/08-aws-infra/aws-architecture.json",
-        ".pipeline/artifacts/v{N}/08-aws-infra/aws-architecture.md"
-      ],
-      "resume_via": "/pipeline-from aws-architect"
-    },
-    {
       "name": "aws-deployer",
       "order": 101,
       "group": "aws",
@@ -368,13 +387,12 @@
       "requires_approval": true,
       "auto_approval_allowed": false,
       "approval_reason": "실제 AWS 배포 직전 최종 비용/리소스 확인 (auto-safety-gates.md #1: 비가역 비용)",
-      "description": "CDK TypeScript 생성 + 배포 + 데이터 레이어 듀얼 모드 + 시드 마이그레이션",
+      "description": "solutions-architect가 만든 infra/ CDK를 실제 AWS로 배포(cdk deploy) + endpoint env 전환 + prod 시드 마이그레이션. 데이터 레이어 코드는 수정하지 않는다(Vision B).",
       "prerequisites": [
         ".pipeline/artifacts/v{N}/08-aws-infra/aws-architecture.json",
-        "src/"
+        "infra/"
       ],
       "outputs": [
-        "infra/",
         ".pipeline/artifacts/v{N}/08-aws-infra/deploy-log.json"
       ],
       "resume_via": "/pipeline-from aws-deployer"

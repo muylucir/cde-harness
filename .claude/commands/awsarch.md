@@ -14,10 +14,10 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
 4. **CHECKPOINT를 통과해야 다음 Phase로 간다** — 각 Phase 끝의 검증 조건을 확인한 후에만 다음 Phase로 넘어간다.
 5. **APPROVAL GATE는 코드로 기록한다** — 비용/리소스 검토 후 즉시 다음 명령 실행:
    ```bash
-   node .pipeline/scripts/checkpoint.mjs approve aws-architect --mode=interactive --notes="비용 OK"
+   node .pipeline/scripts/checkpoint.mjs approve solutions-architect --mode=interactive --notes="비용 OK"
    node .pipeline/scripts/checkpoint.mjs approve aws-deployer  --mode=interactive --notes="배포 승인"
    ```
-   `aws-architect`, `aws-deployer`는 `requires_approval: true`이므로 미승인 시 `start`가 exit 1로 차단된다.
+   `solutions-architect`, `aws-deployer`는 `requires_approval: true`이므로 미승인 시 `start`가 exit 1로 차단된다.
 
 ## 서브에이전트 프롬프트 규칙
 
@@ -116,18 +116,20 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
 - [ ] `.pipeline/state.json`에 새 버전이 `"in-progress"`로 등록되었는가
 - [ ] `.pipeline/artifacts/v{N+1}/08-aws-infra/` 디렉토리가 생성되었는가
 
-## Phase 1: AWS 인프라 설계
+## Phase 1: AWS 인프라 설계 갱신 (solutions-architect 재실행)
+
+> **M3 이후**: `solutions-architect`는 이미 메인 `/pipeline`에서 실행되어 `08-aws-infra/aws-architecture.json`(엔진 pin + AWS 매핑)을 만들었다. `/awsarch`의 Phase 1은 실제 유료 배포 직전에 그 설계를 **재검토·갱신**(코드 ground truth 반영, 비용 재산정)하는 단계다.
 
 ```bash
-# APPROVAL GATE: AWS 인프라 설계 시작에 대한 사용자 동의.
+# APPROVAL GATE: AWS 인프라 설계 갱신에 대한 사용자 동의.
 # auto_approval_allowed=false이므로 --mode=interactive 전용.
-node .pipeline/scripts/checkpoint.mjs approve aws-architect \
-  --mode=interactive --notes="사용자 승인: AWS 인프라 설계 진행"
-node .pipeline/scripts/checkpoint.mjs start aws-architect
+node .pipeline/scripts/checkpoint.mjs approve solutions-architect \
+  --mode=interactive --notes="사용자 승인: AWS 인프라 설계 갱신 진행"
+node .pipeline/scripts/checkpoint.mjs start solutions-architect
 ```
 
-- Launch `aws-architect` agent
-- Input: `architecture.json`, `requirements.json`, `src/types/`, `src/data/seed.ts`, `src/app/api/`, `src/lib/db/`
+- Launch `solutions-architect` agent
+- Input: `architecture.json`(`access_patterns[]`), `ai-architecture.json`(있으면), `requirements.json`, 그리고 이제 존재하는 생성 코드(`src/types/`, `src/data/seed.ts`, `src/app/api/`, `src/lib/db/`)를 ground truth로 반영
 - Output: `.pipeline/artifacts/v{N+1}/08-aws-infra/aws-architecture.json` + `aws-architecture.md`
 
 **APPROVAL GATE — 비용 확인** (이 게이트는 모든 모드에서 실행, auto 모드 없음):
@@ -174,14 +176,14 @@ node .pipeline/scripts/checkpoint.mjs start aws-architect
 - **`--plan` 모드**: APPROVAL GATE 후 여기서 종료 (설계 문서만 — `infra/` CDK 코드도 생성하지 않는다. CDK 코드까지 원하면 `--cdk`를 사용한다). 현재 버전을 completed로 마킹 — `checkpoint.mjs`로 위임 (state.json 직접 쓰기 금지, _preamble §3):
   ```bash
   node .pipeline/scripts/checkpoint.mjs complete \
-    --stage=aws-architect \
+    --stage=solutions-architect \
     --notes="awsarch --plan: design only, no CDK code, no deploy"
   ```
-- 사용자가 거부(설계는 남기고 배포만 보류): `complete --stage=aws-architect --notes="awsarch plan-only: user declined deploy"` 호출 후 종료. (배포가 없었으므로 `set-aws-infra`로 `--data-source=memory --notes="plan-only, no deploy"`를 추가 기록할 수도 있다. 설계 산출물은 `awsarch/v{N+1}` 브랜치에 남으며, 사용자가 머지하거나 폐기를 선택할 수 있다.)
+- 사용자가 거부(설계는 남기고 배포만 보류): `complete --stage=solutions-architect --notes="awsarch plan-only: user declined deploy"` 호출 후 종료. (배포가 없었으므로 `set-aws-infra`로 `--data-source=memory --notes="plan-only, no deploy"`를 추가 기록할 수도 있다. 설계 산출물은 `awsarch/v{N+1}` 브랜치에 남으며, 사용자가 머지하거나 폐기를 선택할 수 있다.)
 - 사용자가 전체 취소(설계물까지 폐기하고 main 복귀): Launch `git-manager` agent with action: `cancel-awsarch` — `awsarch/v{N+1}` 브랜치와 `08-aws-infra/` 설계물을 stash로 폐기하고 main으로 복귀 후 종료. (아직 `cdk deploy` 이전이므로 AWS 비용 미발생.)
 - 사용자가 승인: Phase 2로 진행.
 
-**CHECKPOINT (Phase 1)**: 다음 파일이 존재하는지 확인한다. 누락 시 `aws-architect`를 재실행한다 (최대 1회).
+**CHECKPOINT (Phase 1)**: 다음 파일이 존재하는지 확인한다. 누락 시 `solutions-architect`를 재실행한다 (최대 1회).
 - [ ] `08-aws-infra/aws-architecture.json`이 존재하고 유효한 JSON인가
 - [ ] `08-aws-infra/aws-architecture.md`가 존재하는가
 - [ ] `aws-architecture.json`에 `services`, `iam_policies`, `cost_estimate` 필드가 있는가

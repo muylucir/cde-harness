@@ -79,12 +79,13 @@ node .pipeline/scripts/checkpoint.mjs schema --json
 ## Pipeline Agent Order (순차 + 품질 루프)
 
 ```
-(brief-composer) → domain-researcher → requirements-analyst → architect
+(brief-composer) → domain-researcher → requirements-analyst
+    → application-architect → (ai-architect) → solutions-architect  ← 논리(agnostic) → 논리AI → 물리(엔진 pin + AWS/ministack)
     → spec-writer-backend → (spec-writer-ai) → spec-writer-frontend
     → code-gen-backend → (code-gen-ai) → code-gen-frontend
     → [qa-engineer(Playwright) → fix]* → reviewer ← QA가 기능 검증, reviewer가 품질 리뷰
     → security-auditor-pipeline
-    (/awsarch) → aws-architect → aws-deployer  ← 별도 실행, mock→AWS 전환 시
+    (/awsarch) → solutions-architect(설계 갱신) → aws-deployer  ← 별도 실행, 실제 AWS 배포 시
     (/handover) → handover-packager  ← 별도 실행, 최종 핸드오버 시만
 ```
 
@@ -110,13 +111,13 @@ node .pipeline/scripts/checkpoint.mjs schema --json
 ### AWS Infra 흐름 (mock → real AWS 전환)
 
 ```
-/awsarch → aws-architect(설계) → APPROVAL GATE (비용 확인)
-    → aws-deployer(CDK 생성 + 배포 + 데이터 레이어 교체 + 시드 마이그레이션)
+/awsarch → solutions-architect(설계 갱신) → APPROVAL GATE (비용 확인)
+    → aws-deployer(CDK 실제 AWS 배포 + endpoint env 전환 + 시드 마이그레이션)
     → 완료
 
 /awsarch --qa → 위 흐름 + [qa-engineer → reviewer → security-auditor-pipeline]
-/awsarch --cdk → aws-architect(설계) → aws-deployer(CDK 코드 + 듀얼 모드 레이어, 배포 직전 종료)
-/awsarch --plan → aws-architect(설계)만 실행 (CDK 코드·배포 없음)
+/awsarch --cdk → solutions-architect(설계 갱신) → aws-deployer(CDK 코드 생성, 배포 직전 종료)
+/awsarch --plan → solutions-architect(설계 갱신)만 실행 (CDK 코드·배포 없음)
 ```
 
 ## Language Convention

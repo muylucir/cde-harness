@@ -51,6 +51,34 @@ Aurora Data API 시드 스크립트에 추가 의존성:
 }
 ```
 
+## 로컬 미러 (ministack + cdklocal) — Vision B
+
+동일 `infra/` CDK를 로컬은 ministack(:4566)에, prod는 실제 AWS에 배포한다. 전환은 endpoint env뿐. (PoC 검증 사실 — `ministack-poc-findings` 참조)
+
+**devDependency 추가**: `aws-cdk-local`(cdklocal 래퍼) + `pg`/`tsx`(관계형 시드).
+
+**레포 루트 docker-compose.yml** (2개 서비스):
+```yaml
+services:
+  ministack:                       # DynamoDB / Cognito / S3 (:4566)
+    image: ministackorg/ministack
+    ports: ["4566:4566"]
+    # SERVICES= 필터 금지 — cdklocal deploy가 ssm 등을 필요로 함
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock"]
+  postgres:                        # 관계형 (:5432) — ministack RDS는 CDK 미지원이라 직접 띄움
+    image: postgres:16
+    ports: ["5432:5432"]
+    environment: ["POSTGRES_PASSWORD=postgres", "POSTGRES_DB=appdb"]
+```
+
+**cdklocal 주의 (PoC 확정)**:
+- `cdklocal`은 `AWS_ENDPOINT_URL`과 **`AWS_ENDPOINT_URL_S3` 둘 다** 설정해야 동작(S3 path-style).
+- creds는 더미(`AWS_ACCESS_KEY_ID=test` / `AWS_SECRET_ACCESS_KEY=test` / `AWS_REGION=us-east-1`).
+- health 폴링은 `GET http://localhost:4566/_ministack/health` (status가 `available`).
+- **관계형(Aurora)은 cdklocal로 로컬 배포 불가** — `AWS::RDS::DBSubnetGroup` 미지원으로 롤백. 로컬 관계형은 docker-compose postgres에 시드를 `DATABASE_URL`로 적용한다. app CDK의 Aurora 구문은 prod 배포 전용.
+
+**infra/scripts/wait-ministack.mjs**: `/_ministack/health`를 폴링하고 postgres `pg_isready`까지 확인한 뒤 통과(fail-closed timeout — 반쯤 뜬 컨테이너에서 E2E 돌리지 않음). `check-ministack-parity.mjs`(sub-check [R])가 이 경로 사용을 검증한다.
+
 ## infra/tsconfig.json
 
 ```json

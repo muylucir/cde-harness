@@ -1,6 +1,8 @@
-# CDE Harness - Rapid Prototype Pipeline
+# CDE Harness — Prototype → MVP Pipeline (한 트랙, 재개발 절벽 없음)
 
-Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototypes from customer pain points. Built for AWS Solutions Architects doing rapid customer demos.
+Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototypes from customer pain points. Built for AWS Solutions Architects doing rapid customer demos. **데모에서 나온 코드가 곧 키워나갈 코드다** — ministack(로컬 AWS 미러) + 단일 AWS-SDK 경로(Vision B) 덕분에 프로토타입은 *기본/빠른 트랙*이고 MVP는 *재작성 없이 도달 가능한 같은 트랙의 끝*이다(추가 게이트는 stageable).
+
+> **정직 경계 (과대광고 금지, Rule 14.6 톤)**: "로컬 $0 — 단 **AI는 실제 Bedrock(유료)**"(Rule 8이 AI mocking 금지를 강제). ministack DynamoDB/Cognito/S3는 shape-correct이고 관계형은 docker-compose Postgres(진짜)로 띄운다. **"endpoint만 바꾸면 prod 완성"이 아니다** — "코어/CDK는 안 건드리고 백엔드만 실물로 갈아끼움"이 보장의 전부. 관계형 *프로비저닝*은 로컬(compose)≠prod(Aurora CDK)이다(Rule 12).
 
 ## Tech Stack
 - Next.js 16 (App Router only — NO Pages Router)
@@ -14,8 +16,10 @@ Sub-agent pipeline for generating Next.js 16 + Cloudscape Design System prototyp
 - `npm run lint` — ESLint
 - `npm run format` — Prettier format all
 - `npm run type-check` — TypeScript check
-- `npm run test:e2e` — Playwright E2E tests
-- `cd infra && npx cdk deploy` — AWS 인프라 배포 (/awsarch 후)
+- `npm run test:e2e` — Playwright E2E tests (ministack + postgres 기동 후)
+- `npm run infra:local` — 로컬 AWS 미러 기동: docker compose(ministack:4566 + postgres) + cdklocal bootstrap/deploy + 시드. `npm run dev`/`test:e2e` 전에 1회 실행. (predev 매직 훅 아님 — 명시적 실행)
+- `npm run infra:local:down` — 로컬 미러 정리
+- `cd infra && npx cdk deploy` — 실제 AWS 인프라 배포 (/awsarch 후)
 - `cd infra && npx cdk destroy` — AWS 인프라 제거
 - `cd infra && npx cdk diff` — 인프라 변경 미리보기
 

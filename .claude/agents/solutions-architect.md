@@ -172,6 +172,15 @@ allowedTools:
 
 `mermaid-diagrams` 스킬을 호출하여 아키텍처 다이어그램 작성. 스토리지 레이어 + 통합/이벤트 레이어 + AI 런타임 레이어를 subgraph로 구분.
 
+## ministack 로컬 미러 설계 (Vision B)
+
+solutions-architect는 설계 산출물에 **로컬 미러 구성**을 포함한다(실제 `infra/` CDK 코드 생성은 aws-deployer가 `/awsarch`에서 하지만, 그 청사진과 로컬 기동 방식을 여기서 확정한다). PoC로 확정된 제약을 반영:
+- **docker-compose**: `ministack`(`ministackorg/ministack`, :4566 — DynamoDB/Cognito/S3) + `postgres`(`postgres:16`, :5432 — 관계형) **2개 서비스**. ministack RDS는 CDK(`RDS::DBSubnetGroup`)로 로컬 배포 불가하므로 관계형은 별도 postgres 컨테이너로 띄운다.
+- **cdklocal 배포**: 동일 `infra/` CDK를 로컬은 `cdklocal`(`AWS_ENDPOINT_URL`+`AWS_ENDPOINT_URL_S3`=:4566)로, prod는 `cdk`로. health는 `/_ministack/health` 폴링.
+- **endpoint-only 전환**: DynamoDB/Cognito/S3는 `AWS_ENDPOINT_URL`(로컬 :4566 ↔ prod 미설정), 관계형은 `DATABASE_URL`(로컬 compose ↔ prod Aurora). `DATA_SOURCE` 런타임 분기 없음.
+- aws-architecture.json의 `local_mirror` 필드에 위 구성(서비스 목록, 포트, 시드 경로)을 기록해 aws-deployer/`infra:local` 스크립트가 참조한다.
+- 구조적 회귀는 `check-ministack-parity.mjs`(sub-check [R])가 차단한다 (compose에 ministack+postgres 둘 다, infra:local* 스크립트 존재, src/lib/db에 DATA_SOURCE 없음).
+
 ## 출력
 
 2개 파일: `.pipeline/artifacts/v{N}/08-aws-infra/` 에 저장.

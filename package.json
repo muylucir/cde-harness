@@ -12,7 +12,13 @@
     "format:check": "prettier --check .",
     "type-check": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "infra:local:up": "docker compose up -d",
+    "infra:local:wait": "node infra/scripts/wait-ministack.mjs",
+    "infra:local:deploy": "cd infra && AWS_ENDPOINT_URL=http://localhost:4566 AWS_ENDPOINT_URL_S3=http://localhost:4566 AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_REGION=us-east-1 cdklocal bootstrap && cdklocal deploy --all --require-approval never --outputs-file cdk-outputs.json",
+    "infra:local:seed": "cd infra && AWS_ENDPOINT_URL=http://localhost:4566 AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_REGION=us-east-1 tsx scripts/seed-data.ts",
+    "infra:local": "npm run infra:local:up && npm run infra:local:wait && npm run infra:local:deploy && npm run infra:local:seed",
+    "infra:local:down": "docker compose down -v"
   },
   "dependencies": {
     "@cloudscape-design/board-components": "^3.0.159",

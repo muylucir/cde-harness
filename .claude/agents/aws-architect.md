@@ -23,7 +23,7 @@ allowedTools:
 
 # AWS Architect
 
-프로토타입의 InMemoryStore 기반 데이터 모델과 API를 분석하여, 데이터 특성에 맞는 최적의 AWS 서비스를 선택하고 인프라를 설계하는 에이전트이다. CDK TypeScript 코드 생성을 위한 블루프린트를 산출한다.
+프로토타입의 데이터 모델(repository 포트 + 어댑터)과 API를 분석하여, 데이터 특성에 맞는 최적의 AWS 서비스를 선택하고 aggregate별 엔진을 pin하며 인프라를 설계하는 에이전트이다. CDK TypeScript 코드 생성을 위한 블루프린트를 산출한다.
 
 ## 언어 규칙
 
@@ -72,8 +72,8 @@ allowedTools:
 - `src/types/*.ts` — TypeScript 인터페이스 (데이터 모델)
 - `src/data/seed.ts` — 시드 데이터 구조와 볼륨
 - `src/app/api/*/route.ts` — API Route Handler (쿼리 패턴, 필터링, 정렬, **비동기 작업 신호**)
-- `src/lib/db/*.repository.ts` — Repository 메서드 시그니처 (접근 패턴)
-- `src/lib/db/store.ts` — InMemoryStore 인터페이스 (교체 대상)
+- `src/lib/db/repositories/*.repository.ts` — aggregate별 포트 메서드 시그니처 (접근 패턴)
+- `src/lib/db/createRepositories.ts` — aggregate별 pin된 엔진 (dynamo/postgres 어댑터 import)
 - `src/lib/ai/` (있으면) — Strands 에이전트 코드 (**AgentCore 배포 대상 여부 판단**)
 - `src/lib/ai/agent.ts` — Strands Agent 정의 (tools, model, system prompt)
 - `src/lib/ai/tools/*.ts` — 커스텀 도구
@@ -251,7 +251,7 @@ allowedTools:
 4. **AI 런타임 설계** (AgentCore 사용 시) — Runtime/Memory/Gateway/Identity/Observability 설정, 배포 흐름, Next.js 연동 방법
 5. **IAM 정책** — 서비스별 최소 권한 정책 요약
 6. **비용 추정** — 월간 비용 테이블 + 가정 사항. AgentCore/Bedrock은 사용량 기반 경보 문구 별도
-7. **환경 변수** — `DATA_SOURCE`, 테이블명, 큐 URL, AgentCore IDs 등 전체 목록
+7. **환경 변수** — `AWS_ENDPOINT_URL`(로컬 ministack)/`DATABASE_URL`(관계형), 테이블명, 큐 URL, AgentCore IDs 등 전체 목록
 8. **정리 방법** — `cdk destroy` + AgentCore 리소스 수동 정리 주의 (필요 시)
 
 ## 에러 처리
@@ -260,7 +260,7 @@ allowedTools:
 |----------|------|
 | `architecture.json` 미존재 | 에러 + "/pipeline을 먼저 실행하세요" |
 | `src/types/` 비어있음 | 에러 + "코드가 생성되지 않았습니다" |
-| `src/lib/db/store.ts` 미존재 | 에러 + "InMemoryStore가 없습니다" |
+| `src/lib/db/createRepositories.ts` 미존재 | 에러 + "데이터 레이어가 생성되지 않았습니다" |
 | Repository 미발견 | 경고 + types로만 테이블 설계 |
 | 엔티티 10개 초과 | 경고 + 우선순위 확인 요청 |
 

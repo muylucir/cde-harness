@@ -137,7 +137,9 @@ node .pipeline/scripts/checkpoint.mjs schema --json
 9. **AI 기능은 반드시 `@strands-agents/sdk`로 구현한다.** `@aws-sdk/client-bedrock-runtime` 직접 호출은 금지. 단순 Q&A/요약이라도 `new Agent()` 패턴을 사용한다.
 10. Run `npm run build` after every code generation cycle
 11. Run `npm run test:e2e` after code generation to verify actual behavior
-12. `DATA_SOURCE` 환경변수로 듀얼 모드 지원: `memory`(기본, InMemoryStore) | `dynamodb`(DynamoDBStore). Repository 패턴의 `createStore()` 팩토리로 추상화. `/awsarch` 실행 후 활성화.
+12. **데이터 레이어 = Polyglot Ports & Adapters (Vision B).** 코드는 처음부터 **AWS SDK 한 벌**로 작성한다 — mock↔실물 이중 경로(과거 InMemory↔Dynamo 듀얼 모드)는 **폐기**. aggregate별로 **접근패턴 모양의 repository 인터페이스(포트)** 를 두고, DB-이디오매틱 어댑터(`dynamo/`는 진짜 KV일 때만, 그 외 `postgres/` 관계형)를 둔다. 엔진은 solutions-architect가 aggregate별로 **컴파일타임에 pin**하며, `createRepositories.ts` 팩토리가 조립한다. **런타임 데이터소스 분기 없음** — 로컬/prod 차이는 **endpoint env뿐**: DynamoDB/S3/Cognito는 `AWS_ENDPOINT_URL`(로컬 ministack 4566 ↔ prod 미설정), 관계형은 `DATABASE_URL`(로컬 docker-compose Postgres ↔ prod Aurora/RDS Proxy). 페이지네이션은 커서(`{items, nextToken?}`) 기본(Rule "응답 envelope"). 상세 패턴은 `aws-cdk-patterns` 스킬의 `references/data-layer.md`. AI 코어 Ports & Adapters(Rule 14.1)를 데이터 레이어에 동일 적용한 것이며, `check-repository-naming.mjs`(sub-check [B])가 폐기 패턴 회귀를 차단한다.
+
+    > **로컬 충실도 경계 (과대광고 금지)**: ministack은 DynamoDB/Cognito/S3를 로컬에서 동일 CDK로 띄우지만 관계형(Aurora)은 CDK(`RDS::DBSubnetGroup` 미지원)로 로컬 배포되지 않아 **docker-compose Postgres로 대체**한다. 즉 관계형은 *프로비저닝* 아티팩트가 로컬(compose)≠prod(CDK)이고, repository 어댑터 코드만 동일하다. "endpoint만 바꾸면 prod 완성"이 아니라 "코어/어댑터는 안 건드리고 백엔드만 실물로 갈아끼움"이 보장의 전부다.
 13. **AI 모델 ID 정책**: `BEDROCK_MODEL_ID` 환경변수 SSOT 패턴은 **폐기**(하네스 단순화). 작업 성격에 따라 아래 **3개 중 하나를 코드에 직접 명시**한다. `process.env.BEDROCK_MODEL_ID ?? '...'` 같은 환경변수 fallback 패턴 사용 금지. spec-writer-ai가 `ai-internals.json`의 각 도구/에이전트에 `model_id` 필드를 명시하고, code-generator-ai가 그 값을 코드 문자열로 그대로 박는다. ai-smoke.mjs Check 7/8 + reviewer 카테고리 10이 이를 강제 검증.
 
     > **SSOT**: `.pipeline/scripts/allowed-models.json`. 아래 표는 인간 가독성을 위한 사본. 갱신 시 SSOT JSON과 함께 동기화하며, `node .pipeline/scripts/check-allowed-models-sync.mjs`가 drift를 차단한다.
@@ -291,7 +293,12 @@ src/
 ├── components/         # Cloudscape UI (FE가 생성)
 ├── types/              # 공유 타입 정의 (BE가 생성, FE가 import)
 ├── lib/
-│   ├── db/             # 데이터 접근 레이어 (BE가 생성)
+│   ├── db/             # 데이터 접근 레이어 — Polyglot Ports & Adapters (BE가 생성, Rule 12)
+│   │   ├── repositories/       #   aggregate별 포트(인터페이스), 접근패턴 모양, 커서 페이지네이션
+│   │   ├── dynamo/             #   DynamoDB 이디오매틱 어댑터 (진짜 KV aggregate만)
+│   │   ├── postgres/           #   Postgres/Aurora 이디오매틱 어댑터 (관계형/조인)
+│   │   ├── createRepositories.ts  # 엔진별 팩토리 (aggregate별 컴파일타임 pin)
+│   │   └── client.ts           #   SDK/드라이버 클라이언트 (AWS_ENDPOINT_URL / DATABASE_URL만 읽음)
 │   ├── services/       # AWS 서비스 래퍼 (BE가 생성)
 │   ├── validation/     # zod 스키마 (BE가 생성)
 │   └── ai/             # 포터블 코어 + 어댑터 (AI FR 있을 때 code-gen-ai가 생성, Rule 14)

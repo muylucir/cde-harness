@@ -54,9 +54,13 @@ src/
 ├── types/                    # 공유 타입 정의 (프론트엔드도 사용)
 │   └── {entity}.ts
 ├── lib/
-│   ├── db/                   # 데이터 접근 레이어
-│   │   ├── store.ts          # 인메모리 스토어 (프로토타입 기본)
-│   │   └── {resource}.repository.ts  # 리소스별 CRUD
+│   ├── db/                   # 데이터 접근 레이어 — Polyglot Ports & Adapters (Rule 12)
+│   │   ├── repositories/     #   aggregate별 포트(인터페이스), 접근패턴 모양
+│   │   │   └── {aggregate}.repository.ts
+│   │   ├── dynamo/           #   DynamoDB 이디오매틱 어댑터 (진짜 KV aggregate만)
+│   │   ├── postgres/         #   Postgres/Aurora 이디오매틱 어댑터 (관계형/조인)
+│   │   ├── createRepositories.ts  # 엔진별 팩토리 (aggregate별 컴파일타임 pin)
+│   │   └── client.ts         #   SDK/드라이버 클라이언트 (AWS_ENDPOINT_URL / DATABASE_URL만)
 │   ├── services/             # AWS 서비스 래퍼 (AI/Bedrock 제외 — code-generator-ai 담당)
 │   │   ├── dynamodb.ts       # DynamoDB (필요 시)
 │   │   └── s3.ts             # S3 (필요 시)
@@ -87,7 +91,7 @@ src/
 
 0. **금지 패턴 (위반 시 reviewer가 P0 반려)**: `any` 타입, `@ts-ignore`/`@ts-nocheck`, barrel export(`index.ts`로 재export), Pages Router(`pages/` 디렉터리), 응답 envelope 변형(`{data}`/`{results}`/`{payload}` 등), `as unknown as Record` 이중 캐스트, 별도 interface로 요청 타입 선언(반드시 `z.infer`). **FP-001~FP-011은 담당 범위 내 모든 생성 파일에 예외 없이 적용된다 — 첫 파일만이 아니라 전체 범위이다.**
 1. **AI/Bedrock 코드는 이 에이전트의 담당이 아니다** — `code-generator-ai`가 `@strands-agents/sdk`로 구현
-2. **Repository 패턴 의무화** — 모든 데이터 접근은 `src/lib/db/store.ts`에 정의된 `Store<T>` 인터페이스를 거친다. 첫 구현은 `InMemoryStore`이지만 `createStore<T>(name)` 팩토리가 `process.env.DATA_SOURCE`를 보고 `memory`(기본) | `dynamodb` 어댑터를 분기 반환한다. `/awsarch` 시 DynamoDB 어댑터만 추가하면 되도록 모든 service/route는 store를 직접 인스턴스화하지 않고 팩토리만 호출한다. `api-manifest.json.repository_paths[]`에 store 인터페이스/구현 파일 경로를 기록한다.
+2. **Polyglot Ports & Adapters 의무화 (Rule 12, Vision B)** — 만능 `Store<T>` 포트는 폐기. aggregate별로 **접근패턴 모양의 repository 인터페이스(포트)** 를 `src/lib/db/repositories/{aggregate}.repository.ts`에 정의하고, DB-이디오매틱 어댑터(`dynamo/` = 진짜 KV일 때만, `postgres/` = 관계형)를 둔다. 엔진은 solutions-architect가 aggregate별로 컴파일타임에 pin하며 `createRepositories.ts` 팩토리가 어떤 어댑터를 import할지로 고정한다 — **런타임 데이터소스 분기 없음**. 코드는 처음부터 AWS SDK/PG 드라이버 한 벌로 쓰고, 로컬/prod는 endpoint env(`AWS_ENDPOINT_URL` / `DATABASE_URL`)로만 갈린다. 모든 service/route는 어댑터를 직접 인스턴스화하지 않고 `createRepositories()`만 호출한다. `api-manifest.json.repository_paths[]`에 포트/어댑터/팩토리 파일 경로를 기록한다.
 3. **정렬은 타입 안전 접근자 패턴** — `as unknown as Record` 이중 캐스트 금지. `Record<string, (item: T) => string | number>` 사용
 4. **zod로 모든 POST/PUT 요청 검증**
 5. **코딩 규칙은 CLAUDE.md 참조** — TypeScript, 주석, 네이밍 컨벤션 등
@@ -229,13 +233,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     "updateVehicleSchema": "src/lib/validation/schemas.ts"
   },
   "repository_paths": [
-    { "interface": "src/lib/db/store.ts", "factory": "src/lib/db/createStore.ts", "implementations": ["src/lib/db/inMemoryStore.ts"] }
+    { "aggregate": "vehicles", "engine": "dynamodb", "port": "src/lib/db/repositories/vehicle.repository.ts", "adapter": "src/lib/db/dynamo/vehicle.dynamo.ts", "factory": "src/lib/db/createRepositories.ts" }
   ],
   "drift_notes": []
 }
 ```
 
-`repository_paths`: `Store<T>` 인터페이스 + `createStore()` 팩토리 + 구현 어댑터 경로. `/awsarch` 시 aws-deployer가 이 경로를 보고 `dynamodbStore.ts`를 추가한다. 누락 시 reviewer P0.
+`repository_paths`: aggregate별 포트 인터페이스 + 어댑터(엔진별) + `createRepositories.ts` 팩토리 경로 + 각 aggregate의 pin된 엔진(`dynamodb`|`postgres`). solutions-architect가 메인 파이프라인에서 엔진을 pin하고, `/awsarch`는 동일 코드를 실제 AWS로 배포만 한다(어댑터 교체 없음). 누락 시 reviewer P0.
 
 `drift_notes[]` 항목 예: `{ "endpoint": "GET /api/vehicles", "expected_type": "ListVehiclesResponse", "actual_type": "{ data: Vehicle[] }", "file": "..." }`. drift가 발생했다는 것은 계약 준수 실패이므로 가능한 한 0개여야 한다.
 

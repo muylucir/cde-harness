@@ -55,7 +55,7 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
 
 > **모드 비교 (배포 비용 발생 지점 기준)**:
 > - `--plan`: 인프라 **설계 문서**(`aws-architecture.json/md`)만. CDK 코드 없음. AWS 비용 $0.
-> - `--cdk`: 설계 + **`infra/` CDK 프로젝트 + 듀얼 모드 데이터 레이어**(`createStore.ts`/`dynamodb-store.ts` + route `await` 수정)까지 생성하고 **`cdk deploy` 직전에 종료**. 디스크에 배포 가능한 CDK 프로젝트가 남고 `DATA_SOURCE=memory`로 mock은 그대로 동작. AWS 비용 $0 (배포 안 함). 나중에 `cd infra && npx cdk deploy`로 직접 배포하거나 `/pipeline-from aws-deployer`로 이어서 배포·마이그레이션.
+> - `--cdk`: 설계 + **`infra/` CDK 프로젝트**까지 생성하고 **`cdk deploy` 직전에 종료**. (데이터 레이어는 Vision B라 이미 AWS SDK 한 벌 — 전환 코드 없음.) 디스크에 배포 가능한 CDK 프로젝트가 남고 로컬은 ministack(`AWS_ENDPOINT_URL=http://localhost:4566`)으로 그대로 동작. AWS 비용 $0 (배포 안 함). 나중에 `cd infra && npx cdk deploy`로 직접 배포하거나 `/pipeline-from aws-deployer`로 이어서 배포·마이그레이션.
 > - (없음)/`--qa`: 실제 `cdk deploy` 실행 — **AWS 비용 발생**.
 
 `--auto`는 지원하지 않는다 (실제 AWS 비용이 발생하므로 APPROVAL GATE를 건너뛰지 않는다). `--cdk`/`--plan`도 비용은 없지만 동일하게 APPROVAL GATE(설계 비용 검토)는 거친다 — 사용자가 어떤 인프라를 만들지 검토 없이 코드가 생성되는 것을 막기 위함이다.
@@ -64,7 +64,7 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
 
 0. **Preconditions** — 다음을 모두 확인한다:
    - `.pipeline/state.json`에 `"completed"` 상태의 버전이 최소 1개 존재
-   - `src/lib/db/store.ts`가 존재 (InMemoryStore가 생성되어 있음)
+   - `src/lib/db/createRepositories.ts`가 존재 (데이터 레이어가 생성되어 있음)
    - 현재 `"in-progress"` 상태의 버전이 없음
    - `npm run build` 성공 (현재 코드가 정상)
    - **이중 실행 차단 (acquireLock)**: 단계 3의 `checkpoint.mjs new-version`이 `.pipeline/.lock`을 획득한다. 다른 파이프라인 커맨드(`/pipeline`, `/iterate`, `/reconcile`, `/awsarch`)가 진행 중이면 락 실패로 exit 1. 이 경우 사용자에게: "다른 파이프라인 명령이 진행 중입니다 (`.pipeline/.lock` 보유). 이전 실행이 끝나길 기다리거나, 비정상 종료라면 `.pipeline/.lock` 파일을 확인 후 제거하세요." 안내 후 중단.
@@ -196,45 +196,37 @@ node .pipeline/scripts/checkpoint.mjs approve aws-deployer \
 node .pipeline/scripts/checkpoint.mjs start aws-deployer
 ```
 
-- Launch `aws-deployer` agent (Step 0~3: CDK 프로젝트 생성 + 듀얼 모드 데이터 레이어)
+- Launch `aws-deployer` agent (Step 0~3: CDK 프로젝트 생성. 데이터 레이어는 Vision B라 수정 없음)
 - Output:
   - `infra/` 디렉토리 (CDK 프로젝트)
-  - `src/lib/db/data-store.ts` (공통 인터페이스)
-  - `src/lib/db/dynamodb-store.ts` (DynamoDB 구현)
-  - `src/lib/db/createStore.ts` (듀얼 모드 팩토리 — SSOT)
-  - 수정된 `src/lib/db/*.repository.ts`
-  - 수정된 `src/app/api/*/route.ts` (await 추가)
+  - (데이터 레이어 코드 수정 없음 — code-generator-backend가 생성한 repositories/ + 어댑터 + createRepositories.ts 그대로)
 
-> **`--cdk` 모드 주의**: `aws-deployer`를 Launch할 때 프롬프트에 **"CDK 코드 생성 + 듀얼 모드 데이터 레이어까지만 수행하고 `cdk bootstrap`/`cdk deploy`/시드 마이그레이션은 실행하지 마라 (Step 0~2까지, Step 3 배포 이후 금지)"**를 명시한다. 에이전트가 배포를 실행하지 않도록 범위를 좁히는 것이 `--cdk`의 핵심이다.
+> **`--cdk` 모드 주의**: `aws-deployer`를 Launch할 때 프롬프트에 **"CDK 코드 생성까지만 수행하고 `cdk bootstrap`/`cdk deploy`/시드 마이그레이션은 실행하지 마라 (Step 0~1까지, Step 3 배포 이후 금지)"**를 명시한다. 에이전트가 배포를 실행하지 않도록 범위를 좁히는 것이 `--cdk`의 핵심이다.
 
 **CHECKPOINT (Phase 2)**: 다음 조건을 확인한다. 실패 시 `aws-deployer`에 피드백 → 수정 (최대 2회).
 - [ ] `infra/bin/app.ts`와 `infra/lib/main-stack.ts`가 존재하는가
 - [ ] `infra/package.json`이 존재하는가
-- [ ] `src/lib/db/dynamodb-store.ts`가 존재하는가
-- [ ] `src/lib/db/createStore.ts`가 존재하는가
-- [ ] `npm run build` 성공 (Next.js 빌드, DynamoDB 모드)
-- [ ] `DATA_SOURCE=memory npm run build` 성공 (mock 모드 여전히 동작 — `--cdk`는 배포가 없으므로 mock이 기본 동작 경로)
+- [ ] `npm run build` 성공 (Next.js 빌드)
 - [ ] `cd infra && npx tsc --noEmit` 성공 (CDK 컴파일)
 - [ ] **CDK charset 검사 통과** — `node .pipeline/scripts/check-cdk-charset.mjs` (exit 0). CDK 문자열 리터럴(특히 IAM Role `description`/`roleName`)에 em dash(—)·ellipsis(…)·스마트 따옴표·NBSP·한국어 같은 비-Latin1 문자가 있으면 `CreateRole`이 거부되고 스택이 `ROLLBACK_COMPLETE`로 롤백된다. **실패 시 `aws-deployer`에 피드백 → 수정 (Phase 2 수정 카운트에 포함, 최대 2회)**. 이 게이트는 `tsc --noEmit`가 잡지 못하는 런타임/배포 표면(CFN 텍스트 필드 charset)을 막는다 — 컴파일은 통과해도 배포가 깨지는 케이스다.
 - [ ] **CDK synth + CFN 제약 검사 통과** — `cd infra && npx cdk synth >/dev/null` 후 (루트에서) `node .pipeline/scripts/check-cdk-synth.mjs` (exit 0). 합성된 CloudFormation 템플릿에서 **서비스 허용 범위를 벗어난 숫자 값**(예: CloudFront `OriginReadTimeout` > 120초, Lambda `Timeout` > 900초, SQS `VisibilityTimeout` > 43200초)을 잡는다. 이런 값은 타입은 `number`라 `tsc`는 통과하지만 배포 시 `Invalid request ... not within the valid range`로 `CREATE_FAILED` + 롤백된다. **실패 시 `aws-deployer`에 피드백 → 수정 (Phase 2 수정 카운트에 포함, 최대 2회)**.
 
-- **`--cdk` 모드**: Phase 2 CHECKPOINT 통과 직후 **여기서 종료** (Phase 3 배포로 진행하지 않음). 실제 `cdk deploy`가 없으므로 AWS 비용은 발생하지 않는다. `08-aws-infra/`에는 설계 산출물(`aws-architecture.json/md`)이 있고, `infra/` CDK 프로젝트와 듀얼 모드 데이터 레이어가 디스크에 남는다.
+- **`--cdk` 모드**: Phase 2 CHECKPOINT 통과 직후 **여기서 종료** (Phase 3 배포로 진행하지 않음). 실제 `cdk deploy`가 없으므로 AWS 비용은 발생하지 않는다. `08-aws-infra/`에는 설계 산출물(`aws-architecture.json/md`)이 있고, `infra/` CDK 프로젝트가 디스크에 남는다. (데이터 레이어는 Vision B라 코드 변경 없음.)
   ```bash
-  # 배포가 없었으므로 data_source는 memory로 기록 (듀얼 모드 코드는 있으나 DynamoDB 미배포).
+  # 배포가 없었으므로 data_source는 memory로 기록 (CDK 코드는 있으나 미배포).
   node .pipeline/scripts/checkpoint.mjs set-aws-infra \
     --data-source=memory \
-    --notes="awsarch --cdk: CDK 코드 + 듀얼 모드 레이어 생성, 미배포 (cdk deploy 미실행)"
+    --notes="awsarch --cdk: CDK 코드 생성, 미배포 (cdk deploy 미실행)"
   node .pipeline/scripts/checkpoint.mjs complete \
     --stage=aws-deployer \
-    --notes="awsarch --cdk: infra/ CDK 프로젝트 + 듀얼 모드 레이어 생성 완료, 배포 보류"
+    --notes="awsarch --cdk: infra/ CDK 프로젝트 생성 완료, 배포 보류"
   ```
-  그 후 `git-manager`(action: `post-awsarch`)로 `infra/` + 수정된 `src/lib/db/` 등을 커밋하고, 사용자에게 한국어로 다음을 안내한 뒤 종료한다 (Completion 섹션의 전체 요약 대신 `--cdk` 전용 요약):
+  그 후 `git-manager`(action: `post-awsarch`)로 `infra/` 등을 커밋하고, 사용자에게 한국어로 다음을 안내한 뒤 종료한다 (Completion 섹션의 전체 요약 대신 `--cdk` 전용 요약):
   ```
   ## /awsarch --cdk 완료 (배포 없음)
 
   ### 생성된 것
   - `infra/` — 배포 가능한 CDK TypeScript 프로젝트 (DynamoDB/S3/Cognito 등)
-  - 듀얼 모드 데이터 레이어 (`src/lib/db/createStore.ts`, `dynamodb-store.ts`)
   - 설계 문서: `08-aws-infra/aws-architecture.json/md`
 
   ### 현재 동작

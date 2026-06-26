@@ -1,309 +1,204 @@
-# 데이터 레이어 듀얼 모드 구현
+# 데이터 레이어 — Polyglot Ports & Adapters (Vision B)
 
-InMemoryStore → AWS 서비스 전환을 위한 Repository 패턴 상세 구현.
+코드는 **처음부터 AWS SDK 한 벌**로 작성한다. mock↔실물 이중 경로(과거 InMemory↔DynamoDB)는 폐기됐다. 로컬은 ministack(:4566) + docker-compose Postgres, prod는 실제 AWS — **전환은 endpoint env뿐**(`AWS_ENDPOINT_URL` / `DATABASE_URL`). 이 구조는 AI 코어의 Ports & Adapters(CLAUDE.md Rule 14.1)를 데이터 레이어에 동일 적용한 것이다.
 
-## Store 인터페이스
+## 핵심 원칙
 
-code-generator-backend가 생성하는 기본 인터페이스:
+1. **만능 `Store<T>` 포트 폐기.** aggregate별로 **접근패턴 모양의 repository 인터페이스(포트)** 를 둔다. 메서드 이름이 실제 접근패턴을 드러낸다 (`findByStatus`, `findOverdue` 등).
+2. **DB-이디오매틱 어댑터.** 포트마다 엔진별 구현을 손으로 작성한다. DynamoDB는 **접근패턴이 진짜 key-value일 때만**, 그 외는 관계형(Postgres/Aurora). solutions-architect가 aggregate별 엔진을 **컴파일타임에 pin**한다.
+3. **런타임 분기 없음.** 과거의 환경변수 기반 데이터소스 switch는 없다. "스위치"는 배포 경로가 정하는 **endpoint**다: DynamoDB/S3/Cognito는 `AWS_ENDPOINT_URL`(로컬 4566 ↔ prod 미설정), 관계형은 `DATABASE_URL`(로컬 compose Postgres ↔ prod Aurora/RDS Proxy).
+4. **커서 기본 페이지네이션.** 포트는 `{ items, nextToken? }`를 반환한다(CLAUDE.md "응답 envelope"). 오프셋(`total`)은 solutions-architect가 Postgres로 pin하고 `api-contract.json.offset_pinned_routes[]`에 등록한 aggregate만.
 
-```typescript
-// src/lib/db/store.ts
-export interface Store<T extends { id: string }> {
-  findAll(options?: FindAllOptions): Promise<T[]>;
-  findById(id: string): Promise<T | null>;
-  create(item: Omit<T, 'id'>): Promise<T>;
-  update(id: string, partial: Partial<T>): Promise<T>;
-  delete(id: string): Promise<void>;
-}
+## 디렉토리 구조
 
-export interface FindAllOptions {
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-  filter?: Record<string, string>;
-  limit?: number;
-}
+```
+src/lib/db/
+├── repositories/
+│   ├── vehicle.repository.ts      # 포트(인터페이스) — aggregate별, 접근패턴 모양
+│   └── maintenance.repository.ts
+├── dynamo/
+│   └── vehicle.dynamo.ts          # 어댑터 — DynamoDB 이디오매틱(진짜 KV일 때만)
+├── postgres/
+│   └── maintenance.pg.ts          # 어댑터 — Postgres/Aurora 이디오매틱(관계형/오프셋)
+├── createRepositories.ts          # 엔진별 팩토리(aggregate별 컴파일타임 pin)
+└── client.ts                      # SDK/드라이버 클라이언트 (endpoint env만 읽음)
 ```
 
-## InMemoryStore (기존, code-gen이 생성)
+## Repository 포트 (aggregate별 인터페이스)
 
 ```typescript
-// src/lib/db/inMemoryStore.ts
-export class InMemoryStore<T extends { id: string }> implements Store<T> {
-  private items: Map<string, T> = new Map();
+// src/lib/db/repositories/vehicle.repository.ts
+import type { Vehicle, VehicleStatus, NewVehicle } from '@/types/vehicle';
 
-  constructor(private entityName: string, seedData?: T[]) {
-    seedData?.forEach(item => this.items.set(item.id, item));
-  }
-
-  async findAll(options?: FindAllOptions): Promise<T[]> {
-    let items = Array.from(this.items.values());
-    if (options?.filter) {
-      items = items.filter(item =>
-        Object.entries(options.filter!).every(([key, value]) =>
-          String((item as Record<string, unknown>)[key]) === value
-        )
-      );
-    }
-    if (options?.sortBy) {
-      items.sort((a, b) => {
-        const aVal = (a as Record<string, unknown>)[options.sortBy!];
-        const bVal = (b as Record<string, unknown>)[options.sortBy!];
-        const cmp = String(aVal).localeCompare(String(bVal));
-        return options.sortOrder === 'desc' ? -cmp : cmp;
-      });
-    }
-    return options?.limit ? items.slice(0, options.limit) : items;
-  }
-
-  async findById(id: string): Promise<T | null> {
-    return this.items.get(id) ?? null;
-  }
-
-  async create(item: Omit<T, 'id'>): Promise<T> {
-    const id = crypto.randomUUID();
-    const newItem = { ...item, id } as T;
-    this.items.set(id, newItem);
-    return newItem;
-  }
-
-  async update(id: string, partial: Partial<T>): Promise<T> {
-    const existing = this.items.get(id);
-    if (!existing) throw new Error(`${this.entityName} not found: ${id}`);
-    const updated = { ...existing, ...partial, id };
-    this.items.set(id, updated);
-    return updated;
-  }
-
-  async delete(id: string): Promise<void> {
-    this.items.delete(id);
-  }
+/** 커서 페이지(이식 가능 기본값). nextToken은 Postgres keyset / DynamoDB LastEvaluatedKey 양쪽에 매핑. */
+export interface Page<T> {
+  items: T[];
+  nextToken?: string;
 }
-```
-
-## DynamoDBStore (aws-deployer가 추가)
-
-```typescript
-// src/lib/db/dynamoDBStore.ts
-import {
-  DynamoDBClient,
-  GetItemCommand, PutItemCommand, UpdateItemCommand,
-  DeleteItemCommand, ScanCommand, QueryCommand,
-} from '@aws-sdk/client-dynamodb';
-import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
-import type { Store, FindAllOptions } from './store';
-
-export class DynamoDBStore<T extends { id: string }> implements Store<T> {
-  private client: DynamoDBClient;
-  private tableName: string;
-
-  constructor(entityName: string) {
-    this.client = new DynamoDBClient({});
-    // 환경 변수에서 테이블명 조회: DYNAMODB_VEHICLES_TABLE 등
-    const envKey = `DYNAMODB_${entityName.toUpperCase()}_TABLE`;
-    this.tableName = process.env[envKey]!;
-    if (!this.tableName) {
-      throw new Error(`환경 변수 ${envKey}가 설정되지 않았습니다.`);
-    }
-  }
-
-  async findAll(options?: FindAllOptions): Promise<T[]> {
-    // GSI가 있는 필터는 Query, 없으면 Scan + FilterExpression
-    const result = await this.client.send(new ScanCommand({
-      TableName: this.tableName,
-    }));
-    let items = (result.Items || []).map(item => unmarshall(item) as T);
-
-    // 클라이언트 사이드 필터/정렬 (프로토타입 단순화)
-    if (options?.filter) {
-      items = items.filter(item =>
-        Object.entries(options.filter!).every(([key, value]) =>
-          String((item as Record<string, unknown>)[key]) === value
-        )
-      );
-    }
-    if (options?.sortBy) {
-      items.sort((a, b) => {
-        const aVal = (a as Record<string, unknown>)[options.sortBy!];
-        const bVal = (b as Record<string, unknown>)[options.sortBy!];
-        const cmp = String(aVal).localeCompare(String(bVal));
-        return options.sortOrder === 'desc' ? -cmp : cmp;
-      });
-    }
-    return options?.limit ? items.slice(0, options.limit) : items;
-  }
-
-  async findById(id: string): Promise<T | null> {
-    const result = await this.client.send(new GetItemCommand({
-      TableName: this.tableName,
-      Key: marshall({ id }),
-    }));
-    return result.Item ? (unmarshall(result.Item) as T) : null;
-  }
-
-  async create(item: Omit<T, 'id'>): Promise<T> {
-    const id = crypto.randomUUID();
-    const newItem = { ...item, id, createdAt: new Date().toISOString() } as T;
-    await this.client.send(new PutItemCommand({
-      TableName: this.tableName,
-      Item: marshall(newItem, { removeUndefinedValues: true }),
-    }));
-    return newItem;
-  }
-
-  async update(id: string, partial: Partial<T>): Promise<T> {
-    const existing = await this.findById(id);
-    if (!existing) throw new Error(`Item not found: ${id}`);
-    const updated = { ...existing, ...partial, id, updatedAt: new Date().toISOString() };
-    await this.client.send(new PutItemCommand({
-      TableName: this.tableName,
-      Item: marshall(updated, { removeUndefinedValues: true }),
-    }));
-    return updated as T;
-  }
-
-  async delete(id: string): Promise<void> {
-    await this.client.send(new DeleteItemCommand({
-      TableName: this.tableName,
-      Key: marshall({ id }),
-    }));
-  }
-}
-```
-
-## AuroraStore (aws-deployer가 추가, Data API 사용)
-
-```typescript
-// src/lib/db/auroraStore.ts
-import {
-  RDSDataClient, ExecuteStatementCommand,
-} from '@aws-sdk/client-rds-data';
-import type { Store, FindAllOptions } from './store';
-
-export class AuroraStore<T extends { id: string }> implements Store<T> {
-  private client: RDSDataClient;
-  private clusterArn: string;
-  private secretArn: string;
-  private database: string;
-  private tableName: string;
-
-  constructor(entityName: string) {
-    this.client = new RDSDataClient({});
-    this.clusterArn = process.env.AURORA_CLUSTER_ARN!;
-    this.secretArn = process.env.AURORA_SECRET_ARN!;
-    this.database = process.env.AURORA_DATABASE!;
-    this.tableName = entityName.toLowerCase();
-  }
-
-  private async execute(sql: string, parameters?: Record<string, unknown>[]) {
-    return this.client.send(new ExecuteStatementCommand({
-      resourceArn: this.clusterArn,
-      secretArn: this.secretArn,
-      database: this.database,
-      sql,
-      parameters: parameters as never,
-    }));
-  }
-
-  async findAll(options?: FindAllOptions): Promise<T[]> {
-    let sql = `SELECT * FROM ${this.tableName}`;
-    if (options?.filter) {
-      const where = Object.keys(options.filter)
-        .map(key => `${key} = :${key}`)
-        .join(' AND ');
-      sql += ` WHERE ${where}`;
-    }
-    if (options?.sortBy) {
-      sql += ` ORDER BY ${options.sortBy} ${options.sortOrder === 'desc' ? 'DESC' : 'ASC'}`;
-    }
-    if (options?.limit) {
-      sql += ` LIMIT ${options.limit}`;
-    }
-    const result = await this.execute(sql);
-    return this.parseRecords(result.records, result.columnMetadata);
-  }
-
-  // ... findById, create, update, delete는 유사 패턴
-}
-```
-
-## createStore 팩토리
-
-```typescript
-// src/lib/db/createStore.ts
-import type { Store } from './store';
-import { InMemoryStore } from './inMemoryStore';
-import { DynamoDBStore } from './dynamoDBStore';
-import { AuroraStore } from './auroraStore';
 
 /**
- * 데이터 소스 팩토리. DATA_SOURCE 환경변수로 분기.
- * @param entityName - 엔티티명 (예: 'vehicles')
- * @param seedData - InMemoryStore용 시드 데이터
+ * 차량 aggregate 접근 포트. 메서드는 실제 접근패턴을 드러낸다 —
+ * 어댑터(dynamo/postgres)가 엔진 이디오매틱하게 구현한다.
  */
-export function createStore<T extends { id: string }>(
-  entityName: string,
-  seedData?: T[],
-): Store<T> {
-  const dataSource = process.env.DATA_SOURCE || 'memory';
+export interface VehicleRepository {
+  findById(id: string): Promise<Vehicle | null>;
+  findByStatus(status: VehicleStatus, page?: { after?: string; limit?: number }): Promise<Page<Vehicle>>;
+  create(input: NewVehicle): Promise<Vehicle>;
+  update(id: string, partial: Partial<Vehicle>): Promise<Vehicle>;
+  delete(id: string): Promise<void>;
+}
+```
 
-  switch (dataSource) {
-    case 'dynamodb':
-      return new DynamoDBStore<T>(entityName);
-    case 'aurora':
-      return new AuroraStore<T>(entityName);
-    default:
-      return new InMemoryStore<T>(entityName, seedData);
+## DynamoDB 어댑터 (진짜 key-value 접근일 때만)
+
+```typescript
+// src/lib/db/dynamo/vehicle.dynamo.ts
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import type { VehicleRepository, Page } from '../repositories/vehicle.repository';
+import type { Vehicle, VehicleStatus, NewVehicle } from '@/types/vehicle';
+
+// client.ts가 AWS_ENDPOINT_URL을 읽어 로컬(ministack 4566)/prod 동일 코드로 동작.
+import { ddbDoc } from '../client';
+
+const TABLE = process.env.DYNAMODB_VEHICLES_TABLE!;
+
+/** DynamoDB 이디오매틱 차량 어댑터. status-index GSI로 findByStatus를 Query로 처리(Scan 아님). */
+export class VehicleDynamoRepository implements VehicleRepository {
+  async findById(id: string): Promise<Vehicle | null> {
+    const r = await ddbDoc.send(new GetCommand({ TableName: TABLE, Key: { id } }));
+    return (r.Item as Vehicle) ?? null;
   }
-}
-```
 
-## Repository에서 사용
-
-```typescript
-// src/lib/db/vehicle.repository.ts (기존 코드 수정)
-// BEFORE: const store = new InMemoryStore<Vehicle>('vehicles', seedVehicles);
-// AFTER:
-import { createStore } from './createStore';
-const store = createStore<Vehicle>('vehicles', seedVehicles);
-
-// 나머지 코드는 변경 없음 — Store 인터페이스가 동일
-```
-
-## 마이그레이션 전략
-
-### DynamoDB 시드
-
-```typescript
-// infra/scripts/seed-data.ts
-import { DynamoDBClient, BatchWriteItemCommand } from '@aws-sdk/client-dynamodb';
-import { marshall } from '@aws-sdk/util-dynamodb';
-
-function chunks<T>(arr: T[], size: number): T[][] {
-  return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
-    arr.slice(i * size, (i + 1) * size)
-  );
-}
-
-async function seedTable(tableName: string, items: Record<string, unknown>[]) {
-  const client = new DynamoDBClient({});
-  for (const batch of chunks(items, 25)) {
-    await client.send(new BatchWriteItemCommand({
-      RequestItems: {
-        [tableName]: batch.map(item => ({
-          PutRequest: { Item: marshall(item, { removeUndefinedValues: true }) },
-        })),
-      },
+  async findByStatus(status: VehicleStatus, page?: { after?: string; limit?: number }): Promise<Page<Vehicle>> {
+    const r = await ddbDoc.send(new QueryCommand({
+      TableName: TABLE,
+      IndexName: 'status-index',
+      KeyConditionExpression: '#s = :s',
+      ExpressionAttributeNames: { '#s': 'status' },
+      ExpressionAttributeValues: { ':s': status },
+      Limit: page?.limit ?? 20,
+      ExclusiveStartKey: page?.after ? JSON.parse(Buffer.from(page.after, 'base64').toString()) : undefined,
     }));
+    return {
+      items: (r.Items as Vehicle[]) ?? [],
+      // LastEvaluatedKey → nextToken (커서). 오프셋 total은 DynamoDB에서 산출하지 않는다.
+      nextToken: r.LastEvaluatedKey
+        ? Buffer.from(JSON.stringify(r.LastEvaluatedKey)).toString('base64')
+        : undefined,
+    };
   }
-  console.log(`${tableName}: ${items.length}건 시드 완료`);
+
+  async create(input: NewVehicle): Promise<Vehicle> {
+    const item: Vehicle = { ...input, id: crypto.randomUUID() };
+    await ddbDoc.send(new PutCommand({ TableName: TABLE, Item: item }));
+    return item;
+  }
+
+  // update/delete 동일 패턴 (UpdateCommand / DeleteCommand)
+  async update(): Promise<Vehicle> { throw new Error('see UpdateCommand pattern'); }
+  async delete(): Promise<void> { throw new Error('see DeleteCommand pattern'); }
 }
 ```
 
-### Aurora 시드
+## Postgres/Aurora 어댑터 (관계형 — 기본값, PG-wire)
 
-```sql
--- infra/scripts/seed.sql (Prisma db seed 또는 Data API로 실행)
-INSERT INTO vehicles (id, name, status, ...) VALUES
-  ('uuid-1', 'Vehicle A', 'active', ...),
-  ('uuid-2', 'Vehicle B', 'maintenance', ...);
+```typescript
+// src/lib/db/postgres/maintenance.pg.ts
+import type { MaintenanceRepository, Page } from '../repositories/maintenance.repository';
+import type { MaintenanceRecord } from '@/types/maintenance';
+// client.ts가 DATABASE_URL을 읽어 로컬(compose Postgres)/prod(Aurora+RDS Proxy) 동일 코드.
+import { pg } from '../client';
+
+/**
+ * 정비 기록 관계형 어댑터. 관계형은 keyset(커서) 기본.
+ * 오프셋(total)이 필요한 aggregate는 solutions-architect가 Postgres로 pin하고
+ * api-contract.json.offset_pinned_routes[]에 등록한 경우에만 별도 메서드로 노출.
+ */
+export class MaintenancePgRepository implements MaintenanceRepository {
+  async findByVehicle(vehicleId: string, page?: { after?: string; limit?: number }): Promise<Page<MaintenanceRecord>> {
+    const limit = page?.limit ?? 20;
+    // keyset 페이지네이션: created_at < after 커서. (오프셋 OFFSET/LIMIT 아님)
+    const after = page?.after ? new Date(Buffer.from(page.after, 'base64').toString()) : null;
+    const { rows } = await pg.query<MaintenanceRecord>(
+      `SELECT * FROM maintenance_records
+       WHERE vehicle_id = $1 ${after ? 'AND created_at < $3' : ''}
+       ORDER BY created_at DESC LIMIT $2`,
+      after ? [vehicleId, limit, after] : [vehicleId, limit],
+    );
+    const last = rows.at(-1);
+    return {
+      items: rows,
+      nextToken: rows.length === limit && last
+        ? Buffer.from(new Date(last.createdAt).toISOString()).toString('base64')
+        : undefined,
+    };
+  }
+  // findById/create/update/delete: 표준 파라미터화 쿼리
+}
 ```
+
+## 엔진별 팩토리
+
+```typescript
+// src/lib/db/createRepositories.ts
+import { VehicleDynamoRepository } from './dynamo/vehicle.dynamo';
+import { MaintenancePgRepository } from './postgres/maintenance.pg';
+import type { VehicleRepository } from './repositories/vehicle.repository';
+import type { MaintenanceRepository } from './repositories/maintenance.repository';
+
+/**
+ * aggregate별 repository를 조립한다. 엔진은 solutions-architect가 aggregate별로
+ * 컴파일타임에 pin한 것(여기서 어떤 어댑터를 import하는지로 고정). 런타임 분기 없음.
+ * 로컬/prod 차이는 client.ts가 읽는 endpoint env(AWS_ENDPOINT_URL / DATABASE_URL)뿐.
+ */
+export function createRepositories(): {
+  vehicles: VehicleRepository;        // key-value 접근 → DynamoDB pin
+  maintenance: MaintenanceRepository; // 관계형/조인 → Postgres pin
+} {
+  return {
+    vehicles: new VehicleDynamoRepository(),
+    maintenance: new MaintenancePgRepository(),
+  };
+}
+```
+
+## 클라이언트 (endpoint env만 읽음)
+
+```typescript
+// src/lib/db/client.ts
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { Pool } from 'pg';
+
+// DynamoDB/S3/Cognito: AWS_ENDPOINT_URL이 있으면 로컬 ministack(4566), 없으면 실제 AWS.
+const ddbClient = new DynamoDBClient({
+  endpoint: process.env.AWS_ENDPOINT_URL || undefined,
+});
+export const ddbDoc = DynamoDBDocumentClient.from(ddbClient);
+
+// 관계형: DATABASE_URL이 로컬(compose Postgres)/prod(Aurora+RDS Proxy)를 가른다.
+export const pg = new Pool({ connectionString: process.env.DATABASE_URL });
+```
+
+## 라우트에서 사용
+
+```typescript
+// src/app/api/vehicles/route.ts
+import { createRepositories } from '@/lib/db/createRepositories';
+
+const repos = createRepositories();
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const status = searchParams.get('status') as VehicleStatus;
+  const after = searchParams.get('after') ?? undefined;
+  const page = await repos.vehicles.findByStatus(status, { after });
+  return NextResponse.json(page);   // { items, nextToken? } — 커서 기본
+}
+```
+
+## 시드 마이그레이션
+
+- **DynamoDB**: `infra/scripts/seed-data.ts` — `BatchWriteCommand`(25건/배치). 로컬은 `AWS_ENDPOINT_URL=http://localhost:4566`로 ministack에, prod는 미설정으로 실제 테이블에 적재.
+- **Postgres**: 스키마 + 시드 SQL을 `DATABASE_URL`로 적용. 로컬은 compose Postgres, prod는 Aurora. (CDK는 Aurora를 prod에서 프로비저닝하지만 — ministack은 `RDS::DBSubnetGroup` 미지원이라 로컬 관계형은 compose Postgres로 띄운다. Postgres *프로비저닝* 아티팩트만 로컬≠prod이며, repository 어댑터 코드는 동일.)

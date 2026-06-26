@@ -507,33 +507,27 @@ new cdk.CfnOutput(this, 'AgentRuntimeArn', {
 
 상세 CLI/SDK 워크플로우는 전역 스킬 `bedrock-agentcore-guide` 참조.
 
-## 데이터 레이어 듀얼 모드
+## 데이터 레이어 — Polyglot Ports & Adapters (Vision B)
 
-InMemoryStore → AWS 서비스로 교체할 때 Repository 패턴으로 추상화. 상세 구현은 [references/data-layer.md](references/data-layer.md) 참조.
+코드는 처음부터 AWS SDK/PG 한 벌. mock↔실물 이중 경로는 폐기. aggregate별 **접근패턴 모양의 repository 포트** + DB-이디오매틱 어댑터(`dynamo/`는 진짜 KV일 때만, 그 외 `postgres/`) + 엔진별 `createRepositories.ts` 팩토리. 런타임 분기 없음 — 로컬/prod는 endpoint env(`AWS_ENDPOINT_URL` / `DATABASE_URL`)로만 갈린다. 상세 구현은 [references/data-layer.md](references/data-layer.md) 참조.
 
 핵심 구조:
 
 ```typescript
-// src/lib/db/store.ts — Store 인터페이스 (기존 코드 제너레이터가 생성)
-export interface Store<T> {
-  findAll(): Promise<T[]>;
-  findById(id: string): Promise<T | null>;
-  create(item: T): Promise<T>;
-  update(id: string, partial: Partial<T>): Promise<T>;
-  delete(id: string): Promise<void>;
+// src/lib/db/repositories/vehicle.repository.ts — aggregate별 포트(인터페이스)
+export interface VehicleRepository {
+  findById(id: string): Promise<Vehicle | null>;
+  findByStatus(status: VehicleStatus, page?: { after?: string; limit?: number }): Promise<{ items: Vehicle[]; nextToken?: string }>;
+  create(input: NewVehicle): Promise<Vehicle>;
 }
 
-// src/lib/db/createStore.ts — 팩토리 (aws-deployer가 추가)
-export function createStore<T>(entity: string): Store<T> {
-  const dataSource = process.env.DATA_SOURCE || 'memory';
-  switch (dataSource) {
-    case 'dynamodb':
-      return new DynamoDBStore<T>(entity);
-    case 'aurora':
-      return new AuroraStore<T>(entity);
-    default:
-      return new InMemoryStore<T>(entity);
-  }
+// src/lib/db/createRepositories.ts — 엔진별 팩토리 (aggregate별 컴파일타임 pin)
+// 어떤 어댑터를 import하는지로 엔진이 고정된다. 런타임 분기 없음.
+export function createRepositories() {
+  return {
+    vehicles: new VehicleDynamoRepository(),        // key-value 접근 → DynamoDB pin
+    maintenance: new MaintenancePgRepository(),     // 관계형/조인 → Postgres pin
+  };
 }
 ```
 

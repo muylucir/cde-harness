@@ -10,7 +10,7 @@
  *       3. forbidden_env_var('BEDROCK_MODEL_ID')가 CLAUDE.md에서 "금지" 맥락으로 등장
  *       4. forbidden_aliases_in_sdk가 CLAUDE.md에서 "단축 이름 SDK 전달 금지"로 명시
  *
- *   (B) store factory 파일명 단일성 (check-store-naming.mjs sub-call)
+ *   (B) repository 네이밍 — 폐기된 store/createStore 패턴 차단 + per-aggregate 컨벤션 (check-repository-naming.mjs sub-call)
  *       — 3 라운드 연속 미해결이었던 store-factory.ts vs createStore.ts 분기 차단
  *
  *   (C) strands SKILL.md Rule 13 박스 존재 (check-strands-rule13.mjs sub-call)
@@ -250,7 +250,7 @@ function main() {
 
   // (B)~(G) sub-checks 통합 호출
   const subChecks = [
-    { name: '[B] store factory naming', script: 'check-store-naming.mjs' },
+    { name: '[B] repository naming (Vision B polyglot)', script: 'check-repository-naming.mjs' },
     { name: '[C] strands SKILL.md Rule 13', script: 'check-strands-rule13.mjs' },
     { name: '[D] agent frontmatter ↔ _preamble §8', script: 'check-agent-models.mjs' },
     { name: '[E] no @aws-sdk/client-bedrock-runtime in src/', script: 'check-bedrock-no-direct-import.mjs' },
@@ -286,7 +286,7 @@ function main() {
     );
     process.exit(1);
   }
-  console.log('\n✓ 모든 정책 SSOT (모델 ID / store naming / strands Rule 13 / agent models / Bedrock import / spec model_id / reviewer skills / API envelope / stages drift / markdown rendering / review categories / hardcoded model literals / consumers paths / hook guard matrix / decision preservation / AI portability / dual seam) 동기화 확인.');
+  console.log('\n✓ 모든 정책 SSOT (모델 ID / repository naming / strands Rule 13 / agent models / Bedrock import / spec model_id / reviewer skills / API envelope / stages drift / markdown rendering / review categories / hardcoded model literals / consumers paths / hook guard matrix / decision preservation / AI portability / dual seam) 동기화 확인.');
   process.exit(0);
 }
 

@@ -92,12 +92,10 @@ infra/                                # CDK 프로젝트 (신규 생성)
 ├── scripts/seed-data.ts              # 시드 마이그레이션 (데이터 서비스만)
 ├── package.json, tsconfig.json, cdk.json
 
-src/lib/db/                           # 데이터 레이어 수정
-├── store.ts                          # 기존 InMemoryStore (async 래핑)
-├── dynamodb-store.ts                 # DynamoDB 구현 (신규, 조건부)
-├── aurora-store.ts                   # Aurora 구현 (신규, 조건부)
-├── createStore.ts                    # 듀얼 모드 팩토리 (신규, SSOT는 code-generator-backend가 생성한 파일)
-└── {resource}.repository.ts          # createStore 사용으로 수정
+src/lib/db/                           # 데이터 레이어 — 수정 없음 (Vision B)
+└── (code-generator-backend가 생성한 repositories/ + dynamo/ + postgres/ + createRepositories.ts 그대로)
+   # 코드는 이미 AWS SDK/PG 한 벌. aws-deployer는 어댑터를 새로 만들지 않는다.
+   # 전환은 endpoint env(AWS_ENDPOINT_URL 제거 / DATABASE_URL을 Aurora로)뿐.
 
 src/lib/messaging/ (신규, 조건부)      # SQS/SNS 송신 헬퍼
 └── publisher.ts                      # AWS SDK 래퍼
@@ -150,19 +148,16 @@ CDK 컴파일 검증: `cd infra && npx tsc --noEmit` (에러 시 수정, 최대 
 - **규칙**: 타임아웃/메모리 등 숫자 prop은 위 범위 안에서 설정한다. CloudFront 응답 타임아웃이 120초를 넘어야 하면 코드로 우회하지 말고 **CloudFront 응답 타임아웃 쿼터 상향**을 사용자에게 안내한다 (Service Quotas / 콘솔).
 - exit 1이면 보고된 `리소스타입 [LogicalId] -> prop` 위치의 값을 범위 안으로 조정한 뒤 재실행한다 (`tsc --noEmit`는 못 잡는다 — 값의 타입은 number라 통과하지만 배포가 깨진다).
 
-### Step 2: 듀얼 모드 데이터 레이어
+### Step 2: 데이터 레이어 — 코드 수정 없음 (Vision B)
 
-스킬의 데이터 레이어 패턴(references/data-layer.md)을 참조하여:
+**과거의 "듀얼 모드 데이터 레이어 전환"(InMemory→DynamoDB 재작성)은 폐기됐다.** code-generator-backend가 이미 Polyglot Ports & Adapters(`repositories/` 포트 + `dynamo/`·`postgres/` 어댑터 + `createRepositories.ts`, Rule 12)를 AWS SDK/PG 드라이버 한 벌로 생성했다. aws-deployer는 **어댑터/팩토리를 수정하지 않는다.**
 
-1. **공통 인터페이스** `src/lib/db/data-store.ts` — Store 인터페이스 정의
-2. **기존 InMemoryStore 수정** — `DataStore` 인터페이스 구현 (async 래핑)
-3. **AWS Store 구현** — `aws-architecture.json`에서 선택된 서비스에 맞는 Store:
-   - DynamoDB → `dynamodb-store.ts`
-   - Aurora → `aurora-store.ts`
-4. **Store Factory** `src/lib/db/createStore.ts` — `DATA_SOURCE` 환경변수로 분기 (CLAUDE.md 유틸/훅 camelCase.ts 컨벤션. 8곳 단일성은 `check-store-naming.mjs`가 검증)
-5. **Repository 수정** — `new InMemoryStore()` → `createStore()`
-6. **API Route await 추가** — repository 호출에 `await` 추가
-7. **AWS SDK 설치** — 필요한 `@aws-sdk/*` 패키지 설치
+전환은 **endpoint env뿐**:
+- DynamoDB/S3/Cognito: 로컬에서 쓰던 `AWS_ENDPOINT_URL`(ministack 4566)을 prod에선 **제거**(실제 AWS).
+- 관계형: `DATABASE_URL`을 로컬 compose Postgres → **prod Aurora/RDS Proxy** 엔드포인트로 교체.
+- 필요한 `@aws-sdk/*`·`pg` 패키지는 codegen 시점에 이미 설치됨.
+
+(검증: `check-repository-naming.mjs`(sub-check [B])가 폐기 패턴 회귀를 차단한다.)
 
 ### Step 3: CDK 배포
 

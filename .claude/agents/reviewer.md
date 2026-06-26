@@ -276,11 +276,13 @@ AI 채팅/분석 응답이 사용자에게 마크다운 원문(`**bold**`, `# he
 - [ ] **raw 렌더링 금지**: assistant 분기 JSX에 `{content}`, `{msg.content}`, `{message.content}` 같은 raw 텍스트 노출 0건. user role 메시지의 raw 출력은 허용 (마크다운 의도 없음)
 - [ ] **XSS 방지**: `dangerouslySetInnerHTML`로 마크다운 HTML 삽입 0건
 - [ ] **AgentCore 이식성 (Rule 14, sub-check [P])**: `src/lib/ai/**`(에이전트 코어)가 transport-/persistence-neutral인가 — `server-only`/`next/*`/`@/lib/db` import 0건, repository 영속화 호출 0건. 영속화/전송은 `src/app/api/**` 라우트 어댑터가 소유(events-only). `check-ai-portability.mjs` 결과를 1차 근거로 인용하되, 코어/어댑터 분리가 **실질적으로** 성립하는지(같은 코어를 AgentCore Express 핸들러로 감쌀 수 있는지) 본다. 위반 시 `return_to: "code-generator-ai"`.
+- [ ] **이중 seam 구조 (Rule 14.2, sub-check [Q])**: leaf 도구가 있으면 `ports.ts` + `mcp/index`의 `GATEWAY_URL` 분기로 도구 Gateway seam이 단일 코드 경로(2분기 아님)로 서 있고, leaf 외부 호출이 코어 토폴로지에 새지 않는가. 멀티에이전트면 `DelegationTransport`(InProcess+A2A 둘 다 코드) + 어댑터의 `A2A_URL_*` 분기가 있는가. `check-tool-seam.mjs` 결과를 1차 근거로 인용하되, "코어 0줄 수정 + env 스왑"으로 전환 가능한 구조인지 본다. 위반 시 `return_to: "code-generator-ai"`. leaf 없음/단일/AI 없음이면 vacuous PASS.
 
 **검사 방법**:
 ```bash
 node .pipeline/scripts/check-markdown-render.mjs   # 자동 검증 진입점 (sub-check [J])
 node .pipeline/scripts/check-ai-portability.mjs    # AI 코어 이식성 (sub-check [P])
+node .pipeline/scripts/check-tool-seam.mjs         # AI 코어 이중 seam (sub-check [Q])
 grep -rEn "dangerouslySetInnerHTML" src/ 2>/dev/null
 grep -rEn "\\{\\s*(msg|message)\\.content\\s*\\}" src/ 2>/dev/null
 ```

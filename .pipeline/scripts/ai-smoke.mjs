@@ -16,6 +16,7 @@
  *   8. forbidden_env_var(BEDROCK_MODEL_ID) 환경변수 fallback 패턴 부재
  *   9. code-generator-ai의 generation-log-ai.json.skills_used[]에 필수 스킬 호출 기록
  *  10. SSE 종결 보장 (정상/catch 경로 모두 done emit 또는 controller.close 도달)
+ *  11. (advisory) leaf 도구 ↔ src/lib/ai/mcp/ Gateway seam 공급 교차검증 (하드 차단은 check-tool-seam.mjs = sub-check [Q])
  *
  * 검사 루트 (D7-W2):
  *   기본값은 하네스 루트(= 이 스크립트 위치 기준 ../..)로, 나머지 5개 검증 스크립트와
@@ -650,6 +651,36 @@ function main() {
       'code-generator-ai recorded required Skill calls',
       true,
       'generation-log-ai.json 없음 — code-generator-ai 미실행으로 skip',
+    );
+  }
+
+  // Check 11: leaf 도구 ↔ mcp/ Gateway seam 공급 교차검증 (advisory) ----------
+  // ai-internals.json.tools[].tool_class === 'leaf'가 선언됐으면, 그 도구는 코어 토폴로지가 아니라
+  // src/lib/ai/mcp/(McpClient 포트, createMcpClients)가 공급해야 한다(CLAUDE.md Rule 14.2 도구 Gateway seam).
+  // 하드 차단은 check-tool-seam.mjs(sub-check [Q])가 담당하므로 여기선 비차단 경고로 조기 노출(코드 생성 중 빠른 피드백).
+  const leafTools = Array.isArray(internals.tools)
+    ? internals.tools.filter((t) => t && t.tool_class === 'leaf')
+    : [];
+  if (leafTools.length > 0) {
+    const mcpIndexCandidates = [
+      resolve(ROOT, 'src/lib/ai/mcp/index.ts'),
+      resolve(ROOT, 'src/lib/ai/mcp/index.tsx'),
+    ];
+    const mcpIndex = mcpIndexCandidates.find((p) => existsSync(p));
+    const suppliesClients =
+      mcpIndex && /createMcpClients|McpClientProvider|GATEWAY_URL/.test(readFileSync(mcpIndex, 'utf-8'));
+    collectResult(
+      results,
+      'leaf tools supplied via src/lib/ai/mcp/ Gateway seam (advisory; [Q] enforces)',
+      true, // 비차단: 구조 강제는 check-tool-seam.mjs([Q]). 여기선 조기 경고만.
+      suppliesClients
+        ? null
+        : `⚠ ai-internals.json에 leaf 도구 ${leafTools.length}개 선언(${leafTools
+            .map((t) => t.name)
+            .filter(Boolean)
+            .slice(0, 5)
+            .join(', ')})이나 src/lib/ai/mcp/index의 createMcpClients(GATEWAY_URL 분기) 공급 흔적 없음 — ` +
+          `도구 Gateway seam 미생성 의심. check-tool-seam.mjs(sub-check [Q])로 확정 검증.`,
     );
   }
 

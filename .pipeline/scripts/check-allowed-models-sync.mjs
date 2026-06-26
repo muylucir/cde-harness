@@ -65,6 +65,12 @@
  *         스토어에 직접 결합(@/lib/db import + 영속화 호출)되어 AgentCore Runtime으로 들어올릴 수 없게 되는
  *         것을 차단. events-only 코어: 코어는 emit만, 영속화는 어댑터(Next 라우트/AgentCore 핸들러)가.
  *
+ *   (Q) AI 코어 이중 seam 구조 (check-tool-seam.mjs sub-call)
+ *       — 도구 Gateway seam(leaf 도구 → McpClient 포트 + mcp/index의 GATEWAY_URL 분기, leaf 외부 호출이
+ *         코어 토폴로지에 누수 금지)과 위임 A2A seam(멀티에이전트 → DelegationTransport InProcess+A2A 둘 다
+ *         코드 + 어댑터의 A2A_URL_* 분기)을 검증. 전환 시 코어 0줄 수정 보장. leaf 없음/단일/AI 없음이면
+ *         vacuous PASS. (CLAUDE.md Rule 14.2 — DATA_SOURCE/AI_RUNTIME 다음 seam의 완성.)
+ *
  * 사용법: node .pipeline/scripts/check-allowed-models-sync.mjs
  * 종료 코드: 0 = 모든 SSOT sync, 1 = 어느 하나라도 drift
  */
@@ -257,6 +263,7 @@ function main() {
     { name: '[N] settings.json Bash guard hook DENY/ALLOW matrix', script: 'check-hook-guard.mjs' },
     { name: '[O] confirmed decision / required pattern disposition', script: 'check-decision-preservation.mjs' },
     { name: '[P] AI core AgentCore Runtime portability', script: 'check-ai-portability.mjs' },
+    { name: '[Q] AI core dual seam (tool Gateway + delegation A2A)', script: 'check-tool-seam.mjs' },
   ];
 
   let totalFailed = failed;
@@ -279,7 +286,7 @@ function main() {
     );
     process.exit(1);
   }
-  console.log('\n✓ 모든 정책 SSOT (모델 ID / store naming / strands Rule 13 / agent models / Bedrock import / spec model_id / reviewer skills / API envelope / stages drift / markdown rendering / review categories / hardcoded model literals / consumers paths / hook guard matrix / decision preservation / AI portability) 동기화 확인.');
+  console.log('\n✓ 모든 정책 SSOT (모델 ID / store naming / strands Rule 13 / agent models / Bedrock import / spec model_id / reviewer skills / API envelope / stages drift / markdown rendering / review categories / hardcoded model literals / consumers paths / hook guard matrix / decision preservation / AI portability / dual seam) 동기화 확인.');
   process.exit(0);
 }
 

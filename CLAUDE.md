@@ -168,17 +168,62 @@ node .pipeline/scripts/checkpoint.mjs schema --json
 
     > **금지**: `process.env.BEDROCK_MODEL_ID ?? '...'` 패턴, `.env.example`에 모델 ID 등록, 단축 이름(`'sonnet'`)을 SDK에 전달, 위 3개 외 다른 모델 ID 사용.
 
-14. **AI 에이전트 코어는 AgentCore Runtime 이식 가능 형태로 작성한다 (transport-/persistence-neutral).** AI 에이전트는 궁극적으로 Amazon Bedrock AgentCore Runtime(또는 컨테이너 BYO: Express `/ping`+`/invocations`, ARM64)에 **별도 프로세스로** 배포된다. 따라서 `src/lib/ai/**`(에이전트 토폴로지/프롬프트/도구 = "포터블 코어")는 Next.js 프로세스나 in-process 스토어에 결합되면 안 된다. Rule 12의 `DATA_SOURCE` 듀얼 모드가 데이터 레이어에서 하는 일을, `AI_RUNTIME` 듀얼 모드가 AI 런타임 레이어에서 한다.
+14. **AI 에이전트 코어는 AgentCore Runtime 이식 가능 형태로 작성한다 (transport-/persistence-neutral).** AI 에이전트는 궁극적으로 Amazon Bedrock AgentCore Runtime(또는 컨테이너 BYO: Express `/ping`+`/invocations`, ARM64)에 **별도 프로세스로** 배포된다. 따라서 `src/lib/ai/**`(에이전트 토폴로지/프롬프트/도구 = "포터블 코어")는 Next.js 프로세스나 in-process 스토어에 결합되면 안 된다. Rule 12의 `DATA_SOURCE` 듀얼 모드가 데이터 레이어에서, `AI_RUNTIME` 듀얼 모드가 AI 런타임 레이어에서 하는 일을, 본 규칙의 **이중 seam**(`GATEWAY_URL` + `A2A_URL_*`)이 **도구 해석 레이어**와 **sub-agent 위임 레이어**에서 완성한다.
 
-    - **`AI_RUNTIME` 듀얼 모드**: `inline`(기본, $0 — Next 라우트가 코어를 in-process로 실행, 현재 동작) | `agentcore`(라우트는 `InvokeAgentRuntimeCommand`로 배포된 런타임을 호출하는 얇은 프록시). `/awsarch` 실행 후 `agentcore`로 전환.
-    - **포터블 코어 규칙** (`src/lib/ai/**`, `check-ai-portability.mjs` = sub-check [P]가 강제):
+    ### 14.1 의존성 역전 — Ports & Adapters (코어 이식성의 구조적 근거)
+    코어가 Next/db에 결합되지 않는 것은 "금지 규칙" 때문이 아니라 **의존성 역전** 때문이다. 코어는 자신이 의존하는 인터페이스(포트)만 알고, 구체 구현(어댑터)은 소비자가 주입한다. `src/lib/ai/ports.ts`가 세 포트를 정의한다:
+    - **`Stores` 번들** — 각 repository 메서드와 **1:1로 좁힌** 데이터 포트(예: `ActivityStore.create`, `MessageStore.create`, `AuditLogStore.append`, `SessionStore.findById`). 코어는 이 포트만 본다. Next 어댑터가 기존 repository를 **얇게 감싸** 노출한다(`createAppStores()`).
+    - **`McpClientProvider`** — `create(): Record<string, McpClient>`. mock이든 Gateway든 동일 포트(§14.2).
+    - **`AgentEventSink`(=SSEEmitter)** — activity/token/toolCall/card/intent/error를 **emit만** 한다(영속화 없음, §14.4).
+
+    포트를 repository와 1:1로 좁히면 어댑터가 "감싸기만" 하면 된다. 이 구조에서 아래 "포터블 코어 금지 규칙"은 **자연히 성립**한다(코어가 포트만 import하므로 `@/lib/db`/`next/*`/`server-only`를 import할 이유가 없다). `check-ai-portability.mjs`(sub-check `[P]`)가 이 구조의 회귀를 막는다.
+
+    ### 14.2 두 개의 직교 seam — 단일 코드 경로 + 환경변수 스왑
+    프로토타입(로컬 mock)에서 프로덕션(AgentCore Gateway + A2A 멀티 런타임)으로 갈 때, 코어(`agent.ts`/토폴로지/프롬프트)를 **한 줄도 고치지 않고** 환경변수만 바꿔치기하면 되도록 한다. 두 seam은 **독립적**이고 각각 환경변수 하나로 mock↔live 전환된다.
+
+    | seam | 레이어 | 스위치 env | mock 측 (기본, $0) | live 측 (배포) |
+    |---|---|---|---|---|
+    | **도구 (Gateway)** | 도구 해석 | `GATEWAY_URL` | in-process mock MCP 클라이언트 | AgentCore Gateway MCP (`{target}___{tool}` 프리픽스 규약, `GATEWAY_AUTH`로 인증) |
+    | **위임 (A2A)** | sub-agent 호출 | `A2A_URL_*` | `InProcessDelegation` (같은 프로세스) | `A2ADelegation` (원격 `A2AAgent` 호출) |
+
+    - **불변식**: 코어는 어느 쪽도 알지 못한다. 같은 `McpClient` 포트, 같은 `DelegationTransport` 포트 위에서 동작한다. env를 읽는 곳은 **어댑터(소비자) 주입 지점뿐**이다(코어는 env를 읽지 않는다).
+    - **도구 seam 3단 그라디언트**: `GATEWAY_URL` 미설정 → in-process mock(dev/E2E 기본, $0) / `GATEWAY_URL=http://localhost…` → 로컬 mock Gateway HTTP(MCP 와이어, CI contract test로 "URL만 바꾸면 같은 데이터가 Gateway 경로로 흐른다"를 증명) / `GATEWAY_URL=https://…agentcore` → live AgentCore Gateway. 중간 단계는 휴면 contract test 스캐폴드로만 둔다.
+    - **MCP 도구 이름 프리픽스 규약**: Gateway 와이어에서 도구는 `{target}___{tool}`(target 구분자 = 삼중 언더스코어)로 노출된다. `gateway-client`가 `listTools`에서 프리픽스를 벗기고 `call`에서 다시 붙인다. mock 클라이언트는 프리픽스 없는 평이한 이름을 쓴다 — 코어는 둘 다 같은 `McpClient` 포트로만 본다.
+    - **❌ 폐기된 안티패턴**: `inline=로컬도구 / agentcore=Gateway`처럼 **2분기**로 가르는 설계(전환 때 코드를 고치게 됨). seam은 항상 **단일 코드 경로 + env 스왑**이다.
+
+    ### 14.3 두 층위의 트리거 (위임 seam ≠ 런타임 물리 분리)
+    "분리"는 **위임 seam(코드)**과 **런타임 스캐폴드(물리 디렉토리)**로 나뉘며 트리거가 다르다:
+
+    | 토폴로지 | 위임 seam (층위 1, 코드) | 런타임 스캐폴드 (층위 2, 디렉토리) |
+    |---|---|---|
+    | **단일 에이전트** | 없음 (위임 자체가 없음) | `agent-runtime/` 단일 진입점 (규칙 9 휴면 패턴) |
+    | **멀티, A2A 불필요** | `InProcessDelegation` + `A2ADelegation` **둘 다 코드로** (`A2A_URL_*` 없으면 InProcess) | 단일 진입점 (오케스트레이터만 노출) |
+    | **멀티 + A2A required** | 〃 | **per-agent 분리** (오케스트레이터 + 도메인별 진입점) |
+
+    - **층위 1 트리거 = `agent_topology`가 멀티에이전트(위임 존재)이면 항상.** 작은 추상화 파일 하나(`DelegationTransport`)로 전환 재작성을 0으로 만든다. 단일 에이전트는 위임이 없으므로 불필요.
+    - **층위 2(물리 분리) 트리거 = 멀티 AND `requirement_pattern_disposition.required_pattern`이 A2A 분리/독립 배포를 요구할 때만.** 그 판단은 spec-writer-ai가 `ai-internals.json`에 이미 기록한다(sub-check `[O]`). 프로토타입은 in-process로 돌지만, **seam이 코드로 있으므로** `A2A_URL_*`만 채우면 분리 배포로 전환된다.
+
+    ### 14.4 포터블 코어 규칙 + Events-only (기존 — 유지·강화)
+    - **`AI_RUNTIME` 듀얼 모드**: `inline`(기본, $0 — Next 라우트가 코어를 in-process로 실행) | `agentcore`(라우트는 `InvokeAgentRuntimeCommand`로 배포된 런타임을 호출하는 얇은 프록시). `/awsarch` 실행 후 전환.
+    - **포터블 코어 금지 규칙** (`src/lib/ai/**`, `check-ai-portability.mjs` = sub-check [P]가 강제):
       1. `import 'server-only'` 금지 — 코어는 Next 전용이 아니다.
       2. `next/*` import 금지 — 전송(SSE `ReadableStream`/`done`/`close`)은 Next 라우트 **어댑터**가 소유한다.
       3. `@/lib/db/*` import 금지 — 입력은 컨텍스트/payload로 주입, 출력은 이벤트로 emit (읽기·쓰기 모두).
       4. repository 영속화 호출(`<X>Repository.create/append/update/...`) 금지.
     - **데이터 정책 = Events-only**: 코어는 activity/audit/tool_call/카드/최종 메시지를 전부 `SSEEmitter`로 **emit만** 하고 직접 영속화하지 않는다. 영속화는 **소비자**(inline=Next 라우트, agentcore=이벤트를 수신하는 Next)가 담당한다. 이로써 Next SSE 라우트와 미래 AgentCore Express `/invocations` 핸들러가 같은 코어 위 **얇은 어댑터 2개**가 된다.
     - **TS는 컨테이너 BYO 경로**: AgentCore Runtime의 1급 스캐폴드는 Python(`BedrockAgentCoreApp`)이지만, TS Strands는 Express `/ping`+`/invocations`(port 8080, ARM64 Docker, ECR) 컨테이너로 배포한다. 상세는 `strands-sdk-typescript-guide` / `bedrock-agentcore-guide` 스킬.
-    - **휴면 `agent-runtime/` 패키지 (전략 A, code-generator-ai 규칙 9)**: AI FR이 있으면 code-generator-ai가 코어를 감싸는 두 번째 어댑터를 **레포 루트 `agent-runtime/`** 에 휴면 생성한다 — Express `/ping`+`/invocations` 진입점 **1개**(오케스트레이터/단일 에이전트만 노출, sub-agent는 in-process), ARM64 Dockerfile, README. Next 빌드/배포 대상이 아니나 `cd agent-runtime && npx tsc --noEmit`로 코어 이식성을 컴파일로 증명한다. **멀티-Runtime A2A(전략 B)는 코드 생성하지 않고** README의 복원 경로로만 문서화하며, 실제 분리는 `/awsarch`의 명시적 의사결정이다. 배포 활성화는 aws-deployer(언어 일치: TS 코어 → TS 컨테이너, Python 래퍼 금지).
+    - **휴면 `agent-runtime/` 패키지 (전략 A, code-generator-ai 규칙 9)**: AI FR이 있으면 code-generator-ai가 코어를 감싸는 두 번째 어댑터를 **레포 루트 `agent-runtime/`** 에 휴면 생성한다 — Express `/ping`+`/invocations` 진입점(단일=1개; 멀티+A2A required=per-agent 오케스트레이터+도메인 진입점, §14.3 층위 2), ARM64 Dockerfile, README. Next 빌드/배포 대상이 아니나 `cd agent-runtime && npx tsc --noEmit`로 코어 이식성을 컴파일로 증명한다. 배포 활성화는 aws-deployer(언어 일치: TS 코어 → TS 컨테이너, Python 래퍼 금지).
+
+    ### 14.5 Identity (조건부) — 대부분 코드 변경 0
+    leaf 도구가 Gateway 뒤 실제 백엔드를 부를 때 외부 자격증명은 **Gateway 아웃바운드 auth가 주입**한다(IAM/OAuth 2LO·3LO/API key, `credentialProviderConfigurations`). 코어/도구는 토큰을 만지지 않는다. 인바운드 토큰은 `GATEWAY_AUTH`/`GATEWAY_TOKEN`으로 `gateway-client`가 `Authorization: Bearer`에 실어 보낸다(토큰 발급은 소비자/배포 책임, 코어는 전송 비종속). **코드 seam이 필요한 유일한 경우**: 게이트웨이를 **우회**해 도구가 외부 인증 API를 **직접** 호출(3LO 사용자 위임 등). 이때만 도구에 `CredentialProvider`를 **주입**한다(코어가 토큰 API를 직접 호출하지 않음). spec-writer-ai가 `ai-internals.json.tools[].requires_outbound_auth` + `auth_via: "gateway"|"direct"`로 분류 — `"gateway"`면 설정만, `"direct"`면 provider seam 생성.
+
+    ### 14.6 정직한 경계 (과대광고 금지)
+    - ✅ **보존(재작성 0)**: 코어, 토폴로지, 프롬프트, 도구 계약(name/description/inputSchema), 위임 배선, `McpClient`/`DelegationTransport` 추상화.
+    - ❌ **버려짐(원래 버려야 정상)**: mock MCP 서버 안의 도구 구현 바디, mock 데이터. 배포 시 진짜 Lambda/OpenAPI 타겟·실제 도메인 런타임이 들어선다.
+    - ⚠️ **스왑의 정확한 의미**: 코어 0줄 수정 + env 교체 + *Gateway 뒤 실제 타겟 / 도메인 런타임이 떠 있어야 함*. **"env만 바꾸면 프로덕션 완성"이 아니다.** "**코어는 안 건드리고** 백엔드/런타임만 실물로 갈아끼움"이 보장의 전부다. 문서/주석/보고에서 이 선을 넘는 표현 금지. 완전 구현이 어려운 부분(예: A2A artifact→SSE rich 이벤트 역매핑)은 **스켈레톤 + TODO를 명시**하고 degrade하되 숨기지 않는다(silent fail/template fallback은 여전히 금지 — ai-smoke가 잡는다).
+    - **단순 데모 면제**: leaf 도구가 없으면 Gateway seam 없음, 단일 에이전트면 위임 seam 없음. 단순 Q&A/요약에 MCP·위임을 강제하지 않는다.
+
+    > **검증**: 이중 seam의 구조적 회귀는 `check-tool-seam.mjs`(sub-check [Q])가 막는다 — 코어에 leaf 도구 데이터/외부 호출 구현이 새는지, `ports.ts`가 있는지, `GATEWAY_URL` 분기와 (멀티 시) `DelegationTransport` InProcess+A2A 양쪽이 다 있는지. leaf 없음/단일/AI 없음이면 vacuous PASS.
 
 ## API Contract Conventions (BE/FE 공통)
 
@@ -230,7 +275,7 @@ ESLint가 강제할 수 없는 규칙 (에이전트가 준수):
 
 `src/`는 하네스에 포함되지 않으며, 파이프라인 실행 시 코드 제너레이터가 생성한다.
 `infra/`는 `/awsarch` 실행 시 aws-deployer가 생성한다.
-`agent-runtime/`(휴면)은 AI FR이 있을 때 code-generator-ai가 생성한다 — `src/lib/ai/` 코어를 AgentCore Runtime용으로 감싸는 Express `/ping`+`/invocations` 어댑터(Rule 14 / 규칙 9). Next 빌드 대상이 아니다.
+`agent-runtime/`(휴면)은 AI FR이 있을 때 code-generator-ai가 생성한다 — `src/lib/ai/` 코어를 AgentCore Runtime용으로 감싸는 Express `/ping`+`/invocations` 어댑터(Rule 14 / 규칙 9). Next 빌드 대상이 아니다. 단일 에이전트면 진입점 1개; 멀티+A2A required면 `agent-runtime/{orchestrator,domain,gateway-mock}/` per-agent 진입점 + 각 `agentcore.json`(protocol A2A) + esbuild 번들(Rule 14.3 층위 2).
 
 ```
 src/
@@ -247,7 +292,19 @@ src/
 ├── lib/
 │   ├── db/             # 데이터 접근 레이어 (BE가 생성)
 │   ├── services/       # AWS 서비스 래퍼 (BE가 생성)
-│   └── validation/     # zod 스키마 (BE가 생성)
+│   ├── validation/     # zod 스키마 (BE가 생성)
+│   └── ai/             # 포터블 코어 + 어댑터 (AI FR 있을 때 code-gen-ai가 생성, Rule 14)
+│       ├── ports.ts            # Stores/McpClientProvider/AgentEventSink 포트 (의존성 역전 핵심) — 코어
+│       ├── mcp/                # 도구 Gateway seam — 코어
+│       │   ├── index.ts        #   createMcpClients(): GATEWAY_URL 분기 (mock|gateway)
+│       │   ├── gateway-client.ts  # Gateway 백엔드 ({target}___{tool} 프리픽스 + 인증 토큰 주입)
+│       │   ├── gateway-mock-server.ts  # 로컬 mock Gateway MCP 와이어 빌더 (contract test가 띄움)
+│       │   ├── mock-*.ts       #   leaf 도구의 mock 구현 (mock 데이터 위)
+│       │   └── types.ts        #   McpClient 포트 (source/listTools/call)
+│       ├── agents/             # (멀티) sub-agent 팩토리 + a2a-delegation.ts(InProcess+A2A) — 코어
+│       └── adapters/           # Next 측 어댑터 (코어 아님 — 영속화/전송 소유)
+│           ├── app-stores.ts   #   기존 repository를 Stores 포트로 얇게 감쌈 + appMcpProvider
+│           └── a2a-to-sse.ts   #   (멀티+A2A) 원격 rich 이벤트→SSE 역매핑 (스켈레톤+TODO 허용)
 ├── data/               # 시드 데이터 (BE가 생성)
 ├── hooks/              # API 호출 훅 (FE가 생성)
 └── proxy.ts             # 보안 헤더 + 보호 라우트 가드 (Next.js 16에서 middleware.ts → proxy.ts로 리네이밍, BE가 생성)

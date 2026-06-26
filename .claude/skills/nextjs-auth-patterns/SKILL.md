@@ -172,6 +172,27 @@ export async function verifySession(request: NextRequest): Promise<Session | nul
 }
 ```
 
+### 3.5 로컬 ministack Cognito (Vision B — endpoint/JWKS swap)
+
+ministack(:4566)이 발급하는 Cognito JWT는 **실제 RS256 서명**(`kid: ministack-key-1`)이고 JWKS도 로컬에서 제공된다(`http://localhost:4566/<poolId>/.well-known/jwks.json`). 토큰의 `iss`는 **실제 AWS URL**(`https://cognito-idp.<region>.amazonaws.com/<poolId>`)이라 issuer 검증은 prod와 동일하게 통과한다 — **로컬에선 JWKS 소스만 ministack으로 주입**하면 된다. (PoC 검증 — `ministack-poc-findings`)
+
+`aws-jwt-verify`의 `create({}, {jwksUri})` 2번째 인자 오버라이드는 무시되므로, **`verifier.cacheJwks(localJwks)`로 JWKS를 미리 시드**한다:
+
+```typescript
+// AUTH_PROVIDER=cognito 이고 로컬(AWS_ENDPOINT_URL 설정)일 때만 JWKS를 ministack에서 시드.
+// prod 코드 경로는 무변경 — 로컬 부트스트랩에서 1회 주입한다.
+if (process.env.AWS_ENDPOINT_URL && verifier) {
+  const poolId = process.env.COGNITO_USER_POOL_ID!;
+  const localJwks = await fetch(
+    `${process.env.AWS_ENDPOINT_URL}/${poolId}/.well-known/jwks.json`,
+  ).then((r) => r.json());
+  verifier.cacheJwks(localJwks);   // 이후 verify()가 실제 AWS JWKS로 나가지 않음
+}
+```
+
+- AgentCore Gateway 아웃바운드 auth, AgentCore Identity는 코어/도구가 토큰을 만지지 않으므로(Rule 14.5) 이 swap과 무관하다.
+- 정직 경계: ministack Cognito는 shape-correct다 — JWT 검증·역할(`cognito:groups`)은 동작하지만 Hosted UI·Lambda 트리거·고급 IdP 플로우는 완전 재현이 아닐 수 있다. 최종 인증 하드닝은 실제 Cognito 검증이 필요.
+
 ## 4. Hosted UI 콜백 라우트
 
 Cognito Hosted UI 리다이렉트 흐름은 `code → token` 교환을 서버에서 한다.

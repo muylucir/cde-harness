@@ -65,6 +65,7 @@ allowedTools:
 
 - 응답 타입(`ListVehiclesResponse`, `GetVehicleResponse` 등)은 `src/types/`에 명시적으로 export
 - `api-contract.json`의 `envelope` 필드는 CLAUDE.md 정의를 그대로 인용한다 (drift 시 CLAUDE.md를 신뢰)
+- **페이지네이션은 커서 기본**: list 응답은 `{ items, nextToken? }`, 쿼리는 `?limit&after`. 오프셋(`total`, `?page&pageSize`)은 **solutions-architect가 Postgres로 pin한 aggregate에만** 허용 — aws-architecture.json의 `offset_pinned_routes[]`를 읽어 `api-contract.json.offset_pinned_routes[]`로 옮기고, 해당 라우트만 `list_offset` envelope를 쓴다. 미등록 라우트가 `total`을 반환하면 `[H]` check-envelope이 P0로 차단한다.
 
 ## 점진적 작업 규칙
 
@@ -107,8 +108,10 @@ allowedTools:
 {
   "version": 1,
   "basePath": "/api",
+  "offset_pinned_routes": [],
   "envelope": {
-    "list": "{ items: T[]; total: number; nextToken?: string }",
+    "list": "{ items: T[]; nextToken?: string }",
+    "list_offset": "{ items: T[]; total: number; nextToken?: string }",
     "item": "{ item: T }",
     "mutation_create": "{ item: T }",
     "mutation_update": "{ item: T }",
@@ -121,7 +124,7 @@ allowedTools:
       "method": "GET",
       "path": "/vehicles",
       "pathParams": [],
-      "query": { "page": "number?", "pageSize": "number?", "sortBy": "string?", "sortOrder": "asc|desc?" },
+      "query": { "limit": "number?", "after": "string?", "sortBy": "string?", "sortOrder": "asc|desc?" },
       "requestBody": null,
       "requestType": null,
       "response": { "envelope": "list", "itemType": "Vehicle" },

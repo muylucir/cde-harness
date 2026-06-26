@@ -28,6 +28,10 @@ allowedTools:
 - aggregate별: 단일 key 조회 빈도, ad-hoc 필터/정렬 필요 여부, aggregate 간 JOIN/집계 필요 여부, 쓰기 처리량 특성, 트랜잭션 경계.
 - 페이지네이션은 **커서 기본**(`{ items, nextToken? }`, CLAUDE.md "응답 envelope"). 오프셋(`total`)이 필요한 aggregate는 후보로 표시만 하고, 실제 Postgres pin은 solutions-architect가 결정한다.
 
+### 인가(authz) 논리 — 보호 리소스 매트릭스 (인증 FR 있을 때)
+
+인증 FR이 있으면 `architecture.json.protected_resources[]`에 **논리 수준의 보호 규칙**을 기록한다(누가/무엇을 — 물리 Cognito 배선은 solutions-architect, AI 도구 authz는 ai-architect). 각 항목: `{ resource: "/api/maintenance-records", methods: ["POST","DELETE"], required_roles: ["admin"] }`. proxy.ts 보호 라우트 매트릭스와 역할 기반 UI 분기의 단일 논리 소스다. (인증은 저장소·계약과 같은 논리/물리 seam을 가지며, 여기서 논리만 소유한다.)
+
 ## 입력
 
 현재 파이프라인 버전 디렉토리에서 읽는다:

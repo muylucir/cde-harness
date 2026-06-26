@@ -181,6 +181,14 @@ solutions-architect는 설계 산출물에 **로컬 미러 구성**을 포함한
 - aws-architecture.json의 `local_mirror` 필드에 위 구성(서비스 목록, 포트, 시드 경로)을 기록해 aws-deployer/`infra:local` 스크립트가 참조한다.
 - 구조적 회귀는 `check-ministack-parity.mjs`(sub-check [R])가 차단한다 (compose에 ministack+postgres 둘 다, infra:local* 스크립트 존재, src/lib/db에 DATA_SOURCE 없음).
 
+## 오프셋 페이지네이션 pin (커서 기본의 예외 결정)
+
+aggregate를 Postgres로 pin한 경우에만 오프셋(`total`)을 허용한다(CLAUDE.md "응답 envelope", [H]). solutions-architect는 어떤 aggregate가 오프셋이 필요한 Postgres 엔진인지 판단해 **aws-architecture.json의 `offset_pinned_routes[]`**(경로 문자열 배열, 예: `["/api/maintenance-records"]`)에 기록한다. spec-writer-backend가 이 값을 읽어 `api-contract.json.offset_pinned_routes[]`로 옮기고, `[H]` check-envelope이 미등록 라우트의 `total` 반환을 P0로 차단한다. (DynamoDB pin aggregate는 오프셋 총개수가 부적합하므로 커서만.)
+
+## Cognito 인증 인프라 (인증 FR 있을 때 — 물리 배선)
+
+application-architect의 `protected_resources[]`(논리)와 ai-architect의 도구 authz를 받아 **물리 Cognito 인프라**를 설계한다: User Pool / Client / Domain CDK, `COGNITO_*`/`AUTH_PROVIDER` env. 로컬은 ministack Cognito(:4566), prod는 실제 Cognito — 코드 경로 동일, JWKS 소스만 로컬 주입(`nextjs-auth-patterns` §3.5). leaf 도구의 외부 인증은 Gateway 아웃바운드 auth가 주입(Rule 14.5) — 코어는 토큰 비종속.
+
 ## 출력
 
 2개 파일: `.pipeline/artifacts/v{N}/08-aws-infra/` 에 저장.

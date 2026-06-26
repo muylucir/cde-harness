@@ -265,6 +265,7 @@ function main() {
     { name: '[P] AI core AgentCore Runtime portability', script: 'check-ai-portability.mjs' },
     { name: '[Q] AI core dual seam (tool Gateway + delegation A2A)', script: 'check-tool-seam.mjs' },
     { name: '[R] ministack parity (Vision B same-CDK + 로컬 미러)', script: 'check-ministack-parity.mjs' },
+    { name: '[S] auth wiring (3 아키텍트 횡단 authz)', script: 'check-auth-wiring.mjs' },
   ];
 
   let totalFailed = failed;
@@ -287,7 +288,7 @@ function main() {
     );
     process.exit(1);
   }
-  console.log('\n✓ 모든 정책 SSOT (모델 ID / repository naming / strands Rule 13 / agent models / Bedrock import / spec model_id / reviewer skills / API envelope / stages drift / markdown rendering / review categories / hardcoded model literals / consumers paths / hook guard matrix / decision preservation / AI portability / dual seam / ministack parity) 동기화 확인.');
+  console.log('\n✓ 모든 정책 SSOT (모델 ID / repository naming / strands Rule 13 / agent models / Bedrock import / spec model_id / reviewer skills / API envelope / stages drift / markdown rendering / review categories / hardcoded model literals / consumers paths / hook guard matrix / decision preservation / AI portability / dual seam / ministack parity / auth wiring) 동기화 확인.');
   process.exit(0);
 }
 

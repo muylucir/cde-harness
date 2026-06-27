@@ -92,7 +92,7 @@
       "id": 11,
       "key": "aws_integration",
       "title": "AWS 통합 품질",
-      "summary": "DynamoDB 접근 패턴, DATA_SOURCE 듀얼 모드, IAM 최소 권한, 자격증명 노출 검사",
+      "summary": "DynamoDB 접근 패턴, Polyglot Ports & Adapters 정합(endpoint-only 전환, Rule 12), IAM 최소 권한, 자격증명 노출 검사",
       "always_active": false,
       "active_when": "state.json.versions[v].trigger === \"awsarch\" 또는 infra/ 디렉토리 존재",
       "consumers": [".claude/commands/awsarch.md"]

@@ -1,10 +1,10 @@
 ---
-description: "모의 데이터 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cognito)로 전환. CDK TypeScript 인프라 생성 + 데이터 레이어 교체."
+description: "로컬 미러(ministack) 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cognito, Aurora)로 전환. CDK TypeScript 인프라 생성 + endpoint env 전환(코드 미수정, Vision B)."
 ---
 
-# AWS Architecture — Mock → Real AWS 전환
+# AWS Architecture — 로컬 미러 → Real AWS 전환
 
-InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cognito)로 전환한다. CDK TypeScript로 인프라를 생성하고, 듀얼 모드 데이터 레이어를 구현하여 `DATA_SOURCE` 환경 변수로 mock/real 모드를 전환할 수 있게 한다.
+ministack(로컬 AWS 미러) + compose Postgres 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cognito, Aurora)로 전환한다. 데이터 레이어는 이미 Polyglot Ports & Adapters(Rule 12, Vision B)로 AWS SDK/PG 한 벌이라 **코드를 교체하지 않는다** — CDK TypeScript로 실 인프라를 생성하고, 전환은 **endpoint env뿐**(`AWS_ENDPOINT_URL` 제거 / `DATABASE_URL`을 Aurora로). 런타임 `DATA_SOURCE` 분기는 폐기됐다.
 
 ## 절대 규칙 (위반 시 즉시 중단)
 
@@ -43,7 +43,7 @@ InMemoryStore 기반 프로토타입을 실제 AWS 리소스(DynamoDB, S3, Cogni
 |---|---|
 | (없음) | 전체: 설계 + CDK 배포 + 마이그레이션 (Phase 1~4) |
 | `--qa` | 전체 + QA/리뷰/보안 재실행 (Phase 1~5) |
-| `--cdk` | 설계 + CDK 코드 생성 + 듀얼 모드 데이터 레이어까지: Phase 1~2 (배포·마이그레이션 없음) |
+| `--cdk` | 설계 + CDK 코드 생성까지: Phase 1~2 (배포·마이그레이션 없음. 데이터 레이어 코드는 미수정 — Vision B) |
 | `--plan` | 설계만: Phase 1까지 (CDK 코드·배포 없음) |
 
 ```
@@ -232,8 +232,8 @@ node .pipeline/scripts/checkpoint.mjs start aws-deployer
   - 설계 문서: `08-aws-infra/aws-architecture.json/md`
 
   ### 현재 동작
-  - `DATA_SOURCE=memory npm run dev` — mock 모드로 그대로 동작 (기본)
-  - AWS 리소스는 **아직 생성되지 않음** (비용 $0)
+  - `npm run infra:local && npm run dev` — 로컬 미러(ministack/compose) endpoint env로 그대로 동작 (기본, 비용 $0)
+  - 실 AWS 리소스는 **아직 생성되지 않음** (비용 $0)
 
   ### 배포하려면 (나중에, 비용 발생)
   - `cd infra && npx cdk bootstrap && npx cdk deploy` — 직접 배포, 또는
@@ -317,8 +317,8 @@ cd infra && npx cdk deploy --require-approval broadening --outputs-file cdk-outp
 
 **4-2. 빌드 검증**:
 ```bash
-npm run build                          # 기본 모드 (DynamoDB)
-DATA_SOURCE=memory npm run build       # mock 모드 여전히 동작
+npm run build                          # 실 AWS endpoint env로 빌드
+# 코드는 동일(Vision B) — 로컬 미러(ministack/compose) endpoint env로도 빌드/동작 가능
 ```
 
 **4-3. 마이그레이션 로그 작성**:
@@ -326,8 +326,8 @@ DATA_SOURCE=memory npm run build       # mock 모드 여전히 동작
 
 **CHECKPOINT (Phase 4)**: 다음 조건을 확인한다. 실패 시 `aws-deployer`에 피드백 (최대 2회).
 - [ ] `08-aws-infra/migration-log.json`에 `"status": "completed"`인가
-- [ ] `npm run build` 성공 (DynamoDB 모드)
-- [ ] `DATA_SOURCE=memory npm run build` 성공 (mock 모드)
+- [ ] `npm run build` 성공 (실 AWS endpoint env)
+- [ ] 데이터 레이어 코드 미수정 (`check-repository-naming.mjs` [B] 통과 — 전환은 endpoint env뿐, Vision B)
 
 **Phase 4 완료 시 aws_infra 메타 기록** — `checkpoint.mjs set-aws-infra`로 위임 (LLM은 state.json 직접 쓰지 않음, _preamble §3):
 ```bash
@@ -351,7 +351,7 @@ node .pipeline/scripts/checkpoint.mjs set-aws-infra \
 ### 5-1. QA (기능 검증)
 
 - Launch `qa-engineer` agent
-- 기존 E2E 테스트를 `DATA_SOURCE=dynamodb` 환경에서 재실행
+- 기존 E2E 테스트를 실 AWS endpoint env에서 재실행 (코드 동일, Vision B)
 - 빌드 + Playwright E2E 테스트
 - 실패 시: `aws-deployer` 에이전트에 수정 요청 → 재테스트 (최대 3회)
 
@@ -361,7 +361,7 @@ node .pipeline/scripts/checkpoint.mjs set-aws-infra \
 - 활성 카테고리 전체 (항상 활성 1~10 + **카테고리 11 `aws_integration`** 활성). SSOT: `.pipeline/scripts/review-categories.json`.
 - 카테고리 11 핵심 검사 항목:
   - DynamoDB 접근 패턴이 올바른가
-  - 듀얼 모드가 정상 동작하는가
+  - Polyglot Ports & Adapters 정합 — 폐기 `Store<T>`/`createStore`/`DATA_SOURCE` 분기 잔재 없고 전환이 endpoint env뿐인가 (Rule 12, Vision B)
   - 하드코딩된 AWS 자격 증명이 없는가
   - IAM 정책이 최소 권한을 따르는가
 - 실패 시: 수정 → QA 재실행 (최대 2회 리뷰 이터레이션)
@@ -416,15 +416,15 @@ node .pipeline/scripts/checkpoint.mjs set-aws-infra \
    ### 비용
    - 월간 예상: ${cost}
 
-   ### 테스트 방법
-   - DynamoDB 모드: `DATA_SOURCE=dynamodb npm run dev`
-   - Mock 모드 (오프라인): `DATA_SOURCE=memory npm run dev`
+   ### 테스트 방법 (코드 동일, endpoint env만 차이 — Vision B)
+   - 실 AWS: `.env.local`에서 `AWS_ENDPOINT_URL` 제거 / `DATABASE_URL`을 Aurora로 → `npm run dev`
+   - 로컬 미러 (오프라인, $0): `npm run infra:local && npm run dev` (ministack/compose endpoint)
 
    ### 정리 방법
    - `cd infra && npx cdk destroy`
 
    ### 다음 단계
-   - `DATA_SOURCE=dynamodb npm run dev`로 프로토타입 확인
+   - 실 AWS endpoint env로 `npm run dev` → 프로토타입 확인
    - 고객 피드백 후 `/iterate`로 반복 개선
    - 최종 핸드오버 시 `/handover` 실행
    ```
@@ -456,6 +456,6 @@ node .pipeline/scripts/checkpoint.mjs set-aws-infra \
 3. 사용자에게 3가지 옵션 제시:
    a. 수동 수정 후 `/pipeline-from aws-deployer` 로 재개
    b. `cd infra && npx cdk destroy`로 부분 배포 정리 후 재시도
-   c. mock 모드로 복귀 (데이터 레이어 변경을 revert)
+   c. 로컬 미러로 복귀 (`.env.local`의 endpoint env를 ministack/compose로 되돌림 — 데이터 레이어 코드는 미수정이므로 revert 대상 아님, Vision B)
 
 $ARGUMENTS

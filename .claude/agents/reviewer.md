@@ -246,8 +246,8 @@ node .pipeline/scripts/ai-smoke.mjs
 
 검사 항목:
 
-- [ ] **DynamoDB 접근 패턴**: `BatchGetItem`/`Query` 사용 정합. `Scan` 남용 금지(필요 시 GSI 추가). `src/lib/db/dynamodbStore.ts`가 `Store<T>` 인터페이스 위반 없이 구현.
-- [ ] **DATA_SOURCE 듀얼 모드**: `DATA_SOURCE=memory` + `DATA_SOURCE=dynamodb` 양쪽 모두 `npm run build` 통과. `createStore()` 팩토리가 환경변수에 따라 분기. (사용자가 모드 전환만으로 스위치 가능해야 함)
+- [ ] **DynamoDB 접근 패턴**: `BatchGetItem`/`Query` 사용 정합. `Scan` 남용 금지(필요 시 GSI 추가). `src/lib/db/dynamo/` 어댑터가 aggregate별 repository 포트(`repositories/`)를 위반 없이 구현.
+- [ ] **Polyglot Ports & Adapters 정합 (Rule 12, Vision B)**: 만능 `Store<T>`/`createStore()`/`DATA_SOURCE` 런타임 분기 잔재 0건(`check-repository-naming.mjs` [B]). 데이터소스 전환은 endpoint env(`AWS_ENDPOINT_URL`/`DATABASE_URL`)뿐 — 코드 분기 없음. `createRepositories.ts` 팩토리가 aggregate별 컴파일타임 pin 어댑터를 조립. 로컬(ministack/compose)·실 AWS endpoint env 양쪽으로 `npm run build` 통과.
 - [ ] **하드코딩된 AWS 자격증명 0건**: `AKIA[0-9A-Z]{16}`, `aws_secret_access_key\s*=`, `accessKeyId:\s*['"][A-Z0-9]+['"]` 패턴 부재. `~/.aws/credentials` 또는 환경변수만 사용.
 - [ ] **IAM 정책 최소 권한**: `infra/lib/`의 IAM `policyStatements`가 `Action: '*'` 또는 `Resource: '*'`를 광범위하게 사용하지 않음. 테이블/버킷별 ARN 한정.
 - [ ] **`.env.local`에 secret 노출 없음**: `.gitignore`에 `.env.local` 포함, `.env.local.example`에는 placeholder만 (실제 키/시크릿 없음).
@@ -257,7 +257,8 @@ node .pipeline/scripts/ai-smoke.mjs
 ```bash
 grep -rEn "AKIA[0-9A-Z]{16}|aws_secret_access_key\s*=" src/ infra/ 2>/dev/null
 grep -rEn "Action:\s*['\"]\\*['\"]|Resource:\s*['\"]\\*['\"]" infra/ 2>/dev/null
-DATA_SOURCE=memory npm run build && DATA_SOURCE=dynamodb npm run build
+node .pipeline/scripts/check-repository-naming.mjs   # 폐기 Store<T>/createStore/DATA_SOURCE 분기 잔재 차단 ([B])
+npm run build                                        # 실 AWS endpoint env로 빌드 통과 (전환은 endpoint env뿐)
 ```
 
 > **참고**: 본 카테고리는 `/awsarch --qa` 시에만 활성. `aws_integration.applicable: true`로 기록되며, FAIL 시 `aws-deployer`에게 피드백.

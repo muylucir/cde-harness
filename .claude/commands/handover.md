@@ -120,7 +120,7 @@ node .pipeline/scripts/checkpoint.mjs check handover-packager \
    - 생성된 핸드오버 문서 목록 (절대 경로)
    - 프로덕션 전환 시 필수 작업 수 (CHECKLIST.md 항목 수)
    - 사용된 모델 ID 카탈로그 (AI 기능 있을 때, 도구별)
-   - DATA_SOURCE 듀얼 모드 안내 (`memory` ↔ `dynamodb`)
+   - 로컬↔실 AWS 전환 안내 (endpoint env뿐 — 코드 미수정, Vision B/Rule 12)
    - "이 프로젝트를 고객 개발팀에 전달하세요" 안내
 
 ## Circuit Breaker

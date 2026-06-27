@@ -42,7 +42,7 @@ allowedTools:
 1. **types** — 공유 TypeScript 타입/인터페이스 (프론트엔드도 import)
 2. **validation** — zod 요청 스키마
 3. **data** — 시드/목데이터
-4. **db** — 인메모리 스토어 + 리소스별 repository
+4. **db** — Polyglot Ports & Adapters (Rule 12): aggregate별 repository 포트(`repositories/`) + 엔진 어댑터(`dynamo/`·`postgres/`) + `createRepositories.ts` 팩토리. 만능 `Store<T>`/인메모리 듀얼모드 아님 (전환은 endpoint env뿐)
 5. **services** — AWS 서비스 래퍼 (필요 시: DynamoDB, S3)
 6. **api** — Next.js Route Handlers (REST endpoints)
 7. **proxy** (`src/proxy.ts`, _preamble §11 참조) — 보안 헤더, 인증 가드

@@ -415,7 +415,7 @@ allowedTools:
    feat(v{N}): AWS 인프라 전환 (DynamoDB + CDK)
 
    - DynamoDB 테이블: {N}개
-   - 듀얼 모드: DATA_SOURCE=memory|dynamodb
+   - 데이터 레이어 코드 미수정 (Vision B) — 전환은 endpoint env(AWS_ENDPOINT_URL/DATABASE_URL)뿐
    - 시드 데이터 마이그레이션: {N}건
    - CDK 스택: {stack_name}
    - 리전: {region}

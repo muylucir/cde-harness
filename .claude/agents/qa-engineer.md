@@ -123,122 +123,38 @@ requirements.json의 각 FR에 대해 E2E 테스트를 생성한다.
 3. **architecture.json에서 라우트만 참조**: 어떤 URL에 어떤 페이지가 있는지만 확인
 4. **Cloudscape 셀렉터 규칙 준수**: `getByRole('grid')` for Table, `getByRole('heading')` for Header 등
 
-**테스트 구조:**
+**테스트 구조** (파일 레이아웃·셀렉터 치트시트·코드 패턴 1~6의 단일 소스는 `playwright-e2e` 스킬):
 
-```
-e2e/
-├── navigation.spec.ts          # 모든 라우트 접근 가능 여부
-├── {feature}.spec.ts           # FR별 기능 테스트
-├── user-journey.spec.ts        # 사용자 스토리 기반 멀티 페이지 흐름 테스트
-└── api.spec.ts                 # API 엔드포인트 계약 검증
-```
+| 파일 | 검증 대상 |
+|------|----------|
+| `navigation.spec.ts` | 모든 라우트 접근 가능 여부 |
+| `{feature}.spec.ts` | FR별 기능 테스트 (각 `acceptance_criteria` → 테스트 케이스) |
+| `user-journey.spec.ts` | `user_stories[]`의 P0 스토리를 **여러 페이지를 연결하는 사용자 여정**으로 검증. FR 테스트가 개별 기능의 계약이라면 이건 전체 흐름의 계약 |
+| `api.spec.ts` | API 엔드포인트 계약(envelope) 검증 |
 
-**user-journey.spec.ts** — requirements.json의 `user_stories[]`에서 P0 스토리를 멀티 페이지 흐름 테스트로 생성:
-
-```typescript
-test.describe('US-001: 물류팀 매니저 차량 현황 조회', () => {
-  test('대시보드 → 차량 목록 → 상세 흐름', async ({ page }) => {
-    // 대시보드에서 KPI 확인 (US-001 시작점)
-    await page.goto('/dashboard');
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    // 차량 목록으로 이동
-    await page.getByRole('link', { name: /차량/i }).click();
-    await expect(page.getByRole('grid')).toBeVisible();
-    // 상세 페이지로 이동
-    await page.getByRole('row').nth(1).click();
-    await expect(page.getByRole('heading')).toBeVisible();
-  });
-});
-```
-
-유저스토리 테스트는 FR 테스트와 달리 **여러 페이지를 연결하는 사용자 여정**을 검증한다. FR 테스트가 개별 기능의 계약이라면, 유저스토리 테스트는 전체 흐름의 계약이다.
-
-**테스트 코드 패턴:**
-
-```typescript
-import { test, expect } from '@playwright/test';
-
-test.describe('FR-003: 인시던트 목록', () => {
-  // AC-1: 인시던트 테이블이 표시된다
-  test('인시던트 테이블이 표시되어야 한다', async ({ page }) => {
-    await page.goto('/incidents');
-    // 테이블이 렌더링될 때까지 대기 (waitForTimeout 금지)
-    const table = page.getByRole('grid', { name: /incident/i });
-    await expect(table).toBeVisible();
-  });
-
-  // AC-2: 심각도 필터가 작동한다
-  test('P1 필터 적용 시 P1 인시던트만 표시되어야 한다', async ({ page }) => {
-    await page.goto('/incidents');
-    // 필터 인터랙션
-    await page.getByRole('button', { name: /filter/i }).click();
-    // ... 필터 적용
-    // 어서션: P1만 존재
-    const rows = page.getByRole('row');
-    // 이 어서션은 요구사항이 정한 계약이므로 수정 금지
-  });
-});
-```
+코드 작성 시 `playwright-e2e` 스킬을 Skill 도구로 호출하여 패턴(네비/Table/Form/API/SSE/SideNav)과 Cloudscape 셀렉터 치트시트를 가져온다. 본 절은 그 위에 얹는 **qa 고유 계약 규칙**만 정의한다.
 
 **P0 FR 테스트 깊이 요구:**
 - P0 FR은 최소 1개 이상의 **사용자 인터랙션 테스트** 필수 (click, fill, navigate)
 - 페이지 로드 확인이나 텍스트 존재 확인만으로는 P0 커버리지 인정 안 함
 
-**AI 기능 FR 테스트 규칙 (ai-contract.json이 있을 때만):**
+**AI 기능 FR 테스트 규칙 (ai-contract.json이 있을 때만)** — 코드 패턴은 스킬 패턴 5/5b/5c, 아래는 무엇을 어서션할지의 계약:
 
 AI 엔드포인트는 HTTP 200/201만 확인하면 stub·placeholder도 통과하므로, 아래 중 최소 1개 이상을 반드시 포함한다:
 
-1. **스트리밍 엔드포인트(`streaming: true`)**: `ai-contract.sse_events[].event_type` 중 최소 2개 이상의 이벤트를 실제로 수신하는지 검증 (예: `tool_call`과 `done`이 모두 도착). 수신 이벤트 0건이나 `done`만 오는 경우 실패로 간주.
+1. **스트리밍 엔드포인트(`streaming: true`)**: `ai-contract.sse_events[].event_type` 중 최소 2개 이상의 이벤트를 실제로 수신하는지 검증 (예: `tool_call`과 `done`이 모두 도착). 수신 이벤트 0건이나 `done`만 오는 경우 실패로 간주. (SSE 와이어 형식은 `data: {"type":...}` — 스킬 패턴 5b/5c 참조. `event:` 라인 가정 금지)
 2. **Non-streaming 엔드포인트(`streaming: false`)**: 응답 body의 AI 생성 필드(narrative, summary, recommendations 등)가 stub 패턴(`/will be populated/i`, `/^TODO/i`, `/placeholder/i`)과 일치하지 않음을 어서션.
 3. **도구 호출 가시성**: Tool Trace/ToolTracePanel이 있는 프로토타입이라면 특정 에이전트를 trigger한 후 도구 호출 로그가 1개 이상 기록되는지 검증.
-
-예시:
-```typescript
-test('AI-FR-008: 진단 스트림이 tool_call과 done 이벤트를 모두 emit한다', async ({ request }) => {
-  const res = await request.post('/api/agents/diagnose/stream', { data: { accountId: 'ACC-1001' } });
-  const body = await res.text();
-  expect(body).toMatch(/event:\s*tool_call/);
-  expect(body).toMatch(/event:\s*done/);
-});
-
-test('AI-FR-012: 주간 리포트 narrative가 placeholder 아님', async ({ request }) => {
-  const res = await request.post('/api/agents/weekly-report', { data: {} });
-  const json = await res.json();
-  expect(json.item.narrative).toBeTruthy();
-  expect(json.item.narrative).not.toMatch(/will be populated|placeholder|TODO/i);
-});
-```
 
 이 테스트들은 **계약 어서션**이다 — 실패 시 테스트를 약화하지 말고 `code-generator-ai`에 Type 2 피드백.
 
 ### Phase B-2: Playwright 설정
 
-최초 실행 시 `playwright.config.ts` 도 함께 생성한다:
-
-```typescript
-import { defineConfig } from '@playwright/test';
-
-export default defineConfig({
-  testDir: './e2e',
-  timeout: 30000,
-  expect: { timeout: 5000 },
-  webServer: {
-    command: 'npm run dev',
-    port: 3000,
-    reuseExistingServer: true,
-  },
-  use: {
-    baseURL: 'http://localhost:3000',
-  },
-});
-```
+최초 실행 시 `playwright.config.ts`도 함께 생성한다. 표준 설정(`testDir: './e2e'`, `webServer.command: 'npm run dev'` + **사전 `npm run infra:local`로 로컬 미러 기동** — ministack/compose endpoint env, 폐기된 `DATA_SOURCE=memory` 분기 미사용, Vision B, baseURL, retries)은 `playwright-e2e` 스킬의 "playwright.config.ts (표준)"을 그대로 사용한다.
 
 ### Phase C: 테스트 실행
 
-```bash
-npx playwright install --with-deps chromium   # 최초 1회
-npm run test:e2e                               # 실행
-```
+실행 명령(`npx playwright install --with-deps chromium` 최초 1회 → `npm run test:e2e`)은 `playwright-e2e` 스킬의 "실행 명령" 참조.
 
 ### Phase D: 실패 분석 + 분류
 
@@ -320,37 +236,24 @@ if iteration >= 3:
 
 ## E2E 테스트 금지 패턴
 
-다음 패턴은 사용 금지:
+공통 안티패턴 표(`waitForTimeout` 의존, 어서션 약화, awsui 클래스 셀렉터, 테스트 간 의존, 모든 PR에서 Bedrock 실호출 등)는 `playwright-e2e` 스킬의 "자주 하는 실수" 표가 단일 소스다. 아래는 그 표에 없는 **qa 고유 추가 금지 패턴**만 정의한다:
 
 | 금지 패턴 | 대체 패턴 | 이유 |
 |-----------|----------|------|
-| `page.waitForTimeout(N)` | `expect(locator).toBeVisible()` | 하드코딩 대기는 플레이키 테스트 원인 |
 | `page.textContent('body')` + `includes()` | `getByRole()`, `getByText()` | body 전체 스크래핑은 약한 어서션 |
-| `expect(body).toBeTruthy()` | `expect(element).toContainText('구체적 텍스트')` | 어서션이 아무것도 검증 안 함 |
 | `page.on('pageerror')` after goto | `page.on('pageerror')` before goto | goto 전에 등록해야 에러 캡처 |
 | `test.skip()` / 주석 처리 | 실패 원인 분석 후 수정 | 건너뛰기는 커버리지 감소 |
 
 ## 참조 스킬
 
 ### `playwright-e2e` — **반드시 호출** (테스트 작성 단일 소스)
-- Cloudscape 컴포넌트 셀렉터 패턴 (data-testid 부재 대응 — `getByRole`/`getByText` 우선)
-- AppLayout 내부 네비게이션, useCollection 테이블 상호작용, SSE 스트리밍 응답 검증, networkidle 대기 패턴
-- playwright.config.ts (webServer, baseURL, projects 설정)
-- 본 에이전트 본문의 "Cloudscape 테스트 팁"은 스킬의 요약본이며, 새 패턴 등장 시 스킬을 먼저 갱신한다 (drift 방지).
+테스트 파일 레이아웃, Cloudscape 셀렉터 치트시트(data-testid 부재 대응), 코드 패턴 1~6(네비/Table/Form/API/SSE 5b·5c/SideNav), `playwright.config.ts` 표준 설정, 실행 명령, 안티패턴 표가 모두 이 스킬에 있다. 본 에이전트 본문은 그 위에 얹는 **계약 규칙**(테스트=계약, P0 깊이, AI-FR 어서션 대상, Type1/2 분류, SSE-1~4 체크리스트)만 정의한다. 새 패턴/팁은 본문이 아니라 스킬을 먼저 갱신한다 (drift 방지).
 
 ### `nextjs-auth-patterns` — 인증 FR이 있는 프로토타입의 E2E 테스트
 - mock 모드에서 `MOCK_USER_ID` 쿠키 세팅으로 보호 라우트 진입
 - 권한별(admin/user) 분기 UI 검증
 
 ### `cloudscape-design` — 컴포넌트 ARIA role 카탈로그 참조
-
-## Cloudscape 테스트 팁 (스킬 요약 — 상세는 `playwright-e2e` 스킬 참조)
-
-- **Table**: sticky header로 인해 `<table>` 이 2개 렌더링됨 → `getByRole('grid', { name: '...' })` 사용
-- **Modal**: `getByRole('dialog')` 로 접근
-- **Select/Autosuggest**: `getByRole('combobox')` → `click()` → `getByRole('option')` → `click()`
-- **PropertyFilter**: `getByRole('textbox', { name: /filter/i })` 로 접근
-- **Tabs**: `getByRole('tab', { name: '...' })` → `click()`
 
 ## 출력
 

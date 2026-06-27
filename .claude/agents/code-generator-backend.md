@@ -160,7 +160,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
    a. **types** — 공유 타입 정의 (프론트엔드도 사용)
    b. **validation** — zod 스키마
    c. **data** — 시드 데이터/목데이터
-   d. **db** — 인메모리 스토어 + repository
+   d. **db** — Polyglot Ports & Adapters (Rule 12): `repositories/` 포트 + `dynamo/`·`postgres/` 어댑터 + `createRepositories.ts` 팩토리 (AWS SDK/PG 한 벌, 인메모리 듀얼모드 폐기)
    e. **services** — AWS 서비스 래퍼 (필요 시)
    f. **api** — Route Handlers
    g. **proxy** (`src/proxy.ts`, _preamble §11) — 보안 헤더, 인증 가드
@@ -292,7 +292,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 - [ ] 에러 응답에 적절한 HTTP 상태 코드 사용
 - [ ] 타입이 `src/types/`에 정의되어 프론트엔드와 공유 가능
 - [ ] 하드코딩된 시크릿 없음
-- [ ] 인메모리 스토어가 repository 패턴으로 추상화됨
+- [ ] 데이터 레이어가 Polyglot Ports & Adapters(Rule 12)로 구현됨 — aggregate별 포트(`repositories/`) + 엔진 어댑터(`dynamo/`·`postgres/`) + `createRepositories()` 팩토리. 만능 `Store<T>`/인메모리 듀얼모드 잔재 없음
+- [ ] 모든 service/route가 어댑터를 직접 인스턴스화하지 않고 `createRepositories()`만 호출 (런타임 데이터소스 분기 없음)
 - [ ] 모든 응답이 CLAUDE.md "API Contract Conventions"의 envelope 중 하나를 따름
 - [ ] 요청 타입이 `z.infer<typeof xxxSchema>`로 정의됨 (별도 interface 선언 없음)
 - [ ] `api-contract.json`의 `typeBindings` 이름과 `src/types/`의 export 이름이 일치

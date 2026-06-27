@@ -173,7 +173,7 @@ AI 에이전트 복잡도 분석 시작
 ### DynamoDB
 
 - **테이블 설계**: 엔티티당 1 테이블 (multi-table). 프로토타입에서는 Single Table Design 지양
-- **PK**: `id` (String) — InMemoryStore의 `id` 필드와 일치
+- **PK**: `id` (String) — repository 포트의 `id` 필드와 일치 (Polyglot Ports & Adapters, Rule 12)
 - **SK**: 접근 패턴에서 필요할 때만 (대부분 PK만으로 충분)
 - **GSI**: `findByXxx()` 패턴당 하나. Projection ALL (프로토타입)
 - **네이밍**: `${projectName}-${entity}-${stage}` (예: `FleetMgmt-Vehicles-Dev`)
@@ -322,13 +322,12 @@ AI 에이전트 복잡도 분석 시작
 
 ## 환경 변수 규칙
 
-`DATA_SOURCE` 환경변수로 듀얼 모드 분기:
+**endpoint env로만 로컬↔prod 전환 (Vision B, Rule 12 — 런타임 `DATA_SOURCE` 분기 폐기).** 데이터 레이어는 Polyglot Ports & Adapters로 AWS SDK/PG 한 벌이고, 엔진은 aggregate별 컴파일타임 pin이다. 코드는 동일하고 endpoint만 갈린다:
 
-| DATA_SOURCE 값 | 동작 |
-|----------------|------|
-| `memory` (기본) | InMemoryStore 사용 |
-| `dynamodb` | DynamoDBStore 사용 |
-| `aurora` | AuroraStore (Prisma/Data API) 사용 |
+| 환경변수 | 대상 | 로컬 | prod |
+|----------|------|------|------|
+| `AWS_ENDPOINT_URL` | DynamoDB/S3/Cognito | ministack `http://localhost:4566` | 미설정(=실제 AWS) |
+| `DATABASE_URL` | 관계형 (Postgres/Aurora) | compose Postgres | Aurora/RDS Proxy |
 
 서비스별 환경 변수 네이밍:
 

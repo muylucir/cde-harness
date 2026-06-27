@@ -3,7 +3,7 @@ name: aws-cdk-patterns
 description: >
   CDK TypeScript로 AWS 인프라를 구현·배포할 때 반드시 호출. DynamoDB/Aurora/ElastiCache/OpenSearch/
   S3/Cognito/SQS/SNS/EventBridge/Step Functions/Lambda의 검증된 최신 CDK construct 코드,
-  스택 구조, 데이터 레이어 듀얼 모드(InMemory→AWS) 구현, 시드 데이터 마이그레이션, CfnOutput→.env 패턴을 제공한다.
+  스택 구조, 데이터 레이어 Polyglot Ports & Adapters(Vision B — endpoint-only 전환, Rule 12), 시드 데이터 마이그레이션, CfnOutput→.env 패턴을 제공한다.
   사용자가 "CDK 스택 작성", "이 리소스를 CDK로", "infra/ 폴더", "cdk deploy", "DynamoDB 테이블 만들어",
   "Aurora 클러스터 구성", "Lambda 배포" 같은 구현 작업을 요청하면 — CDK라고 명시하지 않아도 — 사용한다.
   aws-deployer 에이전트가 참조. 인프라 설계/서비스 선택 의사결정은 aws-infra-patterns 스킬을 참조.
@@ -575,12 +575,13 @@ new cdk.CfnOutput(this, 'OutputLogicalId', {
 aws cloudformation describe-stacks --stack-name ${stackName} \
   --query 'Stacks[0].Outputs' --output json | \
   jq -r '.[] | "\(.Description)=\(.OutputValue)"' > .env.local
-echo "DATA_SOURCE=dynamodb" >> .env.local
+# 실 AWS는 AWS_ENDPOINT_URL을 설정하지 않는다(미설정=실제 AWS). 관계형은 DATABASE_URL을 Aurora로.
+# 코드는 동일 — 전환은 endpoint env뿐(Vision B, Rule 12). DATA_SOURCE 같은 런타임 모드 변수는 추가하지 않는다.
 ```
 
 ## References
 
-- [데이터 레이어 패턴](references/data-layer.md) — Store 인터페이스, DynamoDBStore/AuroraStore 구현, createStore 팩토리
+- [데이터 레이어 패턴](references/data-layer.md) — Polyglot Ports & Adapters(Vision B): aggregate별 repository 포트 + `dynamo/`·`postgres/` 어댑터 + `createRepositories.ts` 팩토리, endpoint-only 전환
 - [CDK 프로젝트 설정](references/cdk-setup.md) — package.json, tsconfig.json, cdk.json 템플릿, 배포 명령
 
 ## 최신 construct 스펙 확인

@@ -1,7 +1,9 @@
 # CDK 프로젝트 설정 템플릿
 
 > [!IMPORTANT]
-> **2025년부터 CDK CLI(`aws-cdk`)와 라이브러리(`aws-cdk-lib`)의 버전이 분리되었다.** CLI는 `2.1000.0`+ 대역으로 점프했고, 라이브러리는 기존 `2.x` 시퀀스를 이어간다. 그래서 둘을 같은 `^2.170.0`으로 묶으면 안 된다. 아래 버전은 예시이므로, 새로 만들 땐 `npm install aws-cdk-lib@latest`, `npm install -D aws-cdk@latest`로 최신을 받는 것을 권장한다.
+> **2025년부터 CDK CLI(`aws-cdk`)와 라이브러리(`aws-cdk-lib`)의 버전이 분리되었다.** CLI는 `2.1000.0`+ 대역으로 점프했고, 라이브러리는 기존 `2.x` 시퀀스를 이어간다. 그래서 둘을 같은 `^2.170.0`으로 묶으면 안 된다.
+> - **실제 AWS 배포만** 할 거면 최신 권장: `npm install aws-cdk-lib@latest`, `npm install -D aws-cdk@latest`.
+> - **⚠️ ministack 로컬 미러(cdklocal)를 쓸 거면 최신을 쓰면 안 된다.** `aws-cdk-local`(cdklocal)은 `require("aws-cdk/lib/cdk-toolkit")` deep-import를 하는데, 재패키징된 신 CLI(≥`2.1000`, `exports` 맵 도입)는 이 경로를 막아 `ERR_PACKAGE_PATH_NOT_EXPORTED`로 즉사한다. 또 신 `aws-cdk-lib`(cloud assembly schema 54+)는 구 CLI가 못 읽는다. **cdklocal 호환을 위해 CLI/lib를 `exports` 도입 이전 + 같은 schema 세대로 핀**한다 — 검증된 조합: `aws-cdk: 2.174.0`(고정), `aws-cdk-lib: 2.174.0`(고정). 이 핀에서는 `pointInTimeRecoverySpecification`(신 prop) 대신 `pointInTimeRecovery: false`를 쓴다. 아래 "ministack/cdklocal 호환 핀" 참조.
 
 ## infra/package.json
 
@@ -57,6 +59,14 @@ Aurora Data API 시드 스크립트에 추가 의존성:
 
 **devDependency 추가**: `aws-cdk-local`(cdklocal 래퍼) + `pg`/`tsx`(관계형 시드).
 
+> **⚠️ (#8a) cdklocal 호환 버전 핀 — ministack 경로의 필수 조건.** ministack 미러를 쓸 `infra/`는 `aws-cdk`/`aws-cdk-lib`를 **최신/`^2.1000.0`으로 두면 안 된다**(맨 위 IMPORTANT 참조 — `exports` 맵이 cdklocal deep-import를 막아 `ERR_PACKAGE_PATH_NOT_EXPORTED`로 즉사). cdklocal과 호환되는 검증된 핀:
+> ```json
+> // infra/package.json (ministack 미러를 쓰는 경우)
+> "dependencies":    { "aws-cdk-lib": "2.174.0", "constructs": "^10.4.2" },
+> "devDependencies": { "aws-cdk": "2.174.0", "aws-cdk-local": "^2.19.2", "tsx": "^4.19.0" }
+> ```
+> 이 핀(2.174.0)에서는 DynamoDB Table의 PITR를 신 prop `pointInTimeRecoverySpecification`이 아니라 **`pointInTimeRecovery: false`**로 쓴다(신 prop은 미존재 → 합성 실패).
+
 **레포 루트 docker-compose.yml** (2개 서비스):
 ```yaml
 services:
@@ -76,6 +86,23 @@ services:
 - creds는 더미(`AWS_ACCESS_KEY_ID=test` / `AWS_SECRET_ACCESS_KEY=test` / `AWS_REGION=us-east-1`).
 - health 폴링은 `GET http://localhost:4566/_ministack/health` (status가 `available`).
 - **관계형(Aurora)은 cdklocal로 로컬 배포 불가** — `AWS::RDS::DBSubnetGroup` 미지원으로 롤백. 로컬 관계형은 docker-compose postgres에 시드를 `DATABASE_URL`로 적용한다. app CDK의 Aurora 구문은 prod 배포 전용.
+
+> **⚠️ (#8b) community 미지원 리소스 — `localMirror` 분기 가드.** LocalStack/ministack community는 `AWS::Cognito::UserPoolGroup`·Cognito Hosted UI Domain 등을 미지원이라, 무조건 생성하면 `Unsupported resource type`으로 스택 롤백한다. CDK context 플래그로 분기한다:
+> ```typescript
+> // construct 안에서
+> const localMirror = this.node.tryGetContext('localMirror') === true ||
+>                      this.node.tryGetContext('localMirror') === 'true';
+> if (!localMirror) {
+>   // 실 AWS 배포(기본)에서만 생성. 로컬 미러에서는 생략.
+>   new cognito.CfnUserPoolGroup(this, 'AdminGroup', { /* ... */ });
+>   userPool.addDomain('HostedUI', { /* ... */ });
+> }
+> ```
+> `infra/package.json`의 cdklocal deploy 스크립트에 **`-c localMirror=true`**를 붙인다: `cdklocal deploy --all --require-approval never -c localMirror=true`. 실 AWS 배포(기본 false)는 전부 생성.
+
+> **⚠️ (#8c) seed 스크립트 env 주입.** `infra:local:seed`(루트 package.json)는 `cdklocal:deploy`와 **동일한 env를 명시 주입**해야 한다 — 안 하면 실 AWS로 붙어 `ResourceNotFoundException`. 최소: `AWS_ENDPOINT_URL=http://localhost:4566`, `AWS_REGION=us-east-1`, dummy creds, 그리고 테이블명/`DATABASE_URL`. 예: `"infra:local:seed": "cd infra && AWS_ENDPOINT_URL=http://localhost:4566 AWS_REGION=us-east-1 AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test DATABASE_URL=postgres://postgres:postgres@localhost:5432/appdb tsx scripts/seed-data.ts"`.
+
+> **⚠️ (#8d) region 정합.** cdklocal은 **`us-east-1`**에 배포하므로 `.env.local`/시드/런타임의 `AWS_REGION`도 `us-east-1`로 맞춰야 테이블을 찾는다(불일치 시 `ResourceNotFoundException`). **단 Bedrock은 별개** — AI 추천 등은 실제 Bedrock 리전·자격증명이 필요하고 ministack이 미러하지 않으므로 **로컬 미러에서 AI 기능은 검증 불가**(실 AWS 필요). 이 한계를 핸드오버/README에 명시한다.
 
 **infra/scripts/wait-ministack.mjs**: `/_ministack/health`를 폴링하고 postgres `pg_isready`까지 확인한 뒤 통과(fail-closed timeout — 반쯤 뜬 컨테이너에서 E2E 돌리지 않음). `check-ministack-parity.mjs`(sub-check [R])가 이 경로 사용을 검증한다.
 

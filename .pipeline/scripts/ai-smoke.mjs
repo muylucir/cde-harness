@@ -423,10 +423,23 @@ function main() {
       : `missing-in-code: [${missingInCode.join(', ')}] | extra-in-code: [${extraInCode.join(', ')}]`,
   );
 
-  // Check 5: section_marker_map ↔ 시스템 프롬프트 ----------
+  // Check 5: section_marker_map ↔ 시스템 프롬프트 (transport-aware) ----------
+  // 배경: idiomatic Strands 스트리밍에서 SSE 이벤트는 두 종류로 나뉜다.
+  //   (a) 모델 출력 마커 이벤트: 모델이 프롬프트 <output_format> 지시대로 ALL_CAPS 마커
+  //       (예: `RECOMMENDATION:`)를 텍스트로 출력하고, 라우트 핸들러가 그 줄을 파싱해 합성한다.
+  //       → 마커가 프롬프트에 없으면 파서가 못 찾아 런타임 실패 → 반드시 프롬프트에 있어야 한다.
+  //   (b) transport 이벤트: text 델타 / tool_start / tool_end / done / error 처럼 SDK 이벤트나
+  //       라우트 코드가 직접 생성한다. 모델이 출력하는 마커가 아니므로 프롬프트에 등장하지 않는
+  //       것이 정상이다(오히려 프롬프트에 `TEXT:`/`DONE:`를 강제하면 가짜 마커 출력 → Rule 6 위반).
+  // 따라서 "모든 마커가 프롬프트에 있어야 한다"는 과대제약이며, 진짜 보호는 아래 두 방향이다:
+  //   5  — 프롬프트가 실제 출력하는 ALL_CAPS 마커(역색인) ⊆ section_marker_map.values
+  //        (+ contract가 model-emitted로 선언한 마커는 프롬프트에 존재). FE가 못 알아보는
+  //        마커를 모델이 내는 회귀를 차단.
+  //   5b — section_marker_map.keys ⊆ (sse_events ∪ error_events)의 event_type 집합.
+  //        선언된 이벤트에 매핑되지 않는 고아 key가 없음을 보장.
   const markerMap = contract.section_marker_map ?? {};
-  const markers = Object.values(markerMap).filter(Boolean);
-  if (markers.length > 0) {
+  const markerEntries = Object.entries(markerMap).filter(([, v]) => Boolean(v));
+  if (markerEntries.length > 0) {
     // 프롬프트 전문 수집
     let promptCorpus = '';
     const sp = internals.system_prompt;
@@ -436,33 +449,62 @@ function main() {
         if (p.template) promptCorpus += p.template + '\n';
       }
     }
-    const missingMarkers = markers.filter(
-      (marker) => !promptCorpus.includes(String(marker)),
+
+    // 프롬프트가 실제로 출력하도록 지시하는 ALL_CAPS 마커를 줄머리에서 추출(역색인 소스).
+    // 예: `RECOMMENDATION: {...}` → RECOMMENDATION. 일반 대문자 단어(`Difficulty tiers:`)는
+    // 전부-대문자가 아니라 매칭되지 않는다.
+    const promptMarkers = new Set(
+      [...promptCorpus.matchAll(/^\s*([A-Z][A-Z0-9_]+):/gm)].map((m) => m[1]),
     );
+    // contract가 명시적으로 "모델이 출력한다"고 선언한 마커(있으면). 이 값들은 프롬프트에 있어야 한다.
+    const declaredModelMarkers = Array.isArray(sp?.marker_emitted_by_model)
+      ? sp.marker_emitted_by_model.filter(Boolean).map(String)
+      : [];
+
+    const mapValues = new Set(markerEntries.map(([, v]) => String(v)));
+    // (5-i) 모델 출력 마커(프롬프트 추출 ∪ contract 선언) ⊆ map.values — FE 미인식 마커 차단.
+    const orphanPromptMarkers = [...promptMarkers].filter((m) => !mapValues.has(m));
+    // (5-ii) contract가 model-emitted로 선언한 마커는 프롬프트에 실제 존재해야 한다.
+    const declaredButMissingInPrompt = declaredModelMarkers.filter(
+      (m) => !promptCorpus.includes(m),
+    );
+    const check5Pass =
+      orphanPromptMarkers.length === 0 && declaredButMissingInPrompt.length === 0;
+    const check5Detail = [];
+    if (orphanPromptMarkers.length) {
+      check5Detail.push(
+        `prompt markers not in section_marker_map.values: [${orphanPromptMarkers.join(', ')}]`,
+      );
+    }
+    if (declaredButMissingInPrompt.length) {
+      check5Detail.push(
+        `marker_emitted_by_model not in prompt: [${declaredButMissingInPrompt.join(', ')}]`,
+      );
+    }
     collectResult(
       results,
-      'section_marker_map values present in system prompts',
-      missingMarkers.length === 0,
-      missingMarkers.length
-        ? `missing markers in prompts: [${missingMarkers.join(', ')}]`
-        : null,
+      'model-emitted markers ↔ system prompt / section_marker_map (transport-aware)',
+      check5Pass,
+      check5Pass ? null : check5Detail.join(' | '),
     );
 
-    // map의 key는 sse_events의 event_type 부분집합이어야 한다 (key ⊆ sse_events).
-    // section_marker_map은 "모델이 프롬프트 본문에 직접 쓰는 마커"만 담는다(spec-writer-ai 정의).
-    // 네이티브 Strands 스트리밍에서 text/tool_start/tool_end/done은 SDK transport 이벤트라
-    // 모델이 텍스트 마커로 쓰지 않으므로 맵에 들어가지 않는다 — 따라서 "정확히 일치"가 아니라
-    // "부분집합"이 올바른 불변식이다. (단, 맵 key가 sse_events에 없으면 = 존재하지 않는 이벤트를
-    // 가리키는 것이므로 여전히 위반. 예: error를 error_events가 아닌 sse에 없는데 맵에 넣은 경우.)
-    const markerKeys = new Set(Object.keys(markerMap));
-    const orphanKeys = [...markerKeys].filter((k) => !contractEventTypes.has(k));
+    // (5b) map의 모든 key는 sse_events ∪ error_events의 유효 event_type이어야 한다(부분집합).
+    // section_marker_map은 "모델이 출력하는 마커" 이벤트만 담으므로(transport 이벤트는 제외),
+    // 키 집합은 전체 이벤트 집합의 부분집합이다 — 동일(==)이 아니다. 보호 대상은 "선언된
+    // 이벤트에 매핑되지 않는 고아 마커 key"(FE가 못 알아보는 마커)뿐이다. transport 이벤트가
+    // map에 없는 것은 정상(모델 출력 마커가 아님 → Check 4가 emit 일치를 별도 보장).
+    const errorEvents = Array.isArray(contract.error_events) ? contract.error_events : [];
+    const allEventTypes = new Set([
+      ...contractEventTypes,
+      ...errorEvents.map((e) => e.event_type).filter(Boolean),
+    ]);
+    const orphanKeys = Object.keys(markerMap).filter((k) => !allEventTypes.has(k));
     collectResult(
       results,
-      'section_marker_map keys ⊆ sse_events[].event_type (마커 있는 이벤트만; transport 이벤트는 제외)',
+      'section_marker_map keys ⊆ (sse_events ∪ error_events) event_type set',
       orphanKeys.length === 0,
       orphanKeys.length
-        ? `section_marker_map의 key가 sse_events에 없음: [${orphanKeys.join(', ')}]. ` +
-          `프롬프트 마커가 아닌 transport/error 이벤트를 맵에서 제거하세요(error는 error_events 소속).`
+        ? `orphan marker keys (not a declared event): [${orphanKeys.join(', ')}] | events=${[...allEventTypes].join(',')}`
         : null,
     );
   } else {

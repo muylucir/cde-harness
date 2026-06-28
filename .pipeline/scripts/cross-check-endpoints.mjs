@@ -151,9 +151,30 @@ function main() {
   let failed = 0;
   const results = [];
 
-  // ───── Check 1: frontend hooks endpoint_id ⊆ api-contract endpoints[].id
+  // ───── Check 1: frontend hooks endpoint_id ⊆ (api-contract endpoints[].id ∪ ai-contract route ids)
+  // AI 스트리밍 라우트는 check-5에 의해 api-contract.endpoints[]에 등장하면 안 된다(권위는 ai-contract).
+  // 그런데 그 라우트를 소비하는 FE 훅(예: useRecommendStream)도 endpoint_id로 라우트를 참조한다.
+  // 따라서 endpoint_id 해석 대상에 ai-contract의 라우트 id도 포함해야 check-1과 check-5가 양립한다
+  // (그렇지 않으면 AI 라우트를 쓰는 모든 FE 훅이 두 검사 사이에서 상호 배타에 빠진다).
+  // ai-contract 라우트의 id는 명시 `id` 필드를 우선 사용하고, 없으면 path의 마지막 세그먼트
+  // (예: /api/ai/recommend → "recommend")로 도출한다 — FE 훅이 이미 쓰는 관례와 동일.
   if (frontendSpec && apiContract) {
     const contractIds = new Set((apiContract.endpoints || []).map((e) => e.id).filter(Boolean));
+    const aiRoutes = [
+      ...(Array.isArray(aiContract?.api_routes) ? aiContract.api_routes : []),
+      ...(Array.isArray(aiContract?.endpoints) ? aiContract.endpoints : []),
+    ];
+    for (const r of aiRoutes) {
+      if (r?.id) {
+        contractIds.add(r.id);
+      }
+      const lastSeg = String(r?.path || '')
+        .replace(/\/+$/, '')
+        .split('/')
+        .filter(Boolean)
+        .pop();
+      if (lastSeg) contractIds.add(lastSeg);
+    }
     const orphanHooks = [];
     for (const hook of frontendSpec.hooks || []) {
       if (!hook.endpoint_id) continue;

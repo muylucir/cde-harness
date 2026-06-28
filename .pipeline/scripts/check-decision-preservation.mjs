@@ -138,10 +138,16 @@ function main() {
   if (confirmed.length === 0) {
     pass(`requirements.json.key_decisions[] 확정 결정 없음 (v${version}) — 보존 체인 vacuous PASS`);
   } else if (!arch) {
-    fail(
-      `requirements.json은 confirmed key decision ${confirmed.length}건을 가지나 architecture.json이 없습니다 (v${version})`,
+    // architecture.json은 application-architect(Stage 3)의 산출물이다. 이 aggregator는
+    // requirements-analyst(Stage 2) 체크포인트에서도 돌기 때문에, 그 시점엔 architecture.json이
+    // 아직 없는 게 정상이다. 여기서 fail하면 Stage 2가 Stage 3 산출물을 선결 요구하는 ordering 모순이
+    // 된다. 따라서 architecture 부재 시 보존 체인 검사를 defer(vacuous PASS)한다 — 섹션 (2)가
+    // ai-internals.json 부재 시 skip하는 것과 동일한 비대칭 해소. 보호 효익은 그대로 유지된다:
+    // architecture.json이 생긴 뒤(Stage 3+) 재실행되는 ai-smoke(Stage 7+) 체크포인트에서 disposition
+    // 체인이 강제 검증된다.
+    pass(
+      `requirements.json은 confirmed key decision ${confirmed.length}건을 가지나 architecture.json 미생성 (v${version}) — 보존 체인 defer(아키텍처 생성 후 검증)`,
     );
-    failed++;
   } else {
     const disposition = Array.isArray(arch.key_decisions_disposition)
       ? arch.key_decisions_disposition
@@ -212,10 +218,25 @@ function main() {
       if (!nonEmptyStr(rpd.required_pattern)) probs.push('required_pattern 누락/빈 값');
       if (!nonEmptyStr(rpd.chosen_pattern)) probs.push('chosen_pattern 누락/빈 값');
       if (!nonEmptyStr(rpd.rationale)) probs.push('rationale 누락/빈 값');
-      const downgraded =
-        nonEmptyStr(rpd.required_pattern) &&
-        nonEmptyStr(rpd.chosen_pattern) &&
-        rpd.required_pattern.trim() !== rpd.chosen_pattern.trim();
+      // 다운그레이드 판정: 저자가 disposition을 명시하면(섹션 (1)·architecture.md 컨벤션과 동일:
+      // honored|deferred|descoped) 그것을 신뢰한다. required_pattern과 chosen_pattern은 의도적으로
+      // 서로 다른 추상화 수준(요구 vs 구현)으로 기술되므로 문자열이 같을 일이 거의 없어, 문자열
+      // 불일치만으로 다운그레이드를 추정하면 honored 케이스에서 상시 오탐이 난다. disposition이
+      // 없으면(레거시 아티팩트) 기존 문자열 불일치 휴리스틱으로 폴백한다(하위 호환).
+      const VALID_DISP = new Set(['honored', 'deferred', 'descoped']);
+      let downgraded;
+      if (nonEmptyStr(rpd.disposition)) {
+        if (!VALID_DISP.has(rpd.disposition)) {
+          probs.push(`disposition이 honored|deferred|descoped 중 하나가 아님 (got: ${JSON.stringify(rpd.disposition)})`);
+        }
+        // honored = 요구 패턴을 그대로 채택(다운그레이드 없음). deferred/descoped = 교체/유보.
+        downgraded = rpd.disposition === 'deferred' || rpd.disposition === 'descoped';
+      } else {
+        downgraded =
+          nonEmptyStr(rpd.required_pattern) &&
+          nonEmptyStr(rpd.chosen_pattern) &&
+          rpd.required_pattern.trim() !== rpd.chosen_pattern.trim();
+      }
       if (downgraded) {
         if (!nonEmptyStr(rpd.tradeoff)) {
           probs.push('required_pattern !== chosen_pattern(다운그레이드)인데 tradeoff 누락 — 무엇을 못 보여주게 되는지 기록 필수');

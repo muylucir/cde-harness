@@ -183,6 +183,21 @@ function main() {
     process.exit(0);
   }
 
+  // 마크다운 렌더링은 react-markdown 의존성 + MarkdownContent 컴포넌트 + 스트리밍 UI 소비처를
+  // 요구하며, 이는 전부 code-generator-frontend(5c)의 산출물이다. 이 체크는 bundled aggregator를
+  // 통해 code-generator-ai(5b) 체크포인트에서도 돌지만, 그 시점엔 src/components/(프론트엔드)가
+  // 아직 없다 — backend가 만든 src/{app,lib,types}만 존재한다. 프론트엔드 부재 상태에서 fail하면
+  // 5b가 5c 산출물을 선결 요구하는 ordering 모순(= sub-check [O]와 동형)이 된다. 따라서
+  // 프론트엔드 미생성(src/components/ 및 src/hooks/ 부재) 시 검사를 defer한다. 보호 효익은 그대로:
+  // 프론트엔드가 생긴 뒤 재실행되는 ai-smoke(Stage 7+) 및 reviewer 카테고리 12에서 강제된다.
+  const FRONTEND_MARKERS = ['components', 'hooks'].map((d) => resolve(SRC_DIR, d));
+  if (!FRONTEND_MARKERS.some((d) => existsSync(d))) {
+    console.log(
+      '  ✓ src/components|hooks 부재 (프론트엔드 코드 생성 전) — markdown render check defer (5c 이후 ai-smoke/reviewer가 강제)',
+    );
+    process.exit(0);
+  }
+
   const failures = [];
 
   // 2. package.json 의존성 검증

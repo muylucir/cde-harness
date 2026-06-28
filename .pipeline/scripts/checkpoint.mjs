@@ -398,7 +398,14 @@ function runCheck(checkStr, opts = {}) {
         'jq ',
         'test ',
       ];
-      const allowed = allowedPrefixes.some((p) => trimmed.startsWith(p));
+      // 문서화된 checkpoint 명령 일부는 `cd <subdir> && <allowed>` 형태다 (awsarch.md Phase 2의
+      // `cd infra && npx tsc --noEmit`, `cd infra && npx cdk synth …`). CDK 프로젝트는 infra/에
+      // 자체 package.json/cdk.json/tsconfig.json을 가져 그 디렉토리에서 실행해야 한다. 보안 속성
+      // (임의 명령이 hook을 우회 금지)을 유지하기 위해, **단순 상대 하위디렉토리**(슬래시/`..`/
+      // 절대경로/leading-dot 없음)로의 cd 뒤에 다시 allowed prefix가 오는 경우만 허용한다.
+      const cdMatch = /^cd\s+([A-Za-z0-9_][A-Za-z0-9_-]*)\s+&&\s+(.*)$/.exec(trimmed);
+      const effective = cdMatch ? cdMatch[2].trim() : trimmed;
+      const allowed = allowedPrefixes.some((p) => effective.startsWith(p));
       if (!allowed) {
         return {
           check: `cmd: ${arg}`,

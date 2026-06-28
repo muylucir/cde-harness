@@ -387,12 +387,12 @@
       "requires_approval": true,
       "auto_approval_allowed": false,
       "approval_reason": "실제 AWS 배포 직전 최종 비용/리소스 확인 (auto-safety-gates.md #1: 비가역 비용)",
-      "description": "solutions-architect가 만든 infra/ CDK를 실제 AWS로 배포(cdk deploy) + endpoint env 전환 + prod 시드 마이그레이션. 데이터 레이어 코드는 수정하지 않는다(Vision B).",
+      "description": "solutions-architect의 aws-architecture.json 청사진으로 infra/ CDK를 생성(Step 0~1)한 뒤 실제 AWS로 배포(cdk deploy) + endpoint env 전환 + prod 시드 마이그레이션. 데이터 레이어 코드는 수정하지 않는다(Vision B).",
       "prerequisites": [
-        ".pipeline/artifacts/v{N}/08-aws-infra/aws-architecture.json",
-        "infra/"
+        ".pipeline/artifacts/v{N}/08-aws-infra/aws-architecture.json"
       ],
       "outputs": [
+        "infra/",
         ".pipeline/artifacts/v{N}/08-aws-infra/deploy-log.json"
       ],
       "resume_via": "/pipeline-from aws-deployer"

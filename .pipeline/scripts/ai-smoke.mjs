@@ -448,17 +448,21 @@ function main() {
         : null,
     );
 
-    // map의 key와 sse_events의 event_type 집합 일치
+    // map의 key는 sse_events의 event_type 부분집합이어야 한다 (key ⊆ sse_events).
+    // section_marker_map은 "모델이 프롬프트 본문에 직접 쓰는 마커"만 담는다(spec-writer-ai 정의).
+    // 네이티브 Strands 스트리밍에서 text/tool_start/tool_end/done은 SDK transport 이벤트라
+    // 모델이 텍스트 마커로 쓰지 않으므로 맵에 들어가지 않는다 — 따라서 "정확히 일치"가 아니라
+    // "부분집합"이 올바른 불변식이다. (단, 맵 key가 sse_events에 없으면 = 존재하지 않는 이벤트를
+    // 가리키는 것이므로 여전히 위반. 예: error를 error_events가 아닌 sse에 없는데 맵에 넣은 경우.)
     const markerKeys = new Set(Object.keys(markerMap));
-    const keyMismatch =
-      [...contractEventTypes].filter((t) => !markerKeys.has(t)).length +
-      [...markerKeys].filter((k) => !contractEventTypes.has(k)).length;
+    const orphanKeys = [...markerKeys].filter((k) => !contractEventTypes.has(k));
     collectResult(
       results,
-      'section_marker_map keys == sse_events[].event_type set',
-      keyMismatch === 0,
-      keyMismatch
-        ? `keys=${[...markerKeys].join(',')} events=${[...contractEventTypes].join(',')}`
+      'section_marker_map keys ⊆ sse_events[].event_type (마커 있는 이벤트만; transport 이벤트는 제외)',
+      orphanKeys.length === 0,
+      orphanKeys.length
+        ? `section_marker_map의 key가 sse_events에 없음: [${orphanKeys.join(', ')}]. ` +
+          `프롬프트 마커가 아닌 transport/error 이벤트를 맵에서 제거하세요(error는 error_events 소속).`
         : null,
     );
   } else {

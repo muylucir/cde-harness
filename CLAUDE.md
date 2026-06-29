@@ -85,6 +85,7 @@ node .pipeline/scripts/checkpoint.mjs schema --json
 ```
 (brief-composer) → domain-researcher → requirements-analyst
     → application-architect → (ai-architect) → solutions-architect  ← 논리(agnostic) → 논리AI → 물리(엔진 pin + AWS/ministack)
+    → wireframe-designer  ← 코드 생성 전 화면 레이아웃 ASCII 와이어프레임 시각 검토(APPROVAL GATE)
     → spec-writer-backend → (spec-writer-ai) → spec-writer-frontend
     → code-gen-backend → (code-gen-ai) → code-gen-frontend
     → [qa-engineer(Playwright) → fix]* → reviewer ← QA가 기능 검증, reviewer가 품질 리뷰

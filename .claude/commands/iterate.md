@@ -242,7 +242,7 @@ node .pipeline/scripts/checkpoint.mjs start domain-researcher
 
 pipeline.md의 Stage 2-7을 순서대로 실행한다. 각 에이전트에 리비전 로그 경로를 추가 컨텍스트로 전달한다.
 
-> **APPROVAL GATE 강제 통과 규칙 (Phase 5 전용)**: `requirements-analyst`, `application-architect`, `ai-architect`, `solutions-architect`, `domain-researcher`는 `requires_approval: true`이며 stages.json에서 `auto_approval_allowed: true`이지만, `/iterate`는 정책상 `--auto`를 지원하지 않으므로 **반드시 `--mode=interactive`**로 기록한다. Phase 1 APPROVAL GATE에서 사용자가 "승인"을 선택한 시점이 이 stage들의 승인 근거이다. approve 호출 없이 `start`를 호출하면 stage가 exit 1로 차단된다.
+> **APPROVAL GATE 강제 통과 규칙 (Phase 5 전용)**: `requirements-analyst`, `application-architect`, `ai-architect`, `solutions-architect`, `wireframe-designer`, `domain-researcher`는 `requires_approval: true`이며 stages.json에서 `auto_approval_allowed: true`이지만, `/iterate`는 정책상 `--auto`를 지원하지 않으므로 **반드시 `--mode=interactive`**로 기록한다. Phase 1 APPROVAL GATE에서 사용자가 "승인"을 선택한 시점이 이 stage들의 승인 근거이다. approve 호출 없이 `start`를 호출하면 stage가 exit 1로 차단된다.
 >
 > 승인 단어 처리: 사용자의 "승인"/"계속"/"진행"/"y"/"yes" 입력은 동등하게 Phase 5 진입 트리거로 본다.
 
@@ -257,13 +257,13 @@ node .pipeline/scripts/checkpoint.mjs start requirements-analyst
 - Input: `.pipeline/input/customer-brief.md` + `.pipeline/artifacts/v{N+1}/00-domain/domain-context.json`
 - Output: `.pipeline/artifacts/v{N+1}/01-requirements/`
 
-**Stage 3: Architecture Design (application-architect → ai-architect → solutions-architect)**
+**Stage 3: Architecture Design (application-architect → ai-architect → solutions-architect → wireframe-designer)**
 ```bash
 node .pipeline/scripts/checkpoint.mjs approve application-architect \
   --mode=interactive --notes="iterate Phase 1 사용자 승인"
 node .pipeline/scripts/checkpoint.mjs start application-architect
 ```
-- Launch the `application-architect` agent (논리). AI FR 있으면 이어서 `ai-architect`, 그다음 `solutions-architect`(물리 — 엔진 pin + AWS/ministack)를 `/pipeline` Stage 3과 동일 순서로 실행한다.
+- Launch the `application-architect` agent (논리). AI FR 있으면 이어서 `ai-architect`, 그다음 `solutions-architect`(물리 — 엔진 pin + AWS/ministack), 마지막으로 `wireframe-designer`(화면 레이아웃 시각 검토 APPROVAL GATE)를 `/pipeline` Stage 3과 동일 순서로 실행한다.
 - Input: `01-requirements/requirements.json`
 - Output: `.pipeline/artifacts/v{N+1}/02-architecture/` (+ AI면 ai-architecture.json, solutions는 08-aws-infra/)
 

@@ -202,7 +202,7 @@ Auto 모드에서도 **CHECKPOINT**, **품질 루프(Stage 6)**, **서킷 브레
 
 모든 단계를 순차 실행한다. 코드 생성 후에는 **테스트 루프(기능 검증) → 리뷰(품질 검증)** 순서로 코드 품질을 보장한다.
 
-> **Stage 번호 ↔ stages.json `order` 매핑 (사람용 번호는 묶음 라벨)**: 아래 "Stage N"은 사람이 읽기 쉬운 묶음 라벨이고, `checkpoint.mjs`가 보는 실제 stage 이름/순서는 `.pipeline/scripts/stages.json`의 `order` 필드가 SSOT다. 매핑: Stage 1=`domain-researcher`(order 0), Stage 2=`requirements-analyst`(1), Stage 3=`application-architect`(2)/`ai-architect`(3)/`solutions-architect`(4), Stage 4=`spec-writer-backend`(5)/`spec-writer-ai`(6)/`spec-writer-frontend`(7), Stage 5=`code-generator-backend`(8)/`code-generator-ai`(9)/`code-generator-frontend`(10), Stage 6a=`qa-engineer`(11), Stage 6b=`reviewer`(12), Stage 7=`security-auditor-pipeline`(13), Stage 7+=`ai-smoke`(14). 유효 stage 이름은 `node .pipeline/scripts/checkpoint.mjs list-stages`로 조회한다.
+> **Stage 번호 ↔ stages.json `order` 매핑 (사람용 번호는 묶음 라벨)**: 아래 "Stage N"은 사람이 읽기 쉬운 묶음 라벨이고, `checkpoint.mjs`가 보는 실제 stage 이름/순서는 `.pipeline/scripts/stages.json`의 `order` 필드가 SSOT다. 매핑: Stage 1=`domain-researcher`(order 0), Stage 2=`requirements-analyst`(1), Stage 3=`application-architect`(2)/`ai-architect`(3)/`solutions-architect`(4)/`wireframe-designer`(5), Stage 4=`spec-writer-backend`(6)/`spec-writer-ai`(7)/`spec-writer-frontend`(8), Stage 5=`code-generator-backend`(9)/`code-generator-ai`(10)/`code-generator-frontend`(11), Stage 6a=`qa-engineer`(12), Stage 6b=`reviewer`(13), Stage 7=`security-auditor-pipeline`(14), Stage 7+=`ai-smoke`(15). 유효 stage 이름은 `node .pipeline/scripts/checkpoint.mjs list-stages`로 조회한다.
 
 ```
 Stage 1   도메인 리서치 ← 승인 게이트 (제안 요구사항)
@@ -326,6 +326,23 @@ node .pipeline/scripts/checkpoint.mjs start solutions-architect
 node .pipeline/scripts/checkpoint.mjs check solutions-architect \
   "json:.pipeline/artifacts/v{N}/08-aws-infra/aws-architecture.json" \
   "file:.pipeline/artifacts/v{N}/08-aws-infra/aws-architecture.md"
+```
+
+**3-4. Wireframe Designer (시각 검토 — 코드 생성 전 화면 레이아웃 승인)**
+```bash
+# APPROVAL GATE: 생성된 ASCII 와이어프레임으로 화면 레이아웃을 시각 검토 후 승인.
+node .pipeline/scripts/checkpoint.mjs approve wireframe-designer \
+  --mode=interactive --notes="사용자 승인: 화면 레이아웃 시각 검토 통과"
+node .pipeline/scripts/checkpoint.mjs start wireframe-designer
+```
+- Launch the `wireframe-designer` agent
+- Input: `02-architecture/architecture.json`(pages/component_tree/layout — SSOT)
+- Output: `.pipeline/artifacts/v{N}/02-architecture/wireframe.md`(사람용 ASCII), `wireframe.json`(기계용)
+- **APPROVAL GATE** (auto 모드 시 건너뜀): `wireframe.md`의 페이지별 레이아웃을 제시하고 승인 대기. 구조 변경이 필요하면 application-architect 재실행을 안내(역류 없음, architecture.json이 단일 진실).
+```bash
+node .pipeline/scripts/checkpoint.mjs check wireframe-designer \
+  "file:.pipeline/artifacts/v{N}/02-architecture/wireframe.md" \
+  "json:.pipeline/artifacts/v{N}/02-architecture/wireframe.json"
 ```
 
 ### Stage 4: Specification (BE → AI → FE 3개 에이전트 순차 호출)

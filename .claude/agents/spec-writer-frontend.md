@@ -34,6 +34,7 @@ allowedTools:
 
 - `.pipeline/artifacts/v{N}/01-requirements/requirements.json` — FR, NFR과 함께 **`personas[]`**, **`user_stories[]`** 도 참조한다
 - `.pipeline/artifacts/v{N}/02-architecture/architecture.json` — `metadata.primary_persona` 참조
+- `.pipeline/artifacts/v{N}/02-architecture/wireframe.md` (있으면) — wireframe-designer가 만든 페이지별 ASCII 레이아웃. **레이아웃 참고용**(영역 배치/컴포넌트 위치). architecture.json이 SSOT이므로 충돌 시 architecture.json 우선 — 와이어프레임은 시각 검토 산출물이지 스펙 소스가 아니다.
 - `.pipeline/artifacts/v{N}/03-specs/backend-spec.json` — BE 타입/API 참조 (보조)
 - `.pipeline/artifacts/v{N}/03-specs/api-contract.json` — **BE/FE 공통 계약. 훅 스펙의 `endpoint_id`는 이 파일의 `endpoints[].id`를 참조한다.**
 - `.pipeline/artifacts/v{N}/03-specs/ai-contract.json` — AI 외부 계약 (있을 때, FE는 이 파일만 참조. endpoints/sse_events를 훅 타입에 반영)

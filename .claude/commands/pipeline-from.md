@@ -21,7 +21,7 @@ node .pipeline/scripts/checkpoint.mjs list-stages
 ```
 
 결과 예시:
-- `domain-researcher`, `requirements-analyst`, `application-architect`, `ai-architect`, `solutions-architect`
+- `domain-researcher`, `requirements-analyst`, `application-architect`, `ai-architect`, `solutions-architect`, `wireframe-designer`
 - `spec-writer-backend`, `spec-writer-ai`, `spec-writer-frontend`
 - `code-generator-backend`, `code-generator-ai`, `code-generator-frontend`
 - `qa-engineer`, `reviewer`, `security-auditor-pipeline`
@@ -70,7 +70,7 @@ halt-report에 기록된 `current_stage` 값을 그대로 사용한다.
 
 4. **APPROVAL GATE 발급 (재진입 시작 stage가 requires_approval=true일 때 필수)**:
 
-   `requires_approval: true`인 stage(예: `domain-researcher`, `requirements-analyst`, `application-architect`, `ai-architect`, `solutions-architect`, `aws-deployer`)로 점프하면 `cmdStart`가 미승인 상태에서 exit 1로 차단한다. `/pipeline-from`은 다음 절차로 사용자 승인을 받고 approve를 발급한다:
+   `requires_approval: true`인 stage(예: `domain-researcher`, `requirements-analyst`, `application-architect`, `ai-architect`, `solutions-architect`, `wireframe-designer`, `aws-deployer`)로 점프하면 `cmdStart`가 미승인 상태에서 exit 1로 차단한다. `/pipeline-from`은 다음 절차로 사용자 승인을 받고 approve를 발급한다:
 
    ```bash
    # (a) 대상 stage가 승인 필요한지 확인

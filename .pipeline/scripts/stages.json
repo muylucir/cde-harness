@@ -118,8 +118,27 @@
       "resume_via": "/pipeline-from solutions-architect"
     },
     {
-      "name": "spec-writer-backend",
+      "name": "wireframe-designer",
       "order": 5,
+      "group": "design",
+      "phase": "design",
+      "optional": false,
+      "requires_approval": true,
+      "auto_approval_allowed": true,
+      "approval_reason": "코드 생성 전 화면 레이아웃(ASCII 와이어프레임) 시각 검토 후 진행 여부 결정",
+      "description": "application-architect의 architecture.json(pages/component_tree)을 SSOT로 페이지별 ASCII 레이아웃 와이어프레임 + 영역/컴포넌트/데이터바인딩 기술을 생성한다(ascii-diagram 스킬). 시각 검토 전용 — 새 구조를 발명하지 않고 architecture.json을 렌더한다.",
+      "prerequisites": [
+        ".pipeline/artifacts/v{N}/02-architecture/architecture.json"
+      ],
+      "outputs": [
+        ".pipeline/artifacts/v{N}/02-architecture/wireframe.md",
+        ".pipeline/artifacts/v{N}/02-architecture/wireframe.json"
+      ],
+      "resume_via": "/pipeline-from wireframe-designer"
+    },
+    {
+      "name": "spec-writer-backend",
+      "order": 6,
       "group": "spec",
       "phase": "spec",
       "optional": false,
@@ -137,7 +156,7 @@
     },
     {
       "name": "spec-writer-ai",
-      "order": 6,
+      "order": 7,
       "group": "spec",
       "phase": "spec",
       "optional": true,
@@ -164,7 +183,7 @@
     },
     {
       "name": "spec-writer-frontend",
-      "order": 7,
+      "order": 8,
       "group": "spec",
       "phase": "spec",
       "optional": false,
@@ -184,7 +203,7 @@
     },
     {
       "name": "code-generator-backend",
-      "order": 8,
+      "order": 9,
       "group": "codegen",
       "phase": "codegen",
       "optional": false,
@@ -214,7 +233,7 @@
     },
     {
       "name": "code-generator-ai",
-      "order": 9,
+      "order": 10,
       "group": "codegen",
       "phase": "codegen",
       "optional": true,
@@ -243,7 +262,7 @@
     },
     {
       "name": "code-generator-frontend",
-      "order": 10,
+      "order": 11,
       "group": "codegen",
       "phase": "codegen",
       "optional": false,
@@ -271,7 +290,7 @@
     },
     {
       "name": "qa-engineer",
-      "order": 11,
+      "order": 12,
       "group": "quality",
       "phase": "quality",
       "optional": false,
@@ -292,7 +311,7 @@
     },
     {
       "name": "reviewer",
-      "order": 12,
+      "order": 13,
       "group": "quality",
       "phase": "quality",
       "optional": false,
@@ -317,7 +336,7 @@
     },
     {
       "name": "security-auditor-pipeline",
-      "order": 13,
+      "order": 14,
       "group": "security",
       "phase": "security",
       "optional": false,
@@ -341,7 +360,7 @@
     },
     {
       "name": "ai-smoke",
-      "order": 14,
+      "order": 15,
       "group": "quality",
       "phase": "quality",
       "optional": true,
